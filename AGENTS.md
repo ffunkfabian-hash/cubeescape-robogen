@@ -42,6 +42,27 @@ Unity- oder Blender-Läufe anderer Agenten verfälschen sie um ein Vielfaches).
 5. Sichtbare Änderungen ansehen: `Previews/skins.png`, `Previews/hero.png`, bei Animationen die Kontaktbögen.
 6. Bei Viewer-Änderungen `viewer/build.sh` und `viewer/test_viewer.sh`.
 
+## Plugins und Hooks (Claude Code)
+
+`CLAUDE.md` importiert diese Datei. Nur Claude Code hat die Plugins; andere Agenten befolgen dieselben Regeln aus dem
+Text. Gemeinsam mit Cube Escape und Cubegen (dort je eine eigene Tabelle in `AGENTS.md`).
+
+| Plugin | Einsatz im Roboter-Generator |
+|---|---|
+| Blender-MCP | laufendes Blender des Nutzers als Prüfstand: `CubeEscape_Robot.blend` und Exporte laden, nachmessen, Ansichten rendern – in eigener Szene, nichts speichern |
+| `quick-gate-python` | Ruff (und pytest, wo es reine Python-Teile gibt) für `scripts/`; Pyright kennt `bpy` nicht. Verbindlich bleiben die Teststufen |
+| `code-review` | Slash-Befehl `code-review` vor jedem Release auf `main` |
+| `github` | Pull Requests, Issues, Release-Branches und Tags auf GitHub (oder `gh`) |
+| `engineering` | `debug`, `testing-strategy`, `documentation` |
+| `design` | `design-critique` für Vorschauen und den Viewer |
+| `hookify` | Regeln als `.claude/hookify.<name>.local.md` (eingecheckt) |
+| `unity`, `unity-perf` | erst, wenn der Roboter in Cube Escape eingebaut wird – dann gelten die Regeln dort |
+
+**Hooks** (hookify) **blockieren** Änderungen von Hand an `output/`, Änderungen am Spielprojekt Cube Escape, nacktes
+`git stash` (geteilter Stash-Stapel) und Force-Push; sie **halten das Sitzungsende an**, bis nach einer Änderung in
+`scripts/` eine Teststufe lief, und **warnen** bei Commit/Merge/Tag/Push (nur auf Wunsch), bei Code rund um
+`unwrap()`/Backen (Schemaversion) und bei Viewer-Änderungen. Ändert sich eine dieser Regeln, ändert sich ihre Hook-Datei mit.
+
 ## Cache-Regeln (`<out>/cache`)
 
 - Schlüssel hängen am Inhalt, nicht an Dateizeiten: Geometrie in kanonischer Ecken-Reihenfolge (Blenders

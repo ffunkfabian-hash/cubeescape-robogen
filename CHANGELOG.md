@@ -3,6 +3,18 @@
 Versionen des Roboter-Generators (zählen getrennt von Cube Escape und Cubegen). Jede Version hat einen Tag
 `v<Version>` und einen Release-Branch `release/<Version>`.
 
+## 1.9.1 „Afterburner“ – 2026-10-12
+
+Nur Regeln und Agenten-Werkzeuge; Modell, Ausgaben und QA unverändert (abgestimmt mit Cube Escape 0.45.1 und
+Cubegen 0.14.1).
+
+* `CLAUDE.md` importiert `AGENTS.md` – Claude Code lädt die Regeln jetzt in jeder Sitzung.
+* AGENTS.md › „Plugins und Hooks (Claude Code)“: welches Plugin wofür (Blender-MCP, quick-gate-python, code-review,
+  github, engineering, design, hookify).
+* Acht hookify-Regeln in `.claude/`: blockieren Handänderungen an `output/`, Änderungen an Cube Escape, nacktes
+  `git stash` und Force-Push; verlangen eine Teststufe vor dem Sitzungsende nach Änderungen in `scripts/`; warnen bei
+  Git-Veröffentlichung, Cache-Schema (`unwrap()`/Backen) und Viewer-Änderungen.
+
 ## 1.9.0 „Afterburner“ – 2026-10-12
 
 Alle Stufen parallel, gemessen auf dem M5 (ruhige Maschine, warmer Cache): quick 10–11 s (vorher 25), standard 54–68 s

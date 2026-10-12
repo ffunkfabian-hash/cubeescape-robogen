@@ -1,0 +1,9 @@
+{
+  "format": "CubeEscapeRobotLook",
+  "version": 2,
+  "name": "Aus der Zukunft",
+  "variants": {"Head": "Hologram", "AccBack": "Rocket", "Tail": "Spring"},
+  "expression": "Dizzy",
+  "display": "Rainbow",
+  "glow": 9.0
+}

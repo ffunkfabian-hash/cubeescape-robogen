@@ -6,7 +6,11 @@ preview renders, .blend and a Unity-ready .fbx.
 
 Usage (Blender CLI):
     Blender -b --factory-startup --python-exit-code 1 --python generate_robot.py -- \
-        --out /path/to/output [--stage model|full] [--tex-size 2048] [--no-render]
+        [--tier quick|standard|full] [--out /path/to/output] [--stage model|full] [--tex-size 2048] [--no-render]
+
+Test tiers (see TIERS): quick = small textures, QA of the standard robot only, no renders (output/_quick);
+standard = medium textures, full QA, still renders (output/_standard); full = deliverables (output). Every run
+reports its step times in logs/robot_report.json and warns when the tier's time budget is exceeded.
 
 Conventions (shared with the Cube Escape Blender pipeline):
     * 1 Blender unit = 1 m, robot stands on z = 0, origin between the feet.
@@ -17,6 +21,9 @@ Conventions (shared with the Cube Escape Blender pipeline):
 
 import argparse
 import collections
+import concurrent.futures
+import hashlib
+import inspect
 import shutil
 import json
 import logging
@@ -41,27 +48,64 @@ import make_textures  # noqa: E402 - ImageMagick source textures
 import export_viewer  # noqa: E402 - data for the RobotViewer app
 
 LOG = logging.getLogger("robot")
-VERSION = "1.7.0"
+VERSION = "1.8.0"
 
 # ----------------------------------------------------------------------------------------------
 # Arguments and logging
 # ----------------------------------------------------------------------------------------------
 
 
+# Test tiers: what a run checks and produces, and how long it may take (warning only).
+TIERS = {
+    "quick": {"tex_size": 512, "preview_samples": 0.25, "ao_samples": 16, "qa_types": "Classic", "no_render": True, "no_anim_sheets": True,
+              "budget": 30},
+    "standard": {"tex_size": 1024, "preview_samples": 0.25, "ao_samples": 32, "qa_types": "", "no_render": False, "no_anim_sheets": True,
+                 "budget": 120},
+    "full": {"tex_size": 2048, "preview_samples": 1.0, "ao_samples": 64, "qa_types": "", "no_render": False, "no_anim_sheets": False,
+             "budget": 300},
+}
+
+
 def parse_args():
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
     here = os.path.dirname(os.path.abspath(__file__))
     parser = argparse.ArgumentParser(description="Cube Escape robot generator")
-    parser.add_argument("--out", default=os.path.normpath(os.path.join(here, "..", "output")))
+    parser.add_argument("--tier", choices=list(TIERS), default="full",
+                        help="test tier: quick (seconds), standard (about 2 min), full (deliverables)")
+    parser.add_argument("--out", default=None, help="output folder (default: output, output/_quick, output/_standard)")
     parser.add_argument("--stage", choices=["model", "full"], default="full")
-    parser.add_argument("--tex-size", type=int, default=2048)
-    parser.add_argument("--ao-samples", type=int, default=64)
+    parser.add_argument("--tex-size", type=int, default=None)
+    parser.add_argument("--ao-samples", type=int, default=None)
     parser.add_argument("--no-render", action="store_true")
     parser.add_argument("--skip-bake", action="store_true", help="debug: keep procedural materials, no textures")
     parser.add_argument("--groups", default="", help="debug: only these animation groups (comma list), Basis is kept")
-    parser.add_argument("--qa-types", default="", help="debug: QA only these robot types (comma list)")
+    parser.add_argument("--qa-types", default=None, help="QA only these robot types (comma list, Classic always)")
     parser.add_argument("--no-anim-sheets", action="store_true")
-    return parser.parse_args(argv)
+    parser.add_argument("--no-cache", action="store_true", help="bake and build everything again")
+    parser.add_argument("--check-compose", action="store_true",
+                        help="also bake the default skin directly and compare it with the composed one")
+    parser.add_argument("--bake-device", choices=["auto", "cpu", "gpu"], default="auto",
+                        help="Cycles device for baking (auto = GPU if there is one)")
+    parser.add_argument("--qa-workers", type=int, default=max(1, min(8, (os.cpu_count() or 4) - 2)),
+                        help="parallel Blender processes for the type QA (default: cores - 2, at most 8)")
+    parser.add_argument("--qa-worker-out", default="", help=argparse.SUPPRESS)   # internal: QA worker mode
+    parser.add_argument("--src-dir", default="", help=argparse.SUPPRESS)         # internal: shared source textures
+    args = parser.parse_args(argv)
+    tier = TIERS[args.tier]
+    if args.out is None:
+        args.out = os.path.normpath(os.path.join(here, "..", "output" if args.tier == "full" else "output/_" + args.tier))
+    if args.tex_size is None:
+        args.tex_size = tier["tex_size"]
+    if args.ao_samples is None:
+        args.ao_samples = tier["ao_samples"]
+    if args.qa_types is None:
+        args.qa_types = tier["qa_types"]
+    args.no_render = args.no_render or tier["no_render"]
+    args.no_anim_sheets = args.no_anim_sheets or tier["no_anim_sheets"]
+    args.check_compose = args.check_compose or args.tier == "full"
+    args.budget = tier["budget"]
+    args.preview_samples = tier["preview_samples"]
+    return args
 
 
 def setup_logging(out_dir):
@@ -92,6 +136,9 @@ class _Skip:
         return exc_type is _SkipBlock
 
 
+STEP_TIMES = collections.OrderedDict()     # step name -> seconds, written into the report
+
+
 class Step:
     """Context manager that logs duration and re-raises with a readable step name."""
 
@@ -105,7 +152,9 @@ class Step:
 
     def __exit__(self, exc_type, exc, tb):
         if exc_type is None:
-            LOG.info("  %s done (%.1fs)", self.name, time.time() - self.t0)
+            dt = time.time() - self.t0
+            STEP_TIMES[self.name] = round(dt, 2)
+            LOG.info("  %s done (%.1fs)", self.name, dt)
             return False
         if exc_type is _SkipBlock:
             return True
@@ -1469,8 +1518,97 @@ def apply_weighted_normals(ob):
         bpy.ops.object.modifier_apply(modifier=mod.name)
 
 
-def unwrap(objs):
-    """One shared atlas for every part object (body materials only); eye screen and display keep fixed UVs."""
+UV_SCHEMA = "1.8-a"     # bump when unwrap() changes
+
+
+def mesh_arrays(me):
+    n = len(me.vertices)
+    co = np.empty(n * 3, dtype=np.float32)
+    me.vertices.foreach_get("co", co)
+    lv = np.empty(len(me.loops), dtype=np.int32)
+    me.loops.foreach_get("vertex_index", lv)
+    ls = np.empty(len(me.polygons), dtype=np.int32)
+    me.polygons.foreach_get("loop_start", ls)
+    lt = np.empty(len(me.polygons), dtype=np.int32)
+    me.polygons.foreach_get("loop_total", lt)
+    mi = np.empty(len(me.polygons), dtype=np.int32)
+    me.polygons.foreach_get("material_index", mi)
+    return co.reshape(-1, 3), lv, ls, lt, mi
+
+
+def canonical_order(me):
+    """Blender's face order of the generated parts varies between runs (the vertices do not). Polygons sorted by
+    their rounded corner positions, each rotated to start at its smallest corner, give an order that does not:
+    returns (loop permutation, polygon permutation) into the mesh's own order."""
+    co, lv, ls, lt, _ = mesh_arrays(me)
+    co = np.round(co.astype(np.float64), 5)
+    keys, rot = [], []
+    for p in range(len(ls)):
+        pts = [tuple(c) for c in co[lv[ls[p]:ls[p] + lt[p]]].tolist()]
+        r = min(range(len(pts)), key=pts.__getitem__)
+        keys.append(pts[r:] + pts[:r])
+        rot.append(r)
+    order = sorted(range(len(ls)), key=keys.__getitem__)
+    perm = np.empty(len(lv), dtype=np.int64)
+    k = 0
+    for p in order:
+        start, total, r = ls[p], lt[p], rot[p]
+        for j in range(total):
+            perm[k] = start + (r + j) % total
+            k += 1
+    return perm, np.array(order, dtype=np.int64)
+
+
+def geometry_key(objs):
+    """Content hash of the part meshes before unwrapping (names, corners, materials), independent of face order."""
+    h = hashlib.sha256(repr((UV_SCHEMA, bpy.app.version_string)).encode())
+    for o in sorted(objs, key=lambda o: o.name):
+        co, lv, ls, lt, mi = mesh_arrays(o.data)
+        perm, order = canonical_order(o.data)
+        h.update(o.name.encode())
+        h.update(co[lv[perm]].tobytes())
+        h.update(lt[order].tobytes())
+        h.update(mi[order].tobytes())
+    return h.hexdigest()
+
+
+def unwrap(objs, cache_dir=None):
+    """One shared atlas for every part object (body materials only); eye screen and display keep fixed UVs.
+    Blender's island packing is not deterministic, so with cache_dir the UVs of unchanged geometry are reused:
+    stable textures between runs, and the bake cache can hit."""
+    key = geometry_key(objs)
+    cache_path = os.path.join(cache_dir, "uv_%s.npz" % key[:20]) if cache_dir else None
+    if cache_path and os.path.exists(cache_path):
+        with np.load(cache_path) as data:
+            if all(o.name in data.files and len(data[o.name]) == len(o.data.loops) * 2 for o in objs):
+                for o in objs:
+                    if not o.data.uv_layers:
+                        o.data.uv_layers.new(name="UVMap")
+                    o.data.uv_layers[0].name = "UVMap"
+                    perm, _ = canonical_order(o.data)
+                    uv = np.empty((len(o.data.loops), 2), dtype=np.float32)
+                    uv[perm] = data[o.name].reshape(-1, 2)
+                    o.data.uv_layers[0].data.foreach_set("uv", uv.ravel())
+                LOG.info("  UV cache hit (%s)", key[:12])
+                return
+    unwrap_fresh(objs)
+    if cache_path:
+        os.makedirs(cache_dir, exist_ok=True)
+        for fn in os.listdir(cache_dir):
+            if fn.startswith("uv_") and fn.endswith(".npz"):
+                os.remove(os.path.join(cache_dir, fn))
+        arrays = {}
+        for o in objs:
+            uv = np.empty(len(o.data.loops) * 2, dtype=np.float32)
+            o.data.uv_layers[0].data.foreach_get("uv", uv)
+            perm, _ = canonical_order(o.data)
+            arrays[o.name] = uv.reshape(-1, 2)[perm].ravel()
+        tmp = cache_path + ".tmp.npz"
+        np.savez_compressed(tmp, **arrays)
+        os.replace(tmp, cache_path)
+
+
+def unwrap_fresh(objs):
     view_layer = bpy.context.view_layer
     for o in bpy.context.scene.objects:
         o.select_set(o in objs)
@@ -1527,7 +1665,11 @@ def write_png(path, pixels, width, height, channels):
         fh.write(png)
 
 
-def enable_gpu():
+def enable_gpu(device="gpu"):
+    if device == "cpu":
+        bpy.context.scene.cycles.device = "CPU"
+        LOG.info("  Cycles device: CPU")
+        return
     try:
         prefs = bpy.context.preferences.addons["cycles"].preferences
         for dev_type in ("METAL", "OPTIX", "CUDA", "HIP", "ONEAPI"):
@@ -1539,7 +1681,7 @@ def enable_gpu():
             gpus = [d for d in prefs.devices if d.type != "CPU"]
             if gpus:
                 for d in prefs.devices:
-                    d.use = True
+                    d.use = d.type != "CPU"     # GPU only: deterministic, and the CPU is busy with the QA
                 bpy.context.scene.cycles.device = "GPU"
                 LOG.info("  Cycles device: %s (%s)", dev_type, ", ".join(d.name for d in gpus))
                 return
@@ -1558,19 +1700,85 @@ def linear_to_srgb(c):
     return np.where(c <= 0.0031308, c * 12.92, 1.055 * np.power(c, 1 / 2.4) - 0.055)
 
 
-def bake_textures(objs, mats, size, ao_samples, tex_dir):
+BAKE_SCHEMA = "1.8-c"   # bump when the baking code changes in a way the cache key cannot see
+STATIC_TEXTURES = ("T_Robot_MetallicSmoothness.png", "T_Robot_Occlusion.png", "T_Robot_ColorMask.png",
+                   "T_Robot_LightMask.png", "T_Robot_Normal.png")
+LAYER_SCALE = 16383.75  # cached float maps as uint16 over 0..4: steps of 6e-5, far below one 8-bit step
+COMPOSE_TOLERANCE = 2e-3
+
+
+def bake_textures(objs, mats, size, ao_samples, tex_dir, cache_dir=None, check_compose=False, device="auto"):
+    """Atlas textures. Skins are not baked one by one: every colour of the body is linear in the palette (palette
+    colours only pass through mixes and multiplies with scalar factors), so base = C + sum(w_k * palette_k) with
+    grey weight maps w_k. One bake with the palette black gives C, one bake per three palette colours (one per RGB
+    channel) gives the weights - six bakes for any number of skins, each skin is then composed with numpy.
+    check_compose bakes the default skin directly and compares. With cache_dir, the layers and the static textures
+    of an unchanged model (geometry, UVs, materials, source textures, settings) are reused without baking."""
+    os.makedirs(tex_dir, exist_ok=True)
+    geo_key = bake_geometry_key(objs, size, ao_samples)
+    key = bake_key(geo_key, mats)
+    ao_cache = os.path.join(cache_dir, "ao_%s.npz" % geo_key[:20]) if cache_dir else None
+    stamp_path = os.path.join(tex_dir, ".bake.stamp")
+    cache_path = os.path.join(cache_dir, "bake_%s.npz" % key[:20]) if cache_dir else None
+    layers = None
+    if cache_path and os.path.exists(cache_path) and read_text(stamp_path) == key and \
+            all(os.path.exists(os.path.join(tex_dir, n)) for n in STATIC_TEXTURES):
+        layers = load_layers(cache_path)
+        LOG.info("  bake cache hit (%s): static textures and skin layers reused", key[:12])
+    if layers is None:
+        if os.path.exists(stamp_path):
+            os.remove(stamp_path)
+        layers = bake_layers(objs, mats, size, ao_samples, tex_dir, check_compose, device, ao_cache)
+        with open(stamp_path, "w", encoding="utf-8") as fh:
+            fh.write(key)
+        if cache_path:
+            os.makedirs(cache_dir, exist_ok=True)
+            for fn in os.listdir(cache_dir):
+                if fn.startswith("bake_") and fn.endswith(".npz"):
+                    os.remove(os.path.join(cache_dir, fn))
+            save_layers(cache_path, layers)
+    paths = {n: os.path.join(tex_dir, n) for n in STATIC_TEXTURES}
+
+    def write_skin(skin):
+        base, emit = compose_skin(layers, SKINS[skin])
+        suffix = "" if skin == DEFAULT_SKIN else "_" + skin
+        out = {}
+        for name, arr in (("T_Robot_BaseColor%s.png" % suffix, base * layers["ao_soft"][..., None]),
+                          ("T_Robot_Emission%s.png" % suffix, emit)):
+            out[name] = os.path.join(tex_dir, name)
+            write_png(out[name], linear_to_srgb(arr), size, size, 3)
+        return out
+
+    t0 = time.time()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+        for out in pool.map(write_skin, list(SKINS)):
+            paths.update(out)
+    LOG.info("  composed %d skins in %.1fs", len(SKINS), time.time() - t0)
+    for key_ in ("eyes", "displays"):       # runtime atlases ship next to the baked set
+        dst = os.path.join(tex_dir, os.path.basename(SRC[key_].filepath))
+        shutil.copyfile(bpy.path.abspath(SRC[key_].filepath), dst)
+        paths[os.path.basename(dst)] = dst
+    return paths
+
+
+def bake_layers(objs, mats, size, ao_samples, tex_dir, check_compose, device, ao_cache=None):
     scene = bpy.context.scene
     scene.render.engine = "CYCLES"
-    enable_gpu()
+    enable_gpu("cpu" if device == "cpu" else "gpu")
     scene.cycles.use_denoising = False
     bake = scene.render.bake
     bake.margin = 12
     bake.margin_type = "EXTEND"
     bake.use_clear = True
     bake.target = "IMAGE_TEXTURES"
-    bpy.context.view_layer.objects.active = objs[0]
+    # Cycles bakes every selected object in its own session; on Metal each costs a full device sync. One joined
+    # copy of all parts turns 35 sessions per pass into one (the parts share the atlas and the materials).
+    for o in objs:
+        o.hide_render = True
+    joined = joined_copy(objs, "Bake_All")
     for o in scene.objects:
-        o.select_set(o in objs)
+        o.select_set(o == joined)
+    bpy.context.view_layer.objects.active = joined
     dummy = bpy.data.images.new("bake_dummy", 32, 32, alpha=False, float_buffer=True)
 
     results = {}
@@ -1592,7 +1800,14 @@ def bake_textures(objs, mats, size, ao_samples, tex_dir):
                 em = nt.nodes.new("ShaderNodeEmission")
                 em.name = "BakeEmission"
                 em.inputs["Strength"].default_value = 1.0
-                src = CHANNELS[key][channel]
+                if isinstance(channel, tuple):     # three scalar channels packed into R, G, B
+                    comb = nt.nodes.new("ShaderNodeCombineColor")
+                    comb.name = "BakeCombine"
+                    for i, ch in enumerate(channel):
+                        nt.links.new(CHANNELS[key][ch], comb.inputs[i])
+                    src = comb.outputs[0]
+                else:
+                    src = CHANNELS[key][channel]
                 if src.type == "VALUE":
                     comb = nt.nodes.new("ShaderNodeCombineColor")
                     comb.name = "BakeCombine"
@@ -1620,25 +1835,46 @@ def bake_textures(objs, mats, size, ao_samples, tex_dir):
         bpy.data.images.remove(img)
         return px.reshape(size, size, 4)
 
-    skin_bakes = {}
-    for skin in SKINS:
-        apply_skin(skin)
-        skin_bakes[skin] = (bake_pass("Base_" + skin, "base", "linear"), bake_pass("Emit_" + skin, "emit", "linear"))
+    keys = sorted({k for _, k in PALETTE_NODES})
+    set_palette({})
+    c_base, c_emit = bake_pass("SkinConst", "base", "linear"), bake_pass("SkinConstEmit", "emit", "linear")
+    layers = {"c_base": c_base[..., :3], "c_emit": c_emit[..., :3], "w_base": {}, "w_emit": {}}
+    for i in range(0, len(keys), 3):
+        pack = keys[i:i + 3]
+        set_palette({k: tuple(1.0 if c == j else 0.0 for c in range(3)) for j, k in enumerate(pack)})
+        b = bake_pass("Skin_" + "+".join(pack), "base", "linear")
+        e = bake_pass("SkinEmit_" + "+".join(pack), "emit", "linear")
+        for j, k in enumerate(pack):
+            layers["w_base"][k] = b[..., j] - c_base[..., j]
+            layers["w_emit"][k] = e[..., j] - c_emit[..., j]
     apply_skin(DEFAULT_SKIN)
-    results["rough"] = bake_pass("Roughness", "rough", "data")
-    results["metal"] = bake_pass("Metallic", "metal", "data")
+    if check_compose:
+        direct = (bake_pass("Base_" + DEFAULT_SKIN, "base", "linear")[..., :3],
+                  bake_pass("Emit_" + DEFAULT_SKIN, "emit", "linear")[..., :3])
+        composed = compose_skin(layers, SKINS[DEFAULT_SKIN])
+        err = max(float(np.abs(d - c).max()) for d, c in zip(direct, composed))
+        LOG.info("  skin composition check (%s): max difference %.2e (linear)", DEFAULT_SKIN, err)
+        if err > COMPOSE_TOLERANCE:
+            raise RuntimeError("composed skin differs from the direct bake by %.2e - a palette colour no longer "
+                               "enters linearly (bake skins one by one or fix the material)" % err)
+    results = {}
+    rma = bake_pass("Rough+Metal+LightMask", ("rough", "metal", "mask_a"), "data")
+    results["rough"], results["metal"], results["mask_a"] = rma[..., 0:1], rma[..., 1:2], rma[..., 2:3]
     results["mask"] = bake_pass("ColorMask", "mask", "data", samples=1)
-    results["mask_a"] = bake_pass("ColorMaskA", "mask_a", "data", samples=1)
     bake.normal_space = "TANGENT"
     results["normal"] = bake_pass("Normal", None, "data", samples=4, bake_type="NORMAL")
-    world = scene.world or bpy.data.worlds.new("BakeWorld")
-    scene.world = world
-    world.light_settings.distance = 0.10
-    results["ao"] = bake_ao_configs(objs, mats, size, ao_samples, dummy)
+    ao_cached = load_ao(ao_cache)
+    if ao_cached is not None:
+        ao = ao_cached
+        LOG.info("  AO cache hit: geometry, UVs and AO settings unchanged")
+    else:
+        world = scene.world or bpy.data.worlds.new("BakeWorld")
+        scene.world = world
+        world.light_settings.distance = 0.10
+        ao = np.clip(bake_ao_configs(objs, mats, size, ao_samples, dummy)[..., 0], 0, 1)
+        save_ao(ao_cache, ao)
 
-    os.makedirs(tex_dir, exist_ok=True)
-    ao = np.clip(results["ao"][..., 0], 0, 1)
-    ao_soft = 1.0 - (1.0 - ao) * 0.55
+    layers["ao_soft"] = 1.0 - (1.0 - ao) * 0.55
     metal = np.clip(results["metal"][..., 0], 0, 1)
     smooth = 1.0 - np.clip(results["rough"][..., 0], 0, 1)
     files = {
@@ -1648,22 +1884,190 @@ def bake_textures(objs, mats, size, ao_samples, tex_dir):
         "T_Robot_LightMask.png": (np.clip(results["mask_a"][..., :1], 0, 1), 1),
         "T_Robot_Normal.png": (np.clip(results["normal"][..., :3], 0, 1), 3),
     }
-    for skin, (base, emit) in skin_bakes.items():
-        suffix = "" if skin == DEFAULT_SKIN else "_" + skin
-        files["T_Robot_BaseColor%s.png" % suffix] = (linear_to_srgb(base[..., :3] * ao_soft[..., None]), 3)
-        files["T_Robot_Emission%s.png" % suffix] = (linear_to_srgb(emit[..., :3]), 3)
-    paths = {}
     for name, (arr, ch) in files.items():
         path = os.path.join(tex_dir, name)
         write_png(path, arr, size, size, ch)
-        paths[name] = path
         LOG.info("  wrote %s", path)
-    for key in ("eyes", "displays"):       # runtime atlases ship next to the baked set
-        dst = os.path.join(tex_dir, os.path.basename(SRC[key].filepath))
-        shutil.copyfile(bpy.path.abspath(SRC[key].filepath), dst)
-        paths[os.path.basename(dst)] = dst
     bpy.data.images.remove(dummy)
-    return paths
+    remove_object(joined)
+    for o in objs:
+        o.hide_render = False
+        o.select_set(True)
+    return layers
+
+
+def joined_copy(objs, name):
+    """A temporary single object with copies of the given parts (same materials, UVs, normals, transforms)."""
+    view_layer = bpy.context.view_layer
+    copies = []
+    for o in objs:
+        c = o.copy()
+        c.data = o.data.copy()
+        c.hide_render = False
+        bpy.context.scene.collection.objects.link(c)
+        c.hide_set(False)
+        copies.append(c)
+    for o in bpy.context.scene.objects:
+        o.select_set(o in copies)
+    view_layer.objects.active = copies[0]
+    if len(copies) > 1:
+        bpy.ops.object.join()
+    ob = view_layer.objects.active
+    ob.name = name
+    return ob
+
+
+def remove_object(ob):
+    me = ob.data
+    bpy.data.objects.remove(ob, do_unlink=True)
+    if me is not None and me.users == 0:
+        bpy.data.meshes.remove(me)
+
+
+def set_palette(colors):
+    """Sets every palette node; keys missing in colors become black."""
+    for nd, key in PALETTE_NODES:
+        nd.outputs[0].default_value = (*colors.get(key, (0.0, 0.0, 0.0)), 1.0)
+
+
+def compose_skin(layers, palette):
+    """Linear base colour and emission of a skin from the baked layers (float32, no AO)."""
+    base = layers["c_base"].astype(np.float32, copy=True)
+    emit = layers["c_emit"].astype(np.float32, copy=True)
+    for k, w in layers["w_base"].items():
+        base += w[..., None] * np.asarray(palette[k], dtype=np.float32)
+    for k, w in layers["w_emit"].items():
+        emit += w[..., None] * np.asarray(palette[k], dtype=np.float32)
+    return base, emit
+
+
+def save_layers(path, layers):
+    flat = {"c_base": layers["c_base"], "c_emit": layers["c_emit"], "ao_soft": layers["ao_soft"]}
+    for kind in ("w_base", "w_emit"):
+        for k, w in layers[kind].items():
+            flat["%s__%s" % (kind, k)] = w
+    q = {n: np.round(np.clip(a, 0.0, 4.0) * LAYER_SCALE).astype(np.uint16) for n, a in flat.items()}
+    tmp = path + ".tmp.npz"
+    np.savez_compressed(tmp, **q)
+    os.replace(tmp, path)
+
+
+def load_layers(path):
+    layers = {"w_base": {}, "w_emit": {}}
+    with np.load(path) as data:
+        for n in data.files:
+            a = data[n].astype(np.float32) / LAYER_SCALE
+            if "__" in n:
+                kind, k = n.split("__", 1)
+                layers[kind][k] = a
+            else:
+                layers[n] = a
+    return layers
+
+
+def read_text(path):
+    try:
+        with open(path, encoding="utf-8") as fh:
+            return fh.read().strip()
+    except OSError:
+        return None
+
+
+NODE_ATTRS = ("operation", "blend_type", "data_type", "interpolation_type", "use_clamp", "clamp_factor",
+              "clamp_result", "projection", "projection_blend", "interpolation", "extension", "uv_map", "space",
+              "noise_dimensions", "normalize", "vector_type", "convert_from", "convert_to", "mode", "target")
+
+
+def _sig_value(v):
+    if isinstance(v, float):
+        return round(v, 7)
+    try:
+        return tuple(round(float(x), 7) for x in v)
+    except TypeError:
+        return v
+
+
+def node_tree_signature(nt):
+    """Everything in a material that changes a bake - except the palette colours (skins are composed)."""
+    rows = []
+    for nd in sorted(nt.nodes, key=lambda n: n.name):
+        row = [nd.name, nd.bl_idname, nd.label]
+        for a in NODE_ATTRS:
+            if hasattr(nd, a):
+                row.append((a, str(getattr(nd, a))))
+        img = getattr(nd, "image", None)
+        if img is not None:
+            row.append(("image", img.name, img.filepath, img.colorspace_settings.name))
+        for sock in nd.inputs:
+            if not sock.is_linked and hasattr(sock, "default_value"):
+                row.append((sock.identifier, _sig_value(sock.default_value)))
+        if not nd.label.startswith("PAL_"):
+            for sock in nd.outputs:
+                if hasattr(sock, "default_value"):
+                    row.append(("out", sock.identifier, _sig_value(sock.default_value)))
+        rows.append(repr(row))
+    rows += sorted(repr((l.from_node.name, l.from_socket.identifier, l.to_node.name, l.to_socket.identifier))
+                   for l in nt.links)
+    return "\n".join(rows)
+
+
+def load_ao(path):
+    if not path or not os.path.exists(path):
+        return None
+    with np.load(path) as data:
+        return data["ao"].astype(np.float32) / LAYER_SCALE
+
+
+def save_ao(path, ao):
+    if not path:
+        return
+    folder = os.path.dirname(path)
+    os.makedirs(folder, exist_ok=True)
+    for fn in os.listdir(folder):
+        if fn.startswith("ao_") and fn.endswith(".npz"):
+            os.remove(os.path.join(folder, fn))
+    tmp = path + ".tmp.npz"
+    np.savez_compressed(tmp, ao=np.round(np.clip(ao, 0.0, 4.0) * LAYER_SCALE).astype(np.uint16))
+    os.replace(tmp, path)
+
+
+def bake_key(geo_key, mats):
+    """Content hash of everything the bakes depend on: geometry key + materials + source textures."""
+    h = hashlib.sha256(geo_key.encode())
+    for key in MAT_ORDER:
+        sig = node_tree_signature(mats[key].node_tree)
+        h.update(key.encode())
+        h.update(sig.encode())
+    for k in sorted(SRC):
+        with open(bpy.path.abspath(SRC[k].filepath), "rb") as fh:
+            h.update(fh.read())
+    return h.hexdigest()
+
+
+def bake_geometry_key(objs, size, ao_samples):
+    """Content hash of what the AO depends on: meshes, UVs, material slots, size and samples (in canonical corner
+    order, see canonical_order) and the code that makes normals and bakes. The normals themselves are left out:
+    their float sums depend on the face order, they follow from the geometry and apply_weighted_normals."""
+    h = hashlib.sha256()
+    h.update(repr((BAKE_SCHEMA, bpy.app.version_string, size, ao_samples, MAT_ORDER, BODY_MATS)).encode())
+    for fn in (apply_weighted_normals, bake_layers, bake_ao_configs, joined_copy):
+        h.update(inspect.getsource(fn).encode())
+    for o in sorted(objs, key=lambda o: o.name):
+        me = o.data
+        h.update(repr((o.name, sorted((k, str(o[k])) for k in o.keys()),
+                       [sl.material.name if sl.material else None for sl in o.material_slots])).encode())
+        h.update(np.array(o.matrix_world, dtype=np.float64).tobytes())
+        co, lv, ls, lt, mi = mesh_arrays(me)
+        perm, order = canonical_order(me)
+        h.update(co[lv[perm]].tobytes())
+        h.update(lt[order].tobytes())
+        h.update(mi[order].tobytes())
+        for uvl in me.uv_layers:
+            uv = np.empty(len(me.loops) * 2, dtype=np.float32)
+            uvl.data.foreach_get("uv", uv)
+            h.update(uvl.name.encode())
+            h.update(uv.reshape(-1, 2)[perm].tobytes())
+    return h.hexdigest()
 
 
 def bake_ao_configs(objs, mats, size, samples, dummy):
@@ -1692,16 +2096,16 @@ def bake_ao_configs(objs, mats, size, samples, dummy):
         nt.nodes.active = tex
     scene.cycles.samples = samples
     t0 = time.time()
+    for o in scene.objects:
+        o.hide_render = True
     for i, visible in enumerate(passes):
-        for o in objs:
-            o.hide_render = o not in visible
-            o.select_set(o in visible)
-        bpy.context.view_layer.objects.active = visible[0]
+        conf = joined_copy(visible, "Bake_AO_%d" % i)     # one bake session per configuration (see bake_layers)
+        for o in scene.objects:
+            o.select_set(o == conf)
+        bpy.context.view_layer.objects.active = conf
         # small margin: neighbouring islands of other variants must not be overwritten
         bpy.ops.object.bake(type="AO", margin=2 if i < len(passes) - 1 else 4, use_clear=(i == 0))
-    for o in objs:
-        o.hide_render = False
-        o.select_set(True)
+        remove_object(conf)
     for key in MAT_ORDER:
         nt = mats[key].node_tree
         nt.nodes.remove(nt.nodes["BakeTarget"])
@@ -3718,14 +4122,42 @@ def evaluated_coords(ob):
     return co
 
 
-def build_trees(co, groups):
-    trees = {}
+def group_topology(groups):
+    """Per vertex group: its vertex indices and its polygons in local indices - computed once per mesh."""
+    topo = {}
     for g, polys in groups.items():
         idx = sorted({i for p in polys for i in p})
         remap = {o: n for n, o in enumerate(idx)}
-        verts = [Vector(co[i]) for i in idx]
-        trees[g] = BVHTree.FromPolygons(verts, [[remap[i] for i in p] for p in polys])
-    return trees
+        topo[g] = (np.array(idx, dtype=np.int64), [[remap[i] for i in p] for p in polys])
+    return topo
+
+
+class GroupTrees:
+    """BVH trees of the vertex groups of one mesh state, built only when a pair needs them. Groups whose
+    bounding boxes are apart cannot overlap, so the box test answers most pairs without a tree (same result
+    as testing every pair; the margin covers float32 rounding inside the trees)."""
+
+    MARGIN = 1e-5
+
+    def __init__(self, co, topo):
+        self.co, self.topo, self.trees = co, topo, {}
+        self.lo, self.hi = {}, {}
+        for g, (idx, _) in topo.items():
+            pts = co[idx]
+            self.lo[g] = pts.min(axis=0) - self.MARGIN
+            self.hi[g] = pts.max(axis=0) + self.MARGIN
+
+    def tree(self, g):
+        t = self.trees.get(g)
+        if t is None:
+            idx, polys = self.topo[g]
+            t = self.trees[g] = BVHTree.FromPolygons(self.co[idx].tolist(), polys)
+        return t
+
+    def overlap(self, a, b):
+        if (self.lo[a] > self.hi[b]).any() or (self.lo[b] > self.hi[a]).any():
+            return False
+        return bool(self.tree(a).overlap(self.tree(b)))
 
 
 # Contacts that are intended: fabric accessories may be squeezed by the drooping head.
@@ -3763,11 +4195,12 @@ def run_qa(ob, arm_ob, actions, report, label="Classic", quiet=False):
         pb.scale = (1, 1, 1)
     bpy.context.view_layer.update()
     rest_co = evaluated_coords(ob)
-    rest_trees = build_trees(rest_co, groups)
+    topo = group_topology(groups)
+    rest_trees = GroupTrees(rest_co, topo)
     baseline = set()
     for i, a in enumerate(names):
         for b in names[i + 1:]:
-            if rest_trees[a].overlap(rest_trees[b]):
+            if rest_trees.overlap(a, b):
                 baseline.add((a, b))
     # the eye screen is a decal (it shrinks when blinking), not a joint
     joints = [(a, b) for a in names for b in names if parent.get(a) == b and a != "Eyes"]
@@ -3792,6 +4225,12 @@ def run_qa(ob, arm_ob, actions, report, label="Classic", quiet=False):
         stance_speed = []
         prev_foot = None
         first = last = None
+        pairs = [(a, b) for i, a in enumerate(names) for b in names[i + 1:]
+                 if not ((a, b) in allowed or (a, b) in baseline or (name, a, b) in ACCEPTED_OVERLAPS or
+                         ("*", a, b) in ACCEPTED_OVERLAPS or (name in HIDE_HELD_ITEM and "Prop_R" in (a, b)))]
+        joint_pairs = [(child, par) for child, par in joints
+                       if (min(child, par), max(child, par)) in baseline or (child, par) in baseline or
+                       (par, child) in baseline]
         for f in range(0, frames + 1):
             scene.frame_set(f)
             co = evaluated_coords(ob)
@@ -3803,18 +4242,13 @@ def run_qa(ob, arm_ob, actions, report, label="Classic", quiet=False):
             if co[iz, 2] < min_z:
                 min_z = float(co[iz, 2])
                 min_z_where = "%s@%d" % (vgroup[iz], f)
-            trees = build_trees(co, groups)
-            for i, a in enumerate(names):
-                for b in names[i + 1:]:
-                    if (a, b) in allowed or (a, b) in baseline or (name, a, b) in ACCEPTED_OVERLAPS or ("*", a, b) in ACCEPTED_OVERLAPS or \
-                            (name in HIDE_HELD_ITEM and "Prop_R" in (a, b)):
-                        continue
-                    if trees[a].overlap(trees[b]):
-                        new_overlaps.setdefault("%s/%s" % (a, b), []).append(f)
-            for child, par in joints:
-                if (min(child, par), max(child, par)) in baseline or (child, par) in baseline or (par, child) in baseline:
-                    if not trees[child].overlap(trees[par]):
-                        detached.setdefault("%s/%s" % (child, par), []).append(f)
+            trees = GroupTrees(co, topo)
+            for a, b in pairs:
+                if trees.overlap(a, b):
+                    new_overlaps.setdefault("%s/%s" % (a, b), []).append(f)
+            for child, par in joint_pairs:
+                if not trees.overlap(child, par):
+                    detached.setdefault("%s/%s" % (child, par), []).append(f)
             feet_z = {s: float(co[foot_idx[s], 2].min()) for s in foot_idx}
             if all(z > 0.004 for z in feet_z.values()):
                 flight_frames += 1
@@ -3951,6 +4385,13 @@ def type_bounds(part_objs, cfg):
 # ----------------------------------------------------------------------------------------------
 
 
+PREVIEW_SAMPLE_SCALE = 1.0      # set per tier: previews in the standard tier only need to be readable
+
+
+def preview_samples(n):
+    return max(4, int(round(n * PREVIEW_SAMPLE_SCALE)))
+
+
 def look_at(cam, target):
     d = Vector(target) - cam.location
     cam.rotation_euler = d.to_track_quat("-Z", "Y").to_euler()
@@ -3959,7 +4400,7 @@ def look_at(cam, target):
 def setup_render_scene(coll):
     scene = bpy.context.scene
     scene.render.engine = "BLENDER_EEVEE"
-    scene.eevee.taa_render_samples = 64
+    scene.eevee.taa_render_samples = preview_samples(64)
     try:
         scene.eevee.use_shadows = True
         scene.eevee.use_raytracing = True
@@ -4067,7 +4508,7 @@ def render_views(cam, out_dir, prefix="", res=1100):
 
 def render_anim_sheets(cam, arm_ob, actions, out_dir):
     scene = bpy.context.scene
-    scene.eevee.taa_render_samples = 24
+    scene.eevee.taa_render_samples = preview_samples(24)
     scene.render.resolution_x = scene.render.resolution_y = 300
     sheet_dir = os.path.join(out_dir, "anim_frames")
     os.makedirs(sheet_dir, exist_ok=True)
@@ -4152,7 +4593,7 @@ def set_look(ob, tex_dir, skin=DEFAULT_SKIN, expression="Normal", display="Statu
 
 def render_expressions(cam, ob, out_dir, tex_dir):
     scene = bpy.context.scene
-    scene.eevee.taa_render_samples = 32
+    scene.eevee.taa_render_samples = preview_samples(32)
     scene.render.resolution_x = scene.render.resolution_y = 300
     cam.data.type = "PERSP"
     cam.data.lens = 70
@@ -4177,7 +4618,7 @@ def render_expressions(cam, ob, out_dir, tex_dir):
 def render_types(cam, part_objs, robot_mesh, coll, out_dir, tex_dir):
     """Every robot type (variants + skin + eyes + display + accessories), front and iso."""
     scene = bpy.context.scene
-    scene.eevee.taa_render_samples = 48
+    scene.eevee.taa_render_samples = preview_samples(48)
     scene.render.resolution_x = scene.render.resolution_y = 520
     robot_mesh.hide_render = True
     tiles = {"front": [], "iso": []}
@@ -4214,7 +4655,7 @@ def render_types(cam, part_objs, robot_mesh, coll, out_dir, tex_dir):
 def render_skins(cam, ob, out_dir, tex_dir):
     """Front + iso render per skin (texture swap on M_Robot), combined with ImageMagick."""
     scene = bpy.context.scene
-    scene.eevee.taa_render_samples = 48
+    scene.eevee.taa_render_samples = preview_samples(48)
     scene.render.resolution_x = scene.render.resolution_y = 520
     nodes = ob.data.materials[0].node_tree.nodes
     base = next(n for n in nodes if n.type == "TEX_IMAGE" and n.image.name.startswith("T_Robot_BaseColor"))
@@ -4244,7 +4685,7 @@ def render_skins(cam, ob, out_dir, tex_dir):
 
 def render_gifs(cam, arm_ob, actions, out_dir):
     scene = bpy.context.scene
-    scene.eevee.taa_render_samples = 16
+    scene.eevee.taa_render_samples = preview_samples(16)
     scene.render.resolution_x = scene.render.resolution_y = 320
     cam.data.type = "ORTHO"
     cam.data.ortho_scale = 1.75
@@ -4316,13 +4757,61 @@ def export_fbx(path, objs, arm_ob, animations=True):
 # ----------------------------------------------------------------------------------------------
 
 
+def qa_robot_type(tname, part_objs, coll, arm_ob, actions, report):
+    cfg = default_config()
+    cfg.update(ROBOT_TYPES[tname]["variants"])
+    tmp = combine_objects([part_objs[g] for g in config_groups(cfg)], "QA_" + tname, coll)
+    bind_mesh(tmp, arm_ob)
+    run_qa(tmp, arm_ob, actions, report, tname, quiet=True)
+    bpy.data.objects.remove(tmp, do_unlink=True)
+
+
+def start_qa_workers(type_names, args, out):
+    """The type QA in parallel: each worker is a Blender process that rebuilds the model (no bake, no render -
+    the QA only looks at geometry and animation) and checks a share of the robot types."""
+    n = min(args.qa_workers, len(type_names))
+    workers = []
+    for i in range(n):
+        chunk = type_names[i::n]
+        wdir = os.path.join(out, "logs", "qa_worker_%d" % i)
+        os.makedirs(wdir, exist_ok=True)
+        res = os.path.join(wdir, "qa.json")
+        if os.path.exists(res):
+            os.remove(res)
+        cmd = [bpy.app.binary_path, "-b", "--factory-startup", "-noaudio", "--python-exit-code", "1",
+               "--python", os.path.abspath(__file__), "--", "--out", wdir, "--src-dir", out, "--skip-bake",
+               "--no-render", "--qa-types", ",".join(chunk), "--qa-worker-out", res, "--qa-workers", "1"]
+        if args.groups:
+            cmd += ["--groups", args.groups]
+        proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        workers.append((chunk, wdir, res, proc))
+    LOG.info("  %d QA workers for %d robot types", n, len(type_names))
+    return workers
+
+
+def collect_qa_workers(workers, report):
+    for chunk, wdir, res, proc in workers:
+        code = proc.wait()
+        if code != 0 or not os.path.exists(res):
+            raise RuntimeError("QA worker for %s failed (exit %s), log: %s" % (
+                ", ".join(chunk), code, os.path.join(wdir, "logs", "generate_robot.log")))
+        with open(res, encoding="utf-8") as fh:
+            report.setdefault("qa", {}).update(json.load(fh))
+        shutil.rmtree(wdir, ignore_errors=True)
+
+
 def main():
     args = parse_args()
     out = os.path.abspath(args.out)
     os.makedirs(out, exist_ok=True)
     setup_logging(out)
-    LOG.info("Cube Escape robot generator %s | Blender %s | stage=%s", VERSION, bpy.app.version_string, args.stage)
-    report = {"generator": VERSION, "blender": bpy.app.version_string, "stage": args.stage}
+    t_start = time.time()
+    global PREVIEW_SAMPLE_SCALE
+    PREVIEW_SAMPLE_SCALE = args.preview_samples
+    worker = bool(args.qa_worker_out)
+    LOG.info("Cube Escape robot generator %s | Blender %s | stage=%s | tier=%s%s", VERSION, bpy.app.version_string,
+             args.stage, args.tier, " (QA worker)" if worker else "")
+    report = {"generator": VERSION, "blender": bpy.app.version_string, "stage": args.stage, "tier": args.tier}
     preview_dir = os.path.join(out, "Previews")
     tex_dir = os.path.join(out, "Textures")
     os.makedirs(preview_dir, exist_ok=True)
@@ -4332,7 +4821,8 @@ def main():
         coll = get_collection("Robot")
         preview_coll = get_collection("Preview")
     with Step("ImageMagick source textures"):
-        src_paths = make_textures.make_all(os.path.join(out, "SourceTextures"), log=LOG.info)
+        src_paths = make_textures.make_all(os.path.join(args.src_dir or out, "SourceTextures"), log=LOG.info,
+                                           cache=not args.no_cache)
         load_source_textures(src_paths)
         report["source_textures"] = sorted(os.path.basename(p) for p in src_paths.values())
     with Step("materials"):
@@ -4350,14 +4840,16 @@ def main():
         LOG.info("  %d parts in %d objects; slots: %s", report["parts"], len(part_objs),
                  ", ".join("%s=%s" % (k, "/".join(v)) for k, v in SLOTS.items()))
     with Step("uv"):
-        unwrap(list(part_objs.values()))
+        unwrap(list(part_objs.values()), None if args.no_cache else os.path.join(out, "cache"))
 
     if args.skip_bake:
         LOG.warning("skip-bake: procedural materials only (debug run)")
     with Step("bake textures") if not args.skip_bake else _Skip():
         if args.skip_bake:
             raise _SkipBlock()
-        tex_paths = bake_textures(list(part_objs.values()), mats, args.tex_size, args.ao_samples, tex_dir)
+        tex_paths = bake_textures(list(part_objs.values()), mats, args.tex_size, args.ao_samples, tex_dir,
+                                  None if args.no_cache else os.path.join(out, "cache"), args.check_compose,
+                                  args.bake_device)
         final = [build_baked_material(tex_paths), build_baked_material(tex_paths, "M_RobotFabric",
                                                                         SKINS[DEFAULT_SKIN]["fabric"]),
                  mats["EyeScreen"], mats["Display"]]
@@ -4398,21 +4890,28 @@ def main():
         report["animations"] = {a.name: {"frames": a.frames, "loop": a.loop, "description": a.desc, "group": a.group,
                                          "unity": a.unity} for a in ANIMS}
     with Step("qa"):
-        run_qa(robot_mesh, arm_ob, actions, report, "Classic")
         only = set(filter(None, args.qa_types.split(",")))
-        for tname, spec in ROBOT_TYPES.items():
-            if tname == "Classic" or (only and tname not in only):
-                continue
-            cfg = default_config()
-            cfg.update(spec["variants"])
-            tmp = combine_objects([part_objs[g] for g in config_groups(cfg)], "QA_" + tname, coll)
-            bind_mesh(tmp, arm_ob)
-            qa_t = run_qa(tmp, arm_ob, actions, report, tname, quiet=True)
+        type_names = [t for t in ROBOT_TYPES if t != "Classic" and (not only or t in only)]
+        if worker:
+            for tname in type_names:
+                qa_robot_type(tname, part_objs, coll, arm_ob, actions, report)
+            with open(args.qa_worker_out, "w", encoding="utf-8") as fh:
+                json.dump({t: report["qa"][t] for t in type_names}, fh)
+            return 0
+        workers = start_qa_workers(type_names, args, out) if args.qa_workers > 1 and len(type_names) > 1 else []
+        run_qa(robot_mesh, arm_ob, actions, report, "Classic")
+        if workers:
+            collect_qa_workers(workers, report)
+        else:
+            for tname in type_names:
+                qa_robot_type(tname, part_objs, coll, arm_ob, actions, report)
+        report["qa"] = {t: report["qa"][t] for t in ["Classic"] + type_names}
+        for tname in type_names:
+            qa_t = report["qa"][tname]
             bad = [n for n, e in qa_t["actions"].items() if e["min_z"] < -0.006 or e["new_overlaps"] or
                    e["detached_joints"]]
             LOG.log(logging.WARNING if bad else logging.INFO, "  QA[%s] %d clips, problems: %s", tname,
                     len(qa_t["actions"]), bad or "-")
-            bpy.data.objects.remove(tmp, do_unlink=True)
     with Step("clip data"):
         clips = measure_clips(robot_mesh, arm_ob, actions)
         for a in ANIMS:
@@ -4467,10 +4966,14 @@ def main():
                 pb.location = (0, 0, 0)
                 pb.scale = (1, 1, 1)
             cam = setup_render_scene(preview_coll)
-            report["previews"] = render_views(cam, preview_dir)
-            render_skins(cam, robot_mesh, preview_dir, tex_dir)
-            render_expressions(cam, robot_mesh, preview_dir, tex_dir)
-            render_types(cam, part_objs, robot_mesh, coll, preview_dir, tex_dir)
+            with Step("render views"):
+                report["previews"] = render_views(cam, preview_dir)
+            with Step("render skins"):
+                render_skins(cam, robot_mesh, preview_dir, tex_dir)
+            with Step("render expressions"):
+                render_expressions(cam, robot_mesh, preview_dir, tex_dir)
+            with Step("render types"):
+                render_types(cam, part_objs, robot_mesh, coll, preview_dir, tex_dir)
             if not args.no_anim_sheets:
                 rows = render_anim_sheets(cam, arm_ob, actions, preview_dir)
                 build_contact_sheets(rows, preview_dir)
@@ -4485,7 +4988,13 @@ def main():
         preview_coll.hide_render = False
         bpy.context.scene.frame_end = 120
         bpy.ops.wm.save_as_mainfile(filepath=os.path.join(out, "CubeEscape_Robot.blend"))
+    total = time.time() - t_start
+    report["timings"] = {"steps": dict(STEP_TIMES), "total": round(total, 1), "budget": args.budget}
     write_report(out, report)
+    slow = sorted(STEP_TIMES.items(), key=lambda kv: -kv[1])[:4]
+    LOG.log(logging.WARNING if total > args.budget else logging.INFO, "time: %.0f s (tier %s, budget %d s)%s - "
+            "slowest: %s", total, args.tier, args.budget, " OVER BUDGET" if total > args.budget else "",
+            ", ".join("%s %.0f s" % kv for kv in slow))
     problems = bool(floating)
     for label, qa in report.get("qa", {}).items():
         for name, entry in qa["actions"].items():

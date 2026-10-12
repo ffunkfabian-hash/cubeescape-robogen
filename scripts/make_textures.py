@@ -13,6 +13,8 @@ Usage:  python3 make_textures.py <out_dir> [--magick /path/to/magick]
 Also imported by generate_robot.py (make_all).
 """
 
+import concurrent.futures
+import hashlib
 import math
 import os
 import random
@@ -153,17 +155,49 @@ def make_decals(magick, out):
     return path
 
 
-def make_all(out_dir, magick=None, log=print):
+STAMP = ".make_textures.stamp"
+
+
+def makers():
+    return {
+        "grunge": (make_grunge, "T_Src_Grunge.png"),
+        "brushed": (make_brushed, "T_Src_Brushed.png"),
+        "scratches": (make_scratches, "T_Src_Scratches.png"),
+        "decals": (make_decals, "T_Src_Decals.png"),
+        "eyes": (make_eye_atlas, "T_Robot_EyeAtlas.png"),
+        "displays": (make_display_atlas, "T_Robot_DisplayAtlas.png"),
+    }
+
+
+def source_stamp(magick):
+    """Everything the textures depend on: this script and the ImageMagick version."""
+    with open(os.path.abspath(__file__), "rb") as fh:
+        h = hashlib.sha256(fh.read())
+    h.update(subprocess.run([magick, "-version"], capture_output=True, text=True).stdout.encode())
+    return h.hexdigest()
+
+
+def make_all(out_dir, magick=None, log=print, cache=True):
+    """Builds all source textures in parallel (independent ImageMagick processes, distinct temp files).
+    With cache, unchanged textures (same script, same ImageMagick) are reused."""
     os.makedirs(out_dir, exist_ok=True)
     mg = find_magick(magick)
-    paths = {
-        "grunge": make_grunge(mg, out_dir),
-        "brushed": make_brushed(mg, out_dir),
-        "scratches": make_scratches(mg, out_dir),
-        "decals": make_decals(mg, out_dir),
-        "eyes": make_eye_atlas(mg, out_dir),
-        "displays": make_display_atlas(mg, out_dir),
-    }
+    jobs = makers()
+    paths = {k: os.path.join(out_dir, fn) for k, (_, fn) in jobs.items()}
+    stamp_path = os.path.join(out_dir, STAMP)
+    stamp = source_stamp(mg)
+    if cache and os.path.exists(stamp_path) and all(os.path.exists(p) for p in paths.values()):
+        with open(stamp_path, encoding="utf-8") as fh:
+            if fh.read().strip() == stamp:
+                log("  ImageMagick textures unchanged - reused from %s" % out_dir)
+                return paths
+    if os.path.exists(stamp_path):
+        os.remove(stamp_path)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(jobs)) as pool:
+        futures = {k: pool.submit(fn, mg, out_dir) for k, (fn, _) in jobs.items()}
+        paths = {k: f.result() for k, f in futures.items()}
+    with open(stamp_path, "w", encoding="utf-8") as fh:
+        fh.write(stamp)
     for k, p in paths.items():
         log("  ImageMagick %-9s -> %s" % (k, p))
     return paths

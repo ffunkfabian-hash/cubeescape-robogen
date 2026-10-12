@@ -1,4 +1,4 @@
-# Cube Escape – Roboter-Charakter (Generator 1.7.0)
+# Cube Escape – Roboter-Charakter (Generator 1.8.0)
 
 Der spielbare Roboter aus dem Cube-Escape-Keyart, vollständig per Skript erzeugt: Geometrie mit Bauteil-Varianten
 und Accessoires, Materialien, gebackene Texturen (Detail- und Ausdrucks-Texturen per ImageMagick), Rig mit Bein- und
@@ -36,8 +36,34 @@ Animationen in 8 Gruppen, 20 Skins, 28 Augen-Ausdrücke, 16 Display-Motive, 20 A
 ## Neu erzeugen
 
 ```bash
-/Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup --python-exit-code 1 --python scripts/generate_robot.py -- --out output
+# Teststufe: quick (≈ 25 s) beim Arbeiten, standard (≈ 2 min) vor dem Commit, full (≈ 11 min) für den Lieferstand
+/Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup --python-exit-code 1 --python scripts/generate_robot.py -- --tier quick
 ```
+
+| Stufe | Texturen | QA | Renders | Ausgabe | gemessen (M5) |
+|---|---|---|---|---|---|
+| `quick` | 512, AO 16 Samples | Standard-Roboter, alle Clips | keine | `output/_quick` | 25 s (mit Cache) |
+| `standard` | 1024, AO 32 Samples | alle 14 Typen, alle Clips, parallel | Ansichten, Skins, Ausdrücke, Typen (¼ Samples) | `output/_standard` | 133 s |
+| `full` | 2048, AO 64 Samples | alle 14 Typen, alle Clips, parallel | alles inkl. Animationsbögen und GIFs | `output` | 655 s (davon 7 min Animationsbögen/GIFs) |
+
+Zum Vergleich 1.7.0: 31 min ohne Renders (Backen 24 min, QA 7 min), mit Renders ≈ 40 min. Jeder Lauf schreibt seine
+Schrittzeiten nach `logs/robot_report.json` (`timings`) und warnt, wenn das Zeitbudget der Stufe (`TIERS`)
+überschritten ist. Was die Zeit spart:
+
+- **Skins werden nicht einzeln gebacken.** Jede Körperfarbe hängt linear von der Palette ab: eine Konstante plus
+  eine Graustufen-Gewichtskarte je Palettenfarbe. Sechs Backs liefern diese Ebenen, jeder Skin entsteht daraus per
+  numpy. Das ist exakt: Der Volllauf backt den Standard-Skin zusätzlich direkt und vergleicht (Abweichung 4e-7,
+  Abbruch ab 2e-3). Weitere Skins kosten damit fast nichts.
+- **Ein Objekt pro Back.** Cycles backt jedes ausgewählte Objekt in einer eigenen Sitzung, und auf Metal kostet
+  jede eine Geräte-Synchronisation (35 Teile: 9–20 s je Durchgang). Gebacken wird deshalb eine zusammengefügte
+  Kopie aller Teile, für die AO eine je Konfiguration: 0,2–1 s je Durchgang, Backen gesamt 50 s statt 24 min.
+- **Cache** in `<out>/cache`: UVs (Blenders Insel-Packen ist nicht deterministisch; gespeichert in einer Ecken-
+  Reihenfolge, die nicht von der wechselnden Flächenreihenfolge abhängt), AO (hängt nur von Geometrie, UVs und dem
+  Bake-Code ab) und alle Bake-Ebenen (zusätzlich Materialien und Quelltexturen). ImageMagick-Texturen entstehen
+  parallel und werden bei unverändertem Skript wiederverwendet. `--no-cache` baut alles neu.
+- **QA parallel** in mehreren Blender-Prozessen (`--qa-workers`, Standard Kerne − 2, höchstens 8). Kollisionsbäume
+  entstehen nur für Teilepaare, deren Hüllquader sich berühren. Die Ergebnisse sind identisch mit 1.7.0 (alle Typen
+  und Clips verglichen).
 
 ```bash
 /Applications/Blender.app/Contents/MacOS/Blender -b output/CubeEscape_Robot.blend --python-exit-code 1 --python scripts/verify_robot.py -- --out output
@@ -51,9 +77,10 @@ viewer/build.sh
 viewer/test_viewer.sh
 ```
 
-Optionen des Generators: `--tex-size 1024`, `--no-render`, `--no-anim-sheets`, `--groups Phase1,Phase4` (nur diese
-Clips, Debug), `--qa-types Runner,King` (QA nur für diese Typen, Debug), `--skip-bake` (ohne Texturen, Debug).
-Laufzeit komplett ≈ 40 min (Baking auf der GPU, QA für alle Robotertypen, Renders). Benötigt ImageMagick 7 und für den Viewer die Xcode-Kommandozeilenwerkzeuge.
+Weitere Optionen (überschreiben die Stufe): `--out`, `--tex-size 1024`, `--ao-samples 32`, `--no-render`,
+`--no-anim-sheets`, `--groups Phase1,Phase4` (nur diese Clips), `--qa-types Runner,King` (QA nur für diese Typen,
+Classic immer), `--skip-bake` (ohne Texturen), `--no-cache`, `--check-compose`, `--bake-device cpu|gpu`,
+`--qa-workers 4`. Benötigt ImageMagick 7 und für den Viewer die Xcode-Kommandozeilenwerkzeuge.
 
 ## Robot Viewer
 

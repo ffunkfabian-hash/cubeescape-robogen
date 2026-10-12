@@ -77,7 +77,7 @@ Sechs Generator-Versionen bauen erst die Skin-Systeme (1.10–1.14), dann die K�
 | **1.14 Reshape** | **Formvarianten** des Körpers: facettiert, durchbrochen, offene Kabel, Voxel. | 5 | Gleiche Gelenkpunkte, alle Clips laufen, QA grün |
 | **2.0 Bodyplan** | **Körperpläne** neben Humanoid: Schwebend (Würfel, Kugel), Stelzen, Vierbeiner, Spinne, Rollend, Ortsfest (Turret, Terminal, Falle). Eigene Rigs und Clip-Sätze, gemeinsame Masken und Augen-Atlas. NPC-Reihe als Typen, Gegner als rote Paletten. | NPCs + Gegner | Jeder Plan im Viewer, QA je Plan gegen seine Clips grün |
 
-**1.10 Paintjob umgesetzt:** Skins als Daten (`data/skins.json`, 38 Skins: 20 bestehende, Gold/Neon/Toxic/Ocean
+**1.10 Paintjob veröffentlicht** (12.10., v1.10.0): Skins als Daten (`data/skins.json`, 38 Skins: 20 bestehende, Gold/Neon/Toxic/Ocean
 aufgewertet, 18 neue), Look-Format 3, Oberflächen je Skin, 8 Abzeichen, 5 Leuchtlinien-Muster (inkl. „Gelenke“),
 Zweitfarbe in 8 Lackzonen, 5 neue Gesichter, 3 animierte Display-Motive, Skin-Bogen mit Dreiviertel-Karten, Bloom und
 Silhouetten, 113 UI-Icons, Viewer mit A/B-Vergleich und GIF/MP4-Export. Aus dem Konzeptvergleich vom 12.10. kamen
@@ -118,7 +118,7 @@ Neunzehn weitere Punkte (zwei Vorschläge vom 12. Oktober 2026 wurden in Generat
 - [ ] **Abnutzung je Skin** statt für alle Skins gleicher Schmutz und Kratzer (Konzeptvergleich 12.10.) – Generator 1.11, zusammen mit den Abnutzungsstufen
 - [ ] **Masken für Unity packen:** Lackzonen und Gelenke als ID-Kanal, Masken in 1024² (der Viewer packt schon beim Laden) – vor Spiel-Roboter
 - [ ] **Bloom im Spiel:** URP-Bloom so, dass nur Emission strahlt (wie auf den Skin-Karten) – Spiel-Roboter
-- [ ] **Cubegen übernimmt die Techniken** aus `docs/TECHNIK.md` (Checkliste dort: Looks als Daten, Masken, Zonen, Decal-Anker, Präsentationskarten, Icons, Vorschau-App) – nächste Cubegen-Version
+- [ ] **Cubegen übernimmt die Techniken** aus `docs/TECHNIK.md` im Robogen-Repo (Checkliste dort: Looks als Daten, Masken, Zonen, Decal-Anker, Präsentationskarten, Icons, Vorschau-App) – vorerst nur in Robogen verzeichnet, Übertrag bei einer späteren Cubegen-Version
 
 ## Skin-Katalog
 

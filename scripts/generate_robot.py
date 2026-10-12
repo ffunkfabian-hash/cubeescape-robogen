@@ -5403,19 +5403,21 @@ def export_fbx(path, objs, arm_ob, animations=True):
     arm_ob.rotation_mode = "XYZ"
     arm_ob.rotation_euler = (0.0, 0.0, FBX_EXPORT_TURN)      # the parented meshes turn with it
     bpy.context.view_layer.update()
-    bpy.ops.export_scene.fbx(
-        filepath=path, use_selection=True, object_types={"ARMATURE", "MESH"},
-        apply_unit_scale=True, apply_scale_options="FBX_SCALE_ALL", global_scale=1.0,
-        axis_forward="-Z", axis_up="Y", use_space_transform=True, bake_space_transform=False,
-        mesh_smooth_type="OFF", use_mesh_modifiers=True, use_triangles=True, use_tspace=True,
-        add_leaf_bones=False, primary_bone_axis="Y", secondary_bone_axis="X",
-        use_armature_deform_only=True, armature_nodetype="NULL",
-        bake_anim=animations, bake_anim_use_all_bones=True, bake_anim_use_nla_strips=True,
-        bake_anim_use_all_actions=False, bake_anim_force_startend_keying=True, bake_anim_step=1.0,
-        bake_anim_simplify_factor=0.0, path_mode="STRIP", embed_textures=False, use_custom_props=False,
-    )
-    arm_ob.rotation_mode, arm_ob.rotation_euler = saved_rotation[0], saved_rotation[1]
-    bpy.context.view_layer.update()
+    try:
+        bpy.ops.export_scene.fbx(
+            filepath=path, use_selection=True, object_types={"ARMATURE", "MESH"},
+            apply_unit_scale=True, apply_scale_options="FBX_SCALE_ALL", global_scale=1.0,
+            axis_forward="-Z", axis_up="Y", use_space_transform=True, bake_space_transform=False,
+            mesh_smooth_type="OFF", use_mesh_modifiers=True, use_triangles=True, use_tspace=True,
+            add_leaf_bones=False, primary_bone_axis="Y", secondary_bone_axis="X",
+            use_armature_deform_only=True, armature_nodetype="NULL",
+            bake_anim=animations, bake_anim_use_all_bones=True, bake_anim_use_nla_strips=True,
+            bake_anim_use_all_actions=False, bake_anim_force_startend_keying=True, bake_anim_step=1.0,
+            bake_anim_simplify_factor=0.0, path_mode="STRIP", embed_textures=False, use_custom_props=False,
+        )
+    finally:          # a failed export must not leave the robot turned (renders, .blend)
+        arm_ob.rotation_mode, arm_ob.rotation_euler = saved_rotation[0], saved_rotation[1]
+        bpy.context.view_layer.update()
     for track in ad.nla_tracks:
         track.mute = True
     for o in hidden:

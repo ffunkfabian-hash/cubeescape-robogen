@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Security.Cryptography;
 using System.Text;
 using UnityEditor;
 using UnityEditor.Animations;
@@ -55,9 +54,11 @@ namespace RobotTestbed.Editor
                 if (string.IsNullOrEmpty(output) || !Directory.Exists(output))
                     throw new ArgumentException("ROBOT_OUTPUT must name the generator output folder");
                 Directory.CreateDirectory(ReportDir);
-                int copied = CopyOutput(output);
-                Debug.Log("testbed: " + copied + " files copied from " + output);
+                var copied = CopyOutput(output);
+                Debug.Log("testbed: " + copied.Count + " files copied from " + output);
                 AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
+                if (copied.Contains("robot_config.json"))       // clip settings come from it (TestbedImport)
+                    AssetDatabase.ImportAsset(TestbedImport.MainFbx, ImportAssetOptions.ForceUpdate);
                 SetMotionNode();
                 SetTypeAvatars();
                 EnsurePipeline();
@@ -76,15 +77,9 @@ namespace RobotTestbed.Editor
             EditorApplication.Exit(code);
         }
 
-        static string Hash(string path)
-        {
-            using var md5 = MD5.Create();
-            using var fs = File.OpenRead(path);
-            return BitConverter.ToString(md5.ComputeHash(fs));
-        }
-
-        /// <summary>Copies only changed files (unchanged ones keep their import).</summary>
-        static int CopyOutput(string output)
+        /// <summary>Copies only changed files (same size and time = unchanged, they keep their import) and removes
+        /// files the generator no longer writes (a removed type or look). Returns the copied relative paths.</summary>
+        static List<string> CopyOutput(string output)
         {
             string dst = Path.Combine(Path.GetDirectoryName(Application.dataPath), TestbedImport.ImportDir);
             Directory.CreateDirectory(dst);
@@ -99,17 +94,28 @@ namespace RobotTestbed.Editor
                 files.Add((f, "Types/" + Path.GetFileName(f)));
             foreach (var f in Directory.GetFiles(Path.Combine(output, "Looks"), "*.robotlook.json"))
                 files.Add((f, "Looks/" + Path.GetFileName(f)));
-            int n = 0;
+            var copied = new List<string>();
             foreach (var (src, rel) in files)
             {
                 if (!File.Exists(src)) throw new FileNotFoundException("generator output incomplete", src);
                 string to = Path.Combine(dst, rel);
                 Directory.CreateDirectory(Path.GetDirectoryName(to));
-                if (File.Exists(to) && new FileInfo(to).Length == new FileInfo(src).Length && Hash(to) == Hash(src)) continue;
+                var a = new FileInfo(src);
+                var b = new FileInfo(to);
+                if (b.Exists && b.Length == a.Length && b.LastWriteTimeUtc == a.LastWriteTimeUtc) continue;
                 File.Copy(src, to, true);
-                n++;
+                File.SetLastWriteTimeUtc(to, a.LastWriteTimeUtc);
+                copied.Add(rel);
             }
-            return n;
+            var wanted = new HashSet<string>(files.Select(f => Path.GetFullPath(Path.Combine(dst, f.rel))));
+            foreach (string sub in new[] { "Types", "Looks", "Textures" })
+                foreach (var f in Directory.GetFiles(Path.Combine(dst, sub)))
+                    if (!f.EndsWith(".meta") && !wanted.Contains(Path.GetFullPath(f)))
+                    {
+                        File.Delete(f);
+                        if (File.Exists(f + ".meta")) File.Delete(f + ".meta");
+                    }
+            return copied;
         }
 
         public static string BonePath(Transform root, string bone)
@@ -168,11 +174,13 @@ namespace RobotTestbed.Editor
                 AssetDatabase.SaveAssets();
             }
             GraphicsSettings.defaultRenderPipeline = urp;
+            int level = QualitySettings.GetQualityLevel();
             for (int i = 0; i < QualitySettings.names.Length; i++)
             {
                 QualitySettings.SetQualityLevel(i, false);
                 QualitySettings.renderPipeline = urp;
             }
+            QualitySettings.SetQualityLevel(level, false);
             PlayerSettings.colorSpace = ColorSpace.Linear;
             Check("urp: pipeline asset active", GraphicsSettings.currentRenderPipeline == urp);
         }

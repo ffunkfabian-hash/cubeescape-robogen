@@ -40,7 +40,7 @@ namespace RobotTestbed
             screenColor = look.Colors["screen"];
             glow = look.Glow;
             SetExpression(look.Expression);
-            SetDisplay(look.Display);
+            SetDisplay(look.Display, true);         // the screen colour may have changed with the same motif
         }
 
         public void SetPower(float p)

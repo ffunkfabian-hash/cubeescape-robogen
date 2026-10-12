@@ -12,10 +12,17 @@ namespace RobotTestbed
         public static object Parse(string text)
         {
             int i = 0;
-            object v = Value(text, ref i);
-            Skip(text, ref i);
-            if (i != text.Length) throw new FormatException("JSON: trailing data at " + i);
-            return v;
+            try
+            {
+                object v = Value(text, ref i);
+                Skip(text, ref i);
+                if (i != text.Length) throw new FormatException("JSON: trailing data at " + i);
+                return v;
+            }
+            catch (IndexOutOfRangeException)
+            {
+                throw new FormatException("JSON: unexpected end at " + i);     // truncated file
+            }
         }
 
         static void Skip(string s, ref int i)

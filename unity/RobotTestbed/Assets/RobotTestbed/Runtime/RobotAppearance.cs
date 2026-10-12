@@ -25,6 +25,7 @@ namespace RobotTestbed
 
         MaterialPropertyBlock block;
         readonly List<Material> shared = new List<Material>();
+        readonly List<(Renderer renderer, int index)> bodySlots = new List<(Renderer, int)>();
         float power = 1f;
 
         public void Init(TextAsset configAsset)
@@ -36,10 +37,20 @@ namespace RobotTestbed
         RobotConfig Cfg => Config ??= new RobotConfig(config.text);
 
         /// <summary>Emission factor of the clip ("power": Death 0, Respawn back to 1).</summary>
+        /// <summary>Only _Glow changes: no renderer search, no allocation (the game calls this every frame).</summary>
         public void SetPower(float p)
         {
             power = p;
-            Apply(Look);
+            if (bodySlots.Count == 0) Apply(Look);
+            block ??= new MaterialPropertyBlock();
+            float g = Mathf.Min(Look.Glow, 1.6f) * power;
+            for (int s = 0; s < bodySlots.Count; s++)
+            {
+                var (r, i) = bodySlots[s];
+                r.GetPropertyBlock(block, i);
+                block.SetFloat(Glow, g);
+                r.SetPropertyBlock(block, i);
+            }
         }
 
         public void Apply(RobotLook look)
@@ -60,6 +71,7 @@ namespace RobotTestbed
             var lines = look.LinePattern == "None" ? new Vector4[2] : cfg.Selector("linePatterns", look.LinePattern);
             var finish = cfg.Finish(look.Finish);
             block ??= new MaterialPropertyBlock();
+            bodySlots.Clear();
             foreach (var r in GetComponentsInChildren<Renderer>(true))
             {
                 r.GetSharedMaterials(shared);
@@ -67,6 +79,7 @@ namespace RobotTestbed
                 {
                     var m = shared[i];
                     if (m == null || m.shader.name != "CubeEscape/RobotBody") continue;
+                    bodySlots.Add((r, i));
                     r.GetPropertyBlock(block, i);
                     block.SetVector(Armor, look.Colors["armor"]);
                     block.SetVector(Armor2, look.Armor2);

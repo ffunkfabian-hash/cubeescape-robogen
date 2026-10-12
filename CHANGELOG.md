@@ -3,6 +3,19 @@
 Versionen des Roboter-Generators (zählen getrennt von Cube Escape und Cubegen). Jede Version hat einen Tag
 `v<Version>` und einen Release-Branch `release/<Version>`.
 
+## 1.9.2 „Afterburner“ – 2026-10-12
+
+Prüfung der Neural Engine (Fahrplan-Vorschläge „visuelle Prüfung per Vision“ und „Vorlagen per Bildgenerator“):
+**kein Mehrwert, kein Einsatz.** Renders sind über Prozesse hinweg bitnah gleich (RMSE 1e-5), ein exakter
+Pixelvergleich genügt; Vision-Feature-Prints trennen Fehler nicht besser von legitimen Änderungen und liefern je
+Gerät andere Abstände (Neural Engine 0,0026, CPU 0,0003 für dasselbe Paar). Tempo: 3,8 ms je Bild auf der Neural
+Engine, irrelevant gegenüber dem Render. Messwerte in README › „Neural Engine – geprüft“. Modell und Ausgaben
+unverändert.
+
+* Fahrplan: zwei neue Aufgaben für Generator 1.10, bei denen die Neural Engine sinnvoll sein kann – Konzeptbögen
+  auswerten (Schneiden, Namen per Texterkennung, Farbvorschläge; einmaliges Werkzeug) und Icon-Lesbarkeit prüfen
+  (Saliency, nur Hinweis). Beide mit Zeitregel: Kosten sie zu viel Zeit, werden sie nicht umgesetzt.
+
 ## 1.9.1 „Afterburner“ – 2026-10-12
 
 Nur Regeln und Agenten-Werkzeuge; Modell, Ausgaben und QA unverändert (abgestimmt mit Cube Escape 0.45.1 und

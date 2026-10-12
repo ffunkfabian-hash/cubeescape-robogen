@@ -2,7 +2,7 @@
 https://claude.ai/code/artifact/ed285e14-821e-4986-8b02-3a281874174a – Änderungen dort vornehmen und hier nachziehen. -->
 
 > **Führende Fassung:** [Claude Doc „Fahrplan Roboter-Generator“](https://claude.ai/code/artifact/ed285e14-821e-4986-8b02-3a281874174a).
-> Diese Datei ist ein Abbild (Stand 12.10.2026, Generator 1.9.0).
+> Diese Datei ist ein Abbild (Stand 12.10.2026, Generator 1.9.2).
 
 # Fahrplan Roboter-Generator
 
@@ -91,7 +91,7 @@ Fünf Spielversionen holen den Roboter ins Spiel; jede ist für sich spielbar. D
 
 ## Zusätzliche Aufgaben
 
-Zwölf weitere Punkte (die letzten zwei sind Vorschläge vom 12. Oktober 2026, noch nicht entschieden), jeweils der Stufe zugeordnet, in der sie am besten mitlaufen.
+Vierzehn weitere Punkte (zwei Vorschläge vom 12. Oktober 2026 wurden in Generator 1.9.2 geprüft und verworfen; die letzten zwei nutzen die Neural Engine und fallen weg, wenn sie zu viel Zeit kosten), jeweils der Stufe zugeordnet, in der sie am besten mitlaufen.
 
 - [ ] **UI-Icons per ImageMagick** je Accessoire, Skin und Ausdruck, direkt verwendbar für ein Anpassungsmenü im Spiel – Generator 1.10 (mit dem Skin-Bogen), genutzt in Spiel 0.45
 - [ ] **Detailstufen (LOD):** vereinfachte Meshes mit etwa 6 000 und 2 500 Dreiecken für Entfernung und Menge – vor Spiel 0.44
@@ -103,8 +103,10 @@ Zwölf weitere Punkte (die letzten zwei sind Vorschläge vom 12. Oktober 2026, n
 - [ ] **Servo-Geräusch-Ereignisse** aus der Gelenkgeschwindigkeit berechnet (in die Clip-Daten wie die Fußschritte) – vor Spiel 0.44
 - [ ] **Viewer:** GIF- oder Video-Export und A/B-Vergleich zweier Looks – Generator 1.10
 - [ ] **Unity-Testpaket** in einem separaten, leeren Unity-Projekt; das Spiel bleibt unberührt – direkt nach den Testzeiten, damit jede Generator-Stufe dort sofort geprüft werden kann
-- [ ] **Vorschlag: Visuelle Prüfung aller Kombinationen auf der Neural Engine:** Typ × Skin × Ausdruck per `RobotViewer --snapshot` rendern und mit Apples Bilderkennung (Vision, Merkmalsvergleich) gegen Referenzbilder prüfen; verzeiht kleine Pixelabweichungen aus nicht reproduzierbarem UV-Packing, findet echte Ausreißer in Millisekunden je Bild – ab der Stufe Paintjob, zusammen mit dem Skin-Bogen-Render
-- [ ] **Vorschlag: Weathering- und Paintjob-Vorlagen per Bildgenerator** (Core ML auf der Neural Engine) nur als einmaliges Vorlagenwerkzeug, Ergebnisse eingecheckt – nie im Generatorlauf, weil gleiche Eingabe nicht dasselbe Bild garantiert und Cache-Schlüssel reproduzierbar bleiben müssen; Stil-Abnahme vorher; passt zur Stufe Weathering
+- [ ] **Vorschlag: Visuelle Prüfung aller Kombinationen auf der Neural Engine:** Typ × Skin × Ausdruck per `RobotViewer --snapshot` rendern und mit Apples Bilderkennung (Vision, Merkmalsvergleich) gegen Referenzbilder prüfen; verzeiht kleine Pixelabweichungen aus nicht reproduzierbarem UV-Packing, findet echte Ausreißer in Millisekunden je Bild – ab der Stufe Paintjob, zusammen mit dem Skin-Bogen-Render. Geprüft in 1.9.2: kein Mehrwert – die Renders sind über Prozesse hinweg bitnah gleich (Pixel-RMSE 1e-5), ein exakter Pixelvergleich genügt; Feature Prints trennen eine fehlende Hand (0,106) kaum von 12 statt 24 Samples (0,061) und liefern je Gerät andere Abstände (Neural Engine 0,0026, CPU 0,0003), taugen also nicht als Prüfschranke
+- [ ] **Vorschlag: Weathering- und Paintjob-Vorlagen per Bildgenerator** (Core ML auf der Neural Engine) nur als einmaliges Vorlagenwerkzeug, Ergebnisse eingecheckt – nie im Generatorlauf, weil gleiche Eingabe nicht dasselbe Bild garantiert und Cache-Schlüssel reproduzierbar bleiben müssen; Stil-Abnahme vorher; passt zur Stufe Weathering. Geprüft in 1.9.2: kein Einsatz – die Vorlagen entstehen reproduzierbar per ImageMagick im Low-Poly-Stil und hängen im Cache-Schlüssel; ein Bildgenerator (mehrere GB Modell, Lizenz- und Stilprüfung) liefert das nicht
+- [ ] **Konzeptbögen auswerten (Neural Engine):** die drei Skin-Bögen per Apple Vision in Einzelbilder schneiden, die Namen per Texterkennung lesen und Hauptfarben vorschlagen – einmaliges Werkzeug, das Ergebnis wird geprüft als Katalogdaten eingecheckt, nie im Generatorlauf – Generator 1.10 (Start von Paintjob). **Zeitregel:** höchstens eine Sitzung für Werkzeug und Prüfung; ist Abtippen der 74 Namen und Farben schneller, wird das Feature nicht umgesetzt
+- [ ] **Icon-Lesbarkeit prüfen (Neural Engine):** ein Aufmerksamkeitsmodell (Vision Saliency) meldet Icons, in denen das Objekt nicht im Fokus steht oder angeschnitten ist – nur Hinweis im Bericht – Generator 1.10 (mit den UI-Icons). **Zeitregel:** höchstens 5 % mehr Laufzeit der Stufe, die die Icons erzeugt; sonst wird das Feature nicht umgesetzt
 
 ## Skin-Katalog
 

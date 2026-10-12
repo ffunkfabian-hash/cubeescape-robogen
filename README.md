@@ -1,4 +1,4 @@
-# Cube Escape – Roboter-Charakter (Generator 1.9.1)
+# Cube Escape – Roboter-Charakter (Generator 1.9.2)
 
 Der spielbare Roboter aus dem Cube-Escape-Keyart, vollständig per Skript erzeugt: Geometrie mit Bauteil-Varianten
 und Accessoires, Materialien, gebackene Texturen (Detail- und Ausdrucks-Texturen per ImageMagick), Rig mit Bein- und
@@ -106,6 +106,35 @@ Hauptprozess (gleiches Ergebnis).
   und 6 Effizienzkerne unter Volllast nicht her.
 - **ImageMagick mit `MAGICK_THREAD_LIMIT=1`:** parallele Aufrufe bremsten sich über ihre OpenMP-Threads gegenseitig
   aus (Montage aus 28 Kacheln 3,8 → 1,6 s); die Texturen bleiben bitgleich.
+
+### Neural Engine – geprüft (1.9.2), kein Einsatz
+
+Der Fahrplan schlug vor, Typ × Skin × Ausdruck mit Apples Vision-Merkmalsvergleich (Feature Prints auf der Neural
+Engine) gegen Referenzbilder zu prüfen. Gemessen am 12.10.2026 mit Renderpaaren bekannten Inhalts (300 px,
+24 Samples, Abstand zum Referenzbild):
+
+| Unterschied | Feature Print | Pixel-RMSE |
+|---|---|---|
+| gleiches Bild aus einem zweiten Prozess (Rauschen) | 0,003 | 0,00001 |
+| 12 statt 24 Samples (nur Qualität) | 0,061 | 0,0057 |
+| ein Animationsframe weiter (legitim) | 0,030 | 0,0082 |
+| schnelle Vorschau-Augen (nur Darstellung) | 0,073 | 0,011 |
+| anderer Ausdruck | 0,074 | 0,025 |
+| **fehlende Hand (Fehler)** | **0,106** | 0,0095 |
+| anderer Skin | 0,26–0,28 | 0,024–0,036 |
+
+- **Kein Rauschen auszugleichen:** Die Renders sind über Prozesse hinweg praktisch bitgleich (der UV-Cache hält auch
+  die Texturen fest); jede echte Änderung liegt beim Pixelvergleich über 500-mal über dem Rauschen. Ein exakter
+  Vergleich (`magick compare`, 18 ms je Paar) genügt.
+- **Kein besseres Urteil:** Der Feature Print trennt einen Fehler (fehlende Hand 0,106) kaum von einer reinen
+  Qualitätsänderung (0,061); er sagt „anders“, nicht „falsch“ – wie der Pixelvergleich.
+- **Nicht reproduzierbar:** Dasselbe Bildpaar ergibt auf der Neural Engine 0,0026, auf der CPU 0,0003; Grenzwerte
+  würden je Gerät und macOS-Version kippen. Als Prüfschranke ungeeignet.
+- **Tempo ist kein Argument:** Neural Engine 3,8 ms je Bild (GPU 15,8 ms, CPU 35,4 ms) – gegenüber 160–460 ms für
+  den Render selbst unerheblich. Blender, Cycles, EEVEE und der FBX-Export nutzen die Neural Engine nicht.
+- **Bildgenerator für Vorlagen** (zweiter Vorschlag, nicht installiert: mehrere GB Modell): Die Vorlagen entstehen
+  heute reproduzierbar per ImageMagick im Low-Poly-Stil und hängen im Cache-Schlüssel; ein Bildgenerator liefert
+  das nicht und bräuchte eine Lizenz- und Stilprüfung. Kein Einsatz geplant.
 
 Messen statt raten: `scripts/profile_run.py` startet einen Lauf unter cProfile (mit `--workers 0` sind auch die
 Pakete im Profil):

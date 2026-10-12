@@ -87,6 +87,11 @@ struct Skin: Decodable, Identifiable {
     // since generator 1.10 (optional so older ViewerData still loads)
     let armor2: [Double]?
     let zones2: [String]?
+    struct Material: Decodable { let id: String; let color: [Double] }
+    struct Layer: Decodable { let id: String; let amount: Double; let color: [Double] }
+    let material: Material?
+    let layers: [Layer]?
+    let wear: Double?
     let finish: String?
     let badges: [Badge]?
     let lines: Lines?
@@ -104,6 +109,23 @@ struct MaskChannel: Decodable, Identifiable {
     let id: String
     let texture: String
     let channel: Int
+}
+
+/// A surface layer or material (1.11): mask channel plus default colour (linear) and surface.
+struct LayerInfo: Decodable, Identifiable {
+    let id: String
+    let texture: String
+    let channel: Int
+    let color: [Double]?
+    let roughness: Double?
+    let metalOffset: Double?
+    let base: [Double]?         // materials: a fitting armour colour
+}
+
+struct WeatheringInfo: Decodable {
+    let coverSoft: Double
+    let wearDefault: Double
+    let bareMetal: [Double]
 }
 
 struct FinishInfo: Decodable {
@@ -230,6 +252,10 @@ struct RobotConfig: Decodable {
     let badges: [MaskChannel]?
     let linePatterns: [MaskChannel]?
     let zones: [MaskChannel]?
+    // since generator 1.11
+    let layers: [LayerInfo]?
+    let materials: [LayerInfo]?
+    let weathering: WeatheringInfo?
     let linePaint: Double?
     let expressionStyles: [String: ExpressionStyle]?
     let blink: BlinkInfo?

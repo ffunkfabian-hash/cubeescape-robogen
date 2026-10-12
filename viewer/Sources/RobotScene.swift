@@ -183,35 +183,69 @@ final class RobotScene: NSObject, SCNSceneRendererDelegate {
             p.wrapT = .repeat
         }
         let body = fabric ? """
-        c = fabricColor.rgb * (lum / max(refB.y, 1e-4));
+        c = P(5).rgb * (lum / max(refB.y, 1e-4));
         rough = 0.75; metalness = 0.0;
         """ : """
         float vis = saturate(1.0 - (mk.r + mk.g + mk.b + mk.a));
-        c = mix(c, armorColor.rgb * (lum / refA.x), mk.r);
-        c = mix(c, mechColor.rgb * (lum / refA.y), mk.g);
-        c = mix(c, metalColor.rgb * (lum / refA.z), mk.b);
-        c = mix(c, lightsColor.rgb * (lum / refA.w), mk.a);
-        c = mix(c, visorColor.rgb * (lum / refB.x), vis);
+        c = mix(c, P(0).rgb * (lum / refA.x), mk.r);
+        c = mix(c, P(1).rgb * (lum / refA.y), mk.g);
+        c = mix(c, P(2).rgb * (lum / refA.z), mk.b);
+        c = mix(c, P(3).rgb * (lum / refA.w), mk.a);
+        c = mix(c, P(4).rgb * (lum / refB.x), vis);
+        float4 finish = P(9);
         rough = mix(rough, saturate(rough * finish.x), mk.r);
         metalness = mix(metalness, saturate(metalness + finish.y), mk.r);
         rough = mix(rough, mix(rough, 0.04, 0.8), vis);
         float ratio = clamp(lum / max(mk.r * refA.x + mk.b * refA.z, 1e-3), 0.2, 1.6);
+        float ratioAll = clamp(lum / max(mk.r * refA.x + mk.g * refA.y + mk.b * refA.z, 1e-3), 0.2, 1.6);
         int zid = int(round(aux.g * 8.0));
         float mz = zid >= 1 && zid <= 8 ? float((int(finish.w) >> (zid - 1)) & 1) : 0.0f;
-        c = mix(c, armor2Color.rgb * ratio, mz);
+        c = mix(c, P(6).rgb * ratio, mz);
+        float3 region = mix(mk.r * P(0).rgb + mk.g * P(1).rgb + mk.b * P(2).rgb, P(6).rgb, mz);
+        float4 misc = P(18);                      // line paint, glow, wear, material on
+        if (misc.w > 0.5) c = mix(c, mix(P(19).rgb * ratio, c, aux.b), mk.r);
         float4 b0 = badgeTex0.sample(s, uv), b1 = badgeTex1.sample(s, uv);
-        float mA = saturate(dot(b0, badgeA0) + dot(b1, badgeA1));
-        float mB = saturate(dot(b0, badgeB0) + dot(b1, badgeB1));
-        c = mix(c, badgeAColor.rgb * ratio, mA);
-        c = mix(c, badgeBColor.rgb * ratio, mB);
-        float ml = saturate(dot(lineTex.sample(s, uv), lineSel0) + aux.r * finish.z);
-        c = c * (1.0 - ml * linePaint) + ml * linePaint * 0.6 * lineColor.rgb;
+        c = mix(c, P(14).rgb * ratio, saturate(dot(b0, P(10)) + dot(b1, P(11))));
+        c = mix(c, P(15).rgb * ratio, saturate(dot(b0, P(12)) + dot(b1, P(13))));
+        float4 amt = P(21), amt2 = P(22);         // rust, moss, frost, embers / camo, soft
+        float4 lay = layerTex.sample(s, uv);
+        float wearF = ms.g, grime = ms.b;
+        float patchy = 0.6 + 0.6 * grime;
+        float4 lr = P(28), lm = P(29);
+        float cv;
+        cv = COVER(lay.r, amt.x); c = mix(c, P(23).rgb * patchy * ratioAll, cv);
+        rough = mix(rough, saturate(rough * lr.x), cv); metalness = mix(metalness, saturate(metalness + lm.x), cv);
+        cv = COVER(lay.g, amt.y); c = mix(c, P(24).rgb * patchy * ratioAll, cv);
+        rough = mix(rough, saturate(rough * lr.y), cv); metalness = mix(metalness, saturate(metalness + lm.y), cv);
+        cv = COVER(lay.b, amt.z); c = mix(c, P(25).rgb * patchy * ratioAll, cv);
+        rough = mix(rough, saturate(rough * lr.z), cv); metalness = mix(metalness, saturate(metalness + lm.z), cv);
+        float c1 = COVER(aux.a, amt2.x), c2 = COVER(aux.a, amt2.x * 0.45);
+        c = mix(c, P(27).rgb * ratioAll, c1);
+        c = mix(c, P(27).rgb * 0.45 * ratioAll, c2);
+        float w = misc.z;
+        if (w < 0.5) {
+            float clean = (0.5 - w) * 2.0;
+            c = mix(c, region, saturate(wearF * 1.6) * clean);
+            c = mix(c, region, grime * clean * 0.4);
+        } else {
+            float more = (w - 0.5) * 2.0;
+            c = mix(c, P(31).rgb, saturate(wearF * 4.0 * more) * 0.85);
+            c *= 1.0 - 0.6 * more * grime;
+        }
+        float charred = saturate((lay.a - (1.0 - min(1.0, amt.w * 2.5))) / amt2.y);
+        float ember = saturate((lay.a - (1.0 - amt.w * 0.3)) / 0.04);
+        c *= 1.0 - 0.88 * charred;
+        float ml = saturate(dot(lineTex.sample(s, uv), P(16)) + aux.r * finish.z);
+        float4 lineColor = P(17);
+        c = c * (1.0 - ml * misc.x) + ml * misc.x * 0.6 * lineColor.rgb;
         float3 e = _surface.emission.rgb;
         float le = dot(e, float3(0.2126, 0.7152, 0.0722));
-        _surface.emission.rgb = (mix(e, lightsColor.rgb * (le / refA.w) * 1.6, mk.a)
-                                 + lineColor.rgb * (ml * lineColor.w * 1.6)) * glowAll;
+        _surface.emission.rgb = (mix(e, P(3).rgb * (le / refA.w) * 1.6, mk.a)
+                                 + lineColor.rgb * (ml * lineColor.w * 1.6) + P(26).rgb * (ember * 2.4)) * misc.y;
         """
         if CommandLine.arguments.contains("--debug-no-shader") { return m }
+        // All look values live in a small float texture (see writeParams): SceneKit silently draws a shader modifier
+        // magenta beyond about 23 custom arguments, and 1.11 alone adds a dozen values.
         m.shaderModifiers = [.surface: """
         #pragma arguments
         texture2d<float> maskTexture;
@@ -220,33 +254,18 @@ final class RobotScene: NSObject, SCNSceneRendererDelegate {
         texture2d<float> badgeTex1;
         texture2d<float> lineTex;
         texture2d<float> auxTexture;
-        float4 armor2Color;
-        float4 badgeA0;
-        float4 badgeA1;
-        float4 badgeB0;
-        float4 badgeB1;
-        float4 badgeAColor;
-        float4 badgeBColor;
-        float4 lineSel0;
-        float4 lineColor;
-        float linePaint;
-        float4 armorColor;
-        float4 mechColor;
-        float4 metalColor;
-        float4 lightsColor;
-        float4 visorColor;
-        float4 fabricColor;
-        float4 refA;            // luminance of the Classic colours: armour, mechanics, metal, lights
-        float4 refB;            // visor, fabric
-        float4 finish;          // roughness factor, metal offset, joints glow on/off, paint zone bits (armor2)
-        float glowAll;
+        texture2d<float> layerTex;
+        texture2d<float> params;
         #pragma body
+        #define P(i) params.read(uint2(i, 0))
+        #define COVER(f, a) saturate(((f) - (1.0 - (a))) / amt2.y)
         constexpr sampler s(filter::linear, mip_filter::linear, address::repeat);
-        float2 uv = _surface.diffuseTexcoord;
         constexpr sampler sn(filter::nearest, address::repeat);
+        float2 uv = _surface.diffuseTexcoord;
         float4 mk = maskTexture.sample(s, uv);
         float4 aux = auxTexture.sample(sn, uv);
         float4 ms = msTexture.sample(s, uv);
+        float4 refA = P(7), refB = P(8);
         float3 c = _surface.diffuse.rgb;
         float lum = max(dot(c, float3(0.2126, 0.7152, 0.0722)), 1e-5);
         float rough = 1.0 - ms.a;
@@ -256,38 +275,80 @@ final class RobotScene: NSObject, SCNSceneRendererDelegate {
         _surface.roughness = rough;
         _surface.metalness = metalness;
         """]
-        // six custom textures at most (see packed): colour mask + lights, metal/smoothness, 2 x badges, lines, aux
+        for (key, tex) in sharedTextures() { m.setValue(SCNMaterialProperty(contents: tex), forKey: key) }
+        m.setValue(SCNMaterialProperty(contents: paramTexture as Any), forKey: "params")
+        return m
+    }
+
+    /// Mask textures shared by every scene of the same ViewerData (A/B, exports): packed once.
+    private func sharedTextures() -> [(String, Any)] {
         let cfg = data.config
         func chan(_ list: [MaskChannel]?, _ i: Int) -> (String, Int)? {
             guard let l = list, i < l.count else { return nil }
             return (l[i].texture, l[i].channel)
         }
-        let lines = cfg.linePatterns ?? []
-        let cacheKey = data.root.path
-        let props: [(String, Any?)] = RobotScene.packCache[cacheKey] as? [(String, Any?)] ?? [
-            ("maskTexture", packed([("T_Robot_ColorMask.png", 0), ("T_Robot_ColorMask.png", 1),
-                                    ("T_Robot_ColorMask.png", 2), ("T_Robot_LightMask.png", 0)])),
-            ("msTexture", packed([("T_Robot_MetallicSmoothness.png", 0), nil, nil,
-                                  ("T_Robot_MetallicSmoothness.png", 3)])),
-            ("badgeTex0", packed((0..<4).map { chan(cfg.badges, $0) })),
-            ("badgeTex1", packed((4..<8).map { chan(cfg.badges, $0) })),
-            ("lineTex", packed((0..<4).map { chan(lines, $0) })),
-            // aux: R = fifth glow pattern (Joints), G = paint zone number
-            ("auxTexture", packed([chan(lines, 4), nil, nil, nil],
-                                  zoneIDs: (cfg.zones ?? []).map { "\($0.texture)#\($0.channel)" }, zoneChannel: 1)),
-        ]
-        RobotScene.packCache[cacheKey] = props
+        let key = data.root.path
+        if let cached = RobotScene.packCache[key] as? [(String, Any)] { return cached }
         let black = NSImage(size: NSSize(width: 4, height: 4), flipped: false) { r in
             NSColor.black.setFill(); r.fill(); return true
         }
-        for (key, tex) in props { m.setValue(SCNMaterialProperty(contents: tex ?? black), forKey: key) }
+        let lines = cfg.linePatterns ?? []
+        let layers = (cfg.layers ?? []).map { MaskChannel(id: $0.id, texture: $0.texture, channel: $0.channel) }
+        let idx = { (id: String) in layers.firstIndex { $0.id == id } ?? 99 }
+        let props: [(String, Any?)] = [
+            ("maskTexture", packed([("T_Robot_ColorMask.png", 0), ("T_Robot_ColorMask.png", 1),
+                                    ("T_Robot_ColorMask.png", 2), ("T_Robot_LightMask.png", 0)])),
+            // metal/smoothness, plus the wear fields in the free channels
+            ("msTexture", packed([("T_Robot_MetallicSmoothness.png", 0), chan(layers, idx("Wear")),
+                                  chan(layers, idx("Grime")), ("T_Robot_MetallicSmoothness.png", 3)])),
+            ("badgeTex0", packed((0..<4).map { chan(cfg.badges, $0) })),
+            ("badgeTex1", packed((4..<8).map { chan(cfg.badges, $0) })),
+            ("lineTex", packed((0..<4).map { chan(lines, $0) })),
+            ("layerTex", packed(["Rust", "Moss", "Frost", "Embers"].map { chan(layers, idx($0)) })),
+        ]
+        let result = props.map { ($0.0, $0.1 ?? black as Any) }
+        RobotScene.packCache[key] = result
+        return result
+    }
 
-        // SceneKit silently draws a shader modifier magenta beyond about 23 custom arguments: keep them packed
-        let lum = { (c: [Double]) in RGB(c).luminance }
-        m.setValue(vec4([lum(classic.armor), lum(classic.mech), lum(classic.metal), lum(classic.accent)]), forKey: "refA")
-        m.setValue(vec4([lum(classic.visor), 0.71, 0, 0]), forKey: "refB")
-        m.setValue(NSNumber(value: data.config.linePaint ?? 0.85), forKey: "linePaint")
-        return m
+    /// aux: R = fifth glow pattern (Joints), G = paint zone number, B = pattern of the chosen material, A = camo field.
+    private func auxTexture(material: String) -> Any {
+        let cfg = data.config
+        let key = data.root.path + "#aux#" + material
+        if let cached = RobotScene.packCache[key] { return cached }
+        let lines = cfg.linePatterns ?? []
+        let layers = cfg.layers ?? []
+        let mat = (cfg.materials ?? []).first { $0.id == material }
+        let camo = layers.first { $0.id == "Camo" }
+        let tex = packed([lines.count > 4 ? (lines[4].texture, lines[4].channel) : nil, nil,
+                          mat.map { ($0.texture, $0.channel) }, camo.map { ($0.texture, $0.channel) }],
+                         zoneIDs: (cfg.zones ?? []).map { "\($0.texture)#\($0.channel)" }, zoneChannel: 1) as Any
+        RobotScene.packCache[key] = tex
+        return tex
+    }
+
+    /// The look as 32 float4 texels (layout: the P(i) indices in the shader).
+    private var params = [SIMD4<Float>](repeating: .zero, count: 32)
+    private lazy var paramTexture: MTLTexture? = {
+        let desc = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .rgba32Float, width: 32, height: 1,
+                                                            mipmapped: false)
+        desc.usage = .shaderRead
+        return RobotScene.device?.makeTexture(descriptor: desc)
+    }()
+
+    private func writeParams() {
+        params.withUnsafeBytes { buf in
+            paramTexture?.replace(region: MTLRegionMake2D(0, 0, 32, 1), mipmapLevel: 0, withBytes: buf.baseAddress!,
+                                  bytesPerRow: 32 * 16)
+        }
+    }
+
+    private static func f4(_ c: RGB, _ w: Double = 0) -> SIMD4<Float> {
+        SIMD4(Float(c.r), Float(c.g), Float(c.b), Float(w))
+    }
+
+    private static func f4(_ v: [Double]) -> SIMD4<Float> {
+        SIMD4(Float(v[0]), Float(v[1]), Float(v[2]), Float(v.count > 3 ? v[3] : 0))
     }
 
     /// One-hot channel weights per mask texture (badges: 2 textures x RGBA, lines: 1 texture).
@@ -504,31 +565,53 @@ final class RobotScene: NSObject, SCNSceneRendererDelegate {
             if obj.hasPrefix("AccHand_") && visible.contains(obj) { heldItemNodes += nodes }
         }
         heldItemVisible = true
-        let (rf, mo) = look.finish.params(data.config)
-        for m in [bodyMat, fabricMat] {
-            m.setValue(vec(look.armor), forKey: "armorColor")
-            m.setValue(vec(look.mech), forKey: "mechColor")
-            m.setValue(vec(look.metal), forKey: "metalColor")
-            m.setValue(vec(look.lights), forKey: "lightsColor")
-            m.setValue(vec(look.visor), forKey: "visorColor")
-            m.setValue(vec(look.fabric), forKey: "fabricColor")
-            let joints = maskSelector(look.lines.pattern, in: data.config.linePatterns ?? [])[1][0]
-            var zoneBits = 0
-            for (i, z) in (data.config.zones ?? []).enumerated() where look.zones2.contains(z.id) { zoneBits |= 1 << i }
-            m.setValue(NSValue(scnVector4: SCNVector4(CGFloat(rf), CGFloat(mo), CGFloat(joints), CGFloat(zoneBits))),
-                       forKey: "finish")
-            for (i, slot) in ["A", "B"].enumerated() {
-                let badge = i < look.badges.count ? look.badges[i] : nil
-                let sel = maskSelector(badge?.id, in: data.config.badges ?? [])
-                m.setValue(vec4(sel[0]), forKey: "badge\(slot)0")
-                m.setValue(vec4(sel[1]), forKey: "badge\(slot)1")
-                m.setValue(vec(badge?.color ?? RGB(0, 0, 0)), forKey: "badge\(slot)Color")
-            }
-            let ls = maskSelector(look.lines.pattern, in: data.config.linePatterns ?? [])
-            m.setValue(vec4(ls[0]), forKey: "lineSel0")
-            m.setValue(vec(look.armor2), forKey: "armor2Color")
-            m.setValue(vec(look.lines.color, w: look.lines.strength), forKey: "lineColor")
+        let cfg = data.config
+        var (rf, mo) = look.finish.params(cfg)
+        let material = (cfg.materials ?? []).first { $0.id == look.material.id }
+        if let mat = material, look.finish == .standard {       // the material brings its own surface
+            rf = mat.roughness ?? rf
+            mo = mat.metalOffset ?? mo
         }
+        let lum = { (c: [Double]) in RGB(c).luminance }
+        var p = [SIMD4<Float>](repeating: .zero, count: 32)
+        for (i, c) in [look.armor, look.mech, look.metal, look.lights, look.visor, look.fabric, look.armor2].enumerated() {
+            p[i] = RobotScene.f4(c)
+        }
+        p[7] = RobotScene.f4([lum(classic.armor), lum(classic.mech), lum(classic.metal), lum(classic.accent)])
+        p[8] = RobotScene.f4([lum(classic.visor), 0.71, 0, 0])
+        let joints = maskSelector(look.lines.pattern, in: cfg.linePatterns ?? [])[1][0]
+        var zoneBits = 0
+        for (i, z) in (cfg.zones ?? []).enumerated() where look.zones2.contains(z.id) { zoneBits |= 1 << i }
+        p[9] = RobotScene.f4([rf, mo, joints, Double(zoneBits)])
+        for (i, badge) in [0, 1].map({ $0 < look.badges.count ? look.badges[$0] : nil }).enumerated() {
+            let sel = maskSelector(badge?.id, in: cfg.badges ?? [])
+            p[10 + 2 * i] = RobotScene.f4(sel[0])
+            p[11 + 2 * i] = RobotScene.f4(sel[1])
+            p[14 + i] = RobotScene.f4(badge?.color ?? RGB(0, 0, 0))
+        }
+        p[16] = RobotScene.f4(maskSelector(look.lines.pattern, in: cfg.linePatterns ?? [])[0])
+        p[17] = RobotScene.f4(look.lines.color, look.lines.strength)
+        p[18] = SIMD4(Float(cfg.linePaint ?? 0.85), 1, Float(look.wear), material != nil ? 1 : 0)
+        p[19] = RobotScene.f4(look.material.color)
+        let weathering = cfg.weathering
+        func amount(_ id: String) -> Float { Float(look.layers.first { $0.id == id }?.amount ?? 0) }
+        p[21] = SIMD4(amount("Rust"), amount("Moss"), amount("Frost"), amount("Embers"))
+        p[22] = SIMD4(amount("Camo"), Float(weathering?.coverSoft ?? 0.1), Float(weathering?.wearDefault ?? 0.5), 0)
+        let infos = cfg.layers ?? []
+        for (i, id) in ["Rust", "Moss", "Frost", "Embers", "Camo"].enumerated() {
+            let info = infos.first { $0.id == id }
+            let col = look.layers.first { $0.id == id }?.color ?? RGB(info?.color ?? [0, 0, 0])
+            p[23 + i] = RobotScene.f4(col)
+            if i < 4 {
+                p[28][i] = Float(info?.roughness ?? 1)
+                p[29][i] = Float(info?.metalOffset ?? 0)
+            }
+        }
+        p[31] = RobotScene.f4(weathering?.bareMetal ?? [0.62, 0.63, 0.65])
+        params = p
+        writeParams()
+        let aux = auxTexture(material: material?.id ?? "None")
+        for m in [bodyMat, fabricMat] { m.setValue(SCNMaterialProperty(contents: aux), forKey: "auxTexture") }
         shownExpression = ""            // eye colour or style may have changed
         displayMat.setValue(vec(look.screen), forKey: "screenColor")
         shownPower = -1
@@ -621,7 +704,8 @@ final class RobotScene: NSObject, SCNSceneRendererDelegate {
         let key = p * 1000 + glow
         guard abs(key - shownPower) > 1e-4 else { return }
         shownPower = key
-        for m in [bodyMat, fabricMat] { m.setValue(NSNumber(value: min(glow, 1.6) * p), forKey: "glowAll") }
+        params[18][1] = Float(min(glow, 1.6) * p)
+        writeParams()
         eyeMat.setValue(NSNumber(value: glow * p * eyeGlowStyle), forKey: "glow")
         displayMat.setValue(NSNumber(value: min(p, 1.5)), forKey: "power")
     }

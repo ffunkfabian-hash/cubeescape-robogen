@@ -3,6 +3,28 @@
 Versionen des Roboter-Generators (zählen getrennt von Cube Escape und Cubegen). Jede Version hat einen Tag
 `v<Version>` und einen Release-Branch `release/<Version>`.
 
+## 1.11.0 „Weathering“ – 2026-10-13
+
+Oberflächen-Schichten, Werkstoffe und Abnutzung als Daten; 47 Skins (9 neue: Rust, Moss, Inferno, Circuit, Magma,
+Bamboo, Temple, Paper, Concrete; Arctic mit Frost, Sand mit Werkstoff, Abnutzung und Schal). Modell, QA, Clip-Daten
+und Typ-Maße unverändert.
+
+* **Schichten** Rost, Moos, Frost, Glutrisse, Tarnung: gebackene Felder (Rost in Ecken/Fugen, Moos oben/in Fugen,
+  Frost oben/an Kanten, Glutrisse auf einem Rissnetz, Tarnung als Fleckenfeld), per Rangfolge auf die Lackfläche
+  normiert – Stärke 0,5 bedeckt 49,9 % (`verify_robot.py` prüft das). Je Schicht Farbe und Oberfläche.
+* **Werkstoffe** Holz, Stein (mit Gravurbändern), Sand, Papier, Beton, Messing, Platine als Muster der Panzerung mit
+  Musterfarbe, eigener Rauheit/Metall und passender Grundfarbe.
+* **Abnutzung** 0 sauber – 0,5 gebacken – 1 verbeult aus den Kratzer- und Schmutzfeldern (Abnutzung je Skin).
+* Neue Masken `T_Robot_LayerMask*`, `T_Robot_MaterialMask*`; ImageMagick-Vorlagen Rissnetz und Tarnflecken.
+* **Gegenüberstellung** `Previews/weathering.png`: Classic mit jeder Schicht in drei Stärken, jedem Werkstoff, drei
+  Abnutzungsstufen; Skin-Karten nennen Werkstoff, Schichten und Abnutzung.
+* **Look-Format 4** (`material`, `layers`, `wear`) mit Migration aus 1–3; Fixture `look_v3.json`.
+* **Viewer:** Werkstoff, Schichten mit Reglern, Abnutzung. Alle Look-Werte stehen jetzt in einer Parameter-Textur
+  (SceneKit verträgt nur wenige Shader-Argumente); Kratzer/Schmutz, Tarnung und das Werkstoff-Muster in freien Kanälen.
+* **Unity-Testpaket:** Shader und Look-Format 4; `run_testbed.sh` scheitert jetzt bei Compiler-Fehlern (Unity hatte
+  stillschweigend die alten Assemblies weiterbenutzt).
+* Doku: README, AGENTS, TECHNIK.md (Rangfolge-Normierung, Parameter-Textur, Compiler-Falle), Fahrplan.
+
 ## 1.10.1 „Paintjob“ – 2026-10-13
 
 **Unity-Testpaket** (`unity/RobotTestbed`, `unity/run_testbed.sh`): eigenes URP-Projekt, das die Ausgabe importiert,

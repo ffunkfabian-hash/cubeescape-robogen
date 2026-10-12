@@ -10,7 +10,8 @@ namespace RobotTestbed
     public sealed class RobotLook
     {
         public const string Format = "CubeEscapeRobotLook";
-        public const int CurrentVersion = 3;
+        public const int CurrentVersion = 4;
+        public const float WearDefault = 0.5f;
         public const int MaxBadges = 2;
         static readonly string[] ColorKeys = { "armor", "mech", "metal", "lights", "screen", "eyes", "visor", "fabric" };
 
@@ -36,6 +37,10 @@ namespace RobotTestbed
         public string LinePattern = "None";
         public Vector4 LineColor = new Vector4(1f, 0.38f, 0.05f);
         public float LineStrength = 1f;
+        public string Material = "None";
+        public Vector4 MaterialColor = new Vector4(0.3f, 0.2f, 0.1f);
+        public List<(string id, float amount, Vector4 color)> Layers = new List<(string, float, Vector4)>();
+        public float Wear = WearDefault;
 
         static Vector4 Rgb(object o)
         {
@@ -81,6 +86,21 @@ namespace RobotTestbed
                 if (ld.TryGetValue("color", out var lc)) l.LineColor = Rgb(lc);
                 if (ld.TryGetValue("strength", out var st)) l.LineStrength = (float)(double)st;
             }
+            // version 4: no material, no layers, the baked wear
+            if (d.TryGetValue("material", out var mt))
+            {
+                var md = (Dictionary<string, object>)mt;
+                l.Material = (string)md["id"];
+                if (md.TryGetValue("color", out var mc)) l.MaterialColor = Rgb(mc);
+            }
+            if (d.TryGetValue("layers", out var ls))
+                foreach (var o in (List<object>)ls)
+                {
+                    var ld2 = (Dictionary<string, object>)o;
+                    l.Layers.Add(((string)ld2["id"], (float)(double)ld2["amount"],
+                                  ld2.TryGetValue("color", out var lc2) ? Rgb(lc2) : Vector4.zero));
+                }
+            if (d.TryGetValue("wear", out var wr)) l.Wear = (float)(double)wr;
             var variants = d.TryGetValue("variants", out var vv) ? (Dictionary<string, object>)vv : new Dictionary<string, object>();
             l.Sanitize(config, variants, warnings);
             return l;
@@ -127,6 +147,22 @@ namespace RobotTestbed
             foreach (var lp in config.Objects("linePatterns")) knownLine |= (string)lp["id"] == LinePattern;
             if (LinePattern != "None" && !knownLine) { warnings.Add("Leuchtlinien " + LinePattern + " unbekannt"); LinePattern = "None"; }
             LineStrength = Mathf.Clamp(LineStrength, 0f, 2f);
+            bool knownMaterial = false;
+            foreach (var m in config.Objects("materials")) knownMaterial |= (string)m["id"] == Material;
+            if (Material != "None" && !knownMaterial) { warnings.Add("Werkstoff " + Material + " unbekannt"); Material = "None"; }
+            var layerIds = new HashSet<string>();
+            foreach (var lc in config.Objects("layers"))
+                if (lc.ContainsKey("color") && lc["color"] != null) layerIds.Add((string)lc["id"]);
+            var kept = new List<(string, float, Vector4)>();
+            var seen = new HashSet<string>();
+            foreach (var ly in Layers)
+            {
+                if (!layerIds.Contains(ly.id)) { warnings.Add("Schicht " + ly.id + " unbekannt"); continue; }
+                if (seen.Add(ly.id)) kept.Add((ly.id, Mathf.Clamp01(ly.amount), Clamp01(ly.color)));
+            }
+            Layers = kept;
+            Wear = Mathf.Clamp01(Wear);
+            MaterialColor = Clamp01(MaterialColor);
             Glow = Mathf.Clamp(Glow, 0.2f, 2.5f);
             foreach (var k in ColorKeys) Colors[k] = Clamp01(Colors[k]);
             Armor2 = Clamp01(Armor2);
@@ -166,6 +202,20 @@ namespace RobotTestbed
                 LineColor = Colors["lights"];
                 LineStrength = 1f;
             }
+            Material = "None";
+            if (skin.TryGetValue("material", out var mt) && mt is Dictionary<string, object> md)
+            {
+                Material = (string)md["id"];
+                MaterialColor = RobotConfig.Vec(md["color"]);
+            }
+            Layers = new List<(string, float, Vector4)>();
+            if (skin.TryGetValue("layers", out var ls))
+                foreach (var o in (List<object>)ls)
+                {
+                    var layer = (Dictionary<string, object>)o;
+                    Layers.Add(((string)layer["id"], (float)(double)layer["amount"], RobotConfig.Vec(layer["color"])));
+                }
+            Wear = skin.TryGetValue("wear", out var w) ? (float)(double)w : WearDefault;
             if (!parts) return;
             if (skin.TryGetValue("parts", out var p))
                 foreach (var kv in (Dictionary<string, object>)p) Variants[kv.Key] = (string)kv.Value;

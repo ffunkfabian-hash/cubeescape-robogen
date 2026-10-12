@@ -1,0 +1,80 @@
+{
+  "armor": {
+    "b": 0.1,
+    "g": 0.6,
+    "r": 0.95
+  },
+  "armor2": {
+    "b": 0.1,
+    "g": 0.6,
+    "r": 0.95
+  },
+  "autoDisplay": true,
+  "autoExpression": true,
+  "badges": [],
+  "display": "Star",
+  "expression": "Happy",
+  "eyes": {
+    "b": 0.75,
+    "g": 0.95,
+    "r": 1.0
+  },
+  "fabric": {
+    "b": 0.1,
+    "g": 0.05,
+    "r": 0.45
+  },
+  "finish": "Glanz",
+  "format": "CubeEscapeRobotLook",
+  "glow": 1.0,
+  "lights": {
+    "b": 0.1,
+    "g": 0.45,
+    "r": 1.0
+  },
+  "lines": {
+    "color": {
+      "b": 0.1,
+      "g": 0.45,
+      "r": 1.0
+    },
+    "pattern": "None",
+    "strength": 1.0
+  },
+  "mech": {
+    "b": 0.06,
+    "g": 0.08,
+    "r": 0.1
+  },
+  "metal": {
+    "b": 0.18,
+    "g": 0.55,
+    "r": 0.8
+  },
+  "name": "King",
+  "screen": {
+    "b": 0.4,
+    "g": 0.8,
+    "r": 1.0
+  },
+  "skin": "Gold",
+  "variants": {
+    "AccBack": "Cape",
+    "AccFace": "None",
+    "AccHand": "Flag",
+    "AccHead": "Crown",
+    "AccNeck": "Medal",
+    "Backpack": "Classic",
+    "Feet": "Boots",
+    "Hands": "Mitt",
+    "Head": "Dome",
+    "Pads": "Round"
+  },
+  "version": 3,
+  "visor": {
+    "b": 0.01,
+    "g": 0.007,
+    "r": 0.006
+  },
+  "zones2": []
+}

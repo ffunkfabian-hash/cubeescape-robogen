@@ -60,6 +60,16 @@ namespace RobotTestbed.Tests
         }
 
         [Test]
+        public void V3LookGetsTheVersion4Defaults()
+        {
+            var l = Load("look_v3.json", new List<string>());
+            Assert.AreEqual("Gold", l.Skin);
+            Assert.AreEqual("None", l.Material);
+            Assert.IsEmpty(l.Layers);
+            Assert.AreEqual(RobotLook.WearDefault, l.Wear);
+        }
+
+        [Test]
         public void FutureLookVersionIsRejected()
         {
             Assert.Throws<FormatException>(() => Load("look_future_version.json", new List<string>()));

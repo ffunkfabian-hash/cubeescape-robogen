@@ -51,7 +51,7 @@ import make_textures  # noqa: E402 - ImageMagick source textures
 import export_viewer  # noqa: E402 - data for the RobotViewer app
 
 LOG = logging.getLogger("robot")
-VERSION = "1.10.1"
+VERSION = "1.11.0"
 
 # ----------------------------------------------------------------------------------------------
 # Arguments and logging
@@ -381,6 +381,33 @@ PAINT_ZONES = collections.OrderedDict([
     ("Feet", ("Foot_Shell", "Sneaker_Shell", "Mech_AnklePlate", "Mech_Heel")),
 ])
 ZONE_TEXTURES = ["T_Robot_ZoneMask.png", "T_Robot_ZoneMask2.png"]
+# 1.11 Weathering. Surface layers: equalised fields (amount 0..1 = covered share of the painted surface), one channel
+# each; Wear (scratches) and Grime are raw fields for the wear amount. Materials: pattern of the armour (1 = armour
+# colour, 0 = material colour). Append only (IDs, channel = position).
+LAYERS = ["Rust", "Moss", "Frost", "Embers", "Camo", "Wear", "Grime"]
+EQUALISED_LAYERS = ["Rust", "Moss", "Frost", "Embers", "Camo"]
+LAYER_TEXTURES = ["T_Robot_LayerMask.png", "T_Robot_LayerMask2.png"]
+MATERIALS = ["Wood", "Stone", "Sand", "Paper", "Concrete", "Brass", "Circuit"]
+MATERIAL_TEXTURES = ["T_Robot_MaterialMask.png", "T_Robot_MaterialMask2.png"]
+# defaults per layer/material: colour (sRGB) and surface (roughness factor, metal offset) like the finishes
+LAYER_DEFAULTS = collections.OrderedDict([
+    ("Rust", {"color": "#8a3a12", "roughness": 1.8, "metalOffset": -0.35}),
+    ("Moss", {"color": "#4e6b1d", "roughness": 2.0, "metalOffset": -0.45}),
+    ("Frost", {"color": "#cfeaff", "roughness": 0.7, "metalOffset": -0.2}),
+    ("Embers", {"color": "#ff5c0a", "roughness": 1.6, "metalOffset": -0.3}),
+    ("Camo", {"color": "#56602e", "roughness": 1.5, "metalOffset": -0.25}),
+])
+# "base" = a fitting armour colour (the comparison sheet and the viewer's material picker use it)
+MATERIAL_DEFAULTS = collections.OrderedDict([
+    ("Wood", {"color": "#5b3a1f", "base": "#c08a52", "roughness": 1.6, "metalOffset": -0.4}),
+    ("Stone", {"color": "#4a4741", "base": "#a49c8c", "roughness": 1.9, "metalOffset": -0.45}),
+    ("Sand", {"color": "#8f7449", "base": "#d2b07a", "roughness": 2.0, "metalOffset": -0.45}),
+    ("Paper", {"color": "#a8987c", "base": "#e6dcc8", "roughness": 2.0, "metalOffset": -0.45}),
+    ("Concrete", {"color": "#5d5b57", "base": "#9a958d", "roughness": 1.9, "metalOffset": -0.45}),
+    ("Brass", {"color": "#7a5420", "base": "#c8963a", "roughness": 0.55, "metalOffset": 0.45}),
+    ("Circuit", {"color": "#d8a63a", "base": "#1f7a3e", "roughness": 0.9, "metalOffset": -0.2}),
+])
+WEAR_DEFAULT = 0.5          # the baked look; 0 = clean, 1 = battered
 GLOW_PARTS = ("Ear_Ring", "Neck_Ring", "Waist_Ring", "Elbow_Band", "Battery_Ring")    # line pattern "Joints"
 
 
@@ -397,7 +424,7 @@ def paint_zone(name):
     return 0
 
 
-def srgb_to_linear(c):
+def srgb_channel_to_linear(c):
     return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
 
 
@@ -406,7 +433,7 @@ def parse_color(v):
     if isinstance(v, str):
         if len(v) != 7 or v[0] != "#":
             raise ValueError("colour %r: expected '#rrggbb'" % v)
-        return tuple(round(srgb_to_linear(int(v[i:i + 2], 16) / 255.0), 5) for i in (1, 3, 5))
+        return tuple(round(srgb_channel_to_linear(int(v[i:i + 2], 16) / 255.0), 5) for i in (1, 3, 5))
     if len(v) != 3 or not all(0.0 <= float(x) <= 1.0 for x in v):
         raise ValueError("colour %r: expected three values 0..1" % (v,))
     return tuple(float(x) for x in v)
@@ -440,6 +467,21 @@ def load_skins(path=SKIN_FILE):
             zones2 = list(rec.get("zones2", []))
             if any(z not in PAINT_ZONES for z in zones2) or (zones2 and "armor2" not in pal_):
                 raise ValueError("zones2 %s need palette.armor2 and zones of %s" % (zones2, list(PAINT_ZONES)))
+            material = None
+            if rec.get("material"):
+                m = rec["material"]
+                if m["id"] not in MATERIALS:
+                    raise ValueError("material %r" % m)
+                material = {"id": m["id"], "color": parse_color(m.get("color", MATERIAL_DEFAULTS[m["id"]]["color"]))}
+            layers = []
+            for ly in rec.get("layers", []):
+                if ly["id"] not in LAYER_DEFAULTS or not 0.0 <= float(ly["amount"]) <= 1.0:
+                    raise ValueError("layer %r" % ly)
+                layers.append({"id": ly["id"], "amount": float(ly["amount"]),
+                               "color": parse_color(ly.get("color", LAYER_DEFAULTS[ly["id"]]["color"]))})
+            wear = float(rec.get("wear", WEAR_DEFAULT))
+            if not 0.0 <= wear <= 1.0:
+                raise ValueError("wear %r" % wear)
             lines = None
             if rec.get("lines"):
                 ln = rec["lines"]
@@ -451,7 +493,7 @@ def load_skins(path=SKIN_FILE):
             raise ValueError("%s: skin %s: %s" % (path, sid, exc)) from exc
         pal_.setdefault("armor2", pal_["armor"])
         skins[sid] = {"id": sid, "palette": pal_, "zones2": zones2, "finish": rec.get("finish", "Standard"),
-                      "badges": badges,
+                      "material": material, "layers": layers, "wear": wear, "badges": badges,
                       "lines": lines, "parts": dict(rec.get("parts", {})), "expression": rec.get("expression"),
                       "display": rec.get("display"), "theme": rec.get("theme", ""), "since": rec.get("since", ""),
                       "stage": rec.get("stage", ""), "startSet": bool(rec.get("startSet")),
@@ -563,6 +605,84 @@ BADGE_PLACES = {"Cross": ("ear", "chest", "shoulder", "thigh", "back"),
                 "Glyph": ("ear", "shoulder", "back", "head_back"), "Target": ("ear", "shoulder", "thigh", "head_back")}
 
 
+def layer_fields(k, vec, g, sc):
+    """Raw fields of the surface layers (baked, then equalised so that amount = covered share). Shared by armour,
+    mechanics and metal, so rust and moss also reach joints. Wear = scratches, Grime = grime (raw, for the wear amount)."""
+    geo = k.node("ShaderNodeNewGeometry")
+    sep = k.node("ShaderNodeSeparateXYZ")
+    k.link(geo.outputs["Normal"], sep.inputs[0])
+    up = k.math("MAXIMUM", sep.outputs[2], 0.0)
+    nmax = k.math("MAXIMUM", k.math("MAXIMUM", k.math("ABSOLUTE", sep.outputs[0]), k.math("ABSOLUTE", sep.outputs[1])),
+                  k.math("ABSOLUTE", sep.outputs[2]))
+    edge = k.map_range(nmax, 0.95, 0.6)                      # rounded edges and corners
+    ao = k.node("ShaderNodeAmbientOcclusion", samples=8)
+    ao.inputs["Distance"].default_value = 0.06
+    crevice = k.math("SUBTRACT", 1.0, ao.outputs["AO"])
+    blotch = k.noise(vec, 4.0, 4.0, 0.6)
+    fine = k.noise(vec, 18.0, 3.0, 0.55)
+
+    def blend(*terms):
+        acc = None
+        for w, t in terms:
+            v = k.math("MULTIPLY", t, w)
+            acc = v if acc is None else k.math("ADD", acc, v)
+        return acc
+
+    return {
+        "layer_Rust": blend((0.4, blotch), (0.35, crevice), (0.15, edge), (0.1, g)),
+        "layer_Moss": blend((0.45, up), (0.3, crevice), (0.25, blotch)),
+        "layer_Frost": blend((0.5, up), (0.3, edge), (0.2, fine)),
+        "layer_Embers": box_tex(k, "cracks", vec, 1.3),
+        "layer_Camo": box_tex(k, "camo", vec, 0.9),
+        "layer_Wear": sc,
+        "layer_Grime": g,
+    }
+
+
+def material_fields(k, vec, x, y, z):
+    """Armour patterns of the materials: 1 = armour colour, 0 = material colour (object space, baked)."""
+    out = {}
+    grain = k.node("ShaderNodeTexWave", wave_type="RINGS", rings_direction="SPHERICAL", wave_profile="SIN")
+    k.link(k.stretch(vec, 1.0, 1.0, 0.12), grain.inputs["Vector"])
+    grain.inputs["Scale"].default_value = 7.0
+    grain.inputs["Distortion"].default_value = 7.0
+    grain.inputs["Detail"].default_value = 3.0
+    out["mat_Wood"] = k.map_range(k.math("ADD", k.math("MULTIPLY", grain.outputs["Fac"], 0.8),
+                                         k.math("MULTIPLY", k.noise(k.stretch(vec, 1.0, 1.0, 0.2), 60.0, 2.0), 0.3)),
+                                  0.25, 1.0)
+    cells = k.node("ShaderNodeTexVoronoi", feature="DISTANCE_TO_EDGE")
+    k.link(vec, cells.inputs["Vector"])
+    cells.inputs["Scale"].default_value = 8.0
+    mortar = k.map_range(cells.outputs["Distance"], 0.0, 0.06)
+    carve = k.map_range(k.math("ABSOLUTE", k.math("SUBTRACT", k.math("FRACT", k.math("MULTIPLY", z, 6.0)), 0.5)),
+                        0.44, 0.47)                          # engraved bands (Temple)
+    speck = k.map_range(k.noise(vec, 45.0, 3.0), 0.3, 0.7, 0.75, 1.0)
+    out["mat_Stone"] = k.math("MULTIPLY", k.math("MULTIPLY", mortar, k.math("SUBTRACT", 1.0, k.math("MULTIPLY", carve, 0.7))),
+                              speck)
+    ripple = k.node("ShaderNodeTexWave", wave_type="BANDS", bands_direction="Z", wave_profile="SIN")
+    k.link(vec, ripple.inputs["Vector"])
+    ripple.inputs["Scale"].default_value = 9.0
+    ripple.inputs["Distortion"].default_value = 3.0
+    out["mat_Sand"] = k.math("ADD", k.math("MULTIPLY", k.map_range(k.noise(vec, 160.0, 2.0), 0.3, 0.7), 0.7),
+                             k.math("MULTIPLY", ripple.outputs["Fac"], 0.3))
+    fibres = k.noise(k.stretch(vec, 1.0, 1.0, 0.08), 70.0, 4.0, 0.7)
+    fold = k.node("ShaderNodeTexWave", wave_type="BANDS", bands_direction="DIAGONAL", wave_profile="SAW")
+    k.link(vec, fold.inputs["Vector"])
+    fold.inputs["Scale"].default_value = 2.5
+    out["mat_Paper"] = k.map_range(k.math("SUBTRACT", k.math("ADD", k.math("MULTIPLY", fibres, 0.35), 0.75),
+                                          k.math("MULTIPLY", k.map_range(fold.outputs["Fac"], 0.9, 1.0), 0.35)),
+                                   0.4, 1.0)
+    pores = k.node("ShaderNodeTexVoronoi", feature="F1")
+    k.link(vec, pores.inputs["Vector"])
+    pores.inputs["Scale"].default_value = 70.0
+    out["mat_Concrete"] = k.math("MULTIPLY", k.map_range(pores.outputs["Distance"], 0.05, 0.25),
+                                 k.map_range(k.noise(vec, 12.0, 4.0), 0.25, 0.75, 0.55, 1.0))
+    out["mat_Brass"] = k.map_range(k.math("ADD", k.math("MULTIPLY", box_tex(k, "brushed", vec, 2.5), 0.5),
+                                          k.math("MULTIPLY", k.noise(vec, 6.0, 3.0), 0.5)), 0.3, 0.8, 0.45, 1.0)
+    out["mat_Circuit"] = k.math("SUBTRACT", 1.0, k.map_range(box_tex(k, "circuit", vec, 2.2), 0.25, 0.75))
+    return out
+
+
 def pattern_masks(k, vec, x, y, z):
     """Badge and glow line masks of the armour (0..1 scalars, keys "badge_<id>" / "line_<id>"); baked once into mask
     textures, the colours come from the skin (composed per skin, tinted at runtime)."""
@@ -657,6 +777,8 @@ def build_materials():
     bump(k, b, k.math("SUBTRACT", k.math("MULTIPLY", g, 0.25), k.math("MULTIPLY", sc, 0.9)), 0.35)
     finish_material("White", mat, k, b, base, rough, metal, k.rgb((0, 0, 0)), viewport=(0.66, 0.68, 0.72))
     CHANNELS["White"].update(pattern_masks(k, vec, x, y, z))
+    CHANNELS["White"].update(layer_fields(k, vec, g, sc))
+    CHANNELS["White"].update(material_fields(k, vec, x, y, z))
     mats["White"] = mat
 
     # Anthracite mechanics.
@@ -667,6 +789,7 @@ def build_materials():
     rough = k.math("ADD", k.math("MULTIPLY", g, 0.16), 0.36)
     bump(k, b, k.math("SUBTRACT", k.math("MULTIPLY", g, 0.3), k.math("MULTIPLY", sc, 0.5)), 0.3)
     finish_material("Dark", mat, k, b, base, rough, k.value(0.70), k.rgb((0, 0, 0)), viewport=(0.06, 0.065, 0.075))
+    CHANNELS["Dark"].update(layer_fields(k, vec, g, sc))
     mats["Dark"] = mat
 
     # Mid grey metal for hands, ear caps and small mechanics.
@@ -677,6 +800,7 @@ def build_materials():
     rough = k.math("ADD", k.math("MULTIPLY", g, 0.10), 0.30)
     bump(k, b, k.math("SUBTRACT", k.math("MULTIPLY", g, 0.2), k.math("MULTIPLY", sc, 0.6)), 0.3)
     finish_material("Grey", mat, k, b, base, rough, k.value(0.60), k.rgb((0, 0, 0)), viewport=(0.34, 0.35, 0.38))
+    CHANNELS["Grey"].update(layer_fields(k, vec, g, sc))
     mats["Grey"] = mat
 
     # Glossy black face visor.
@@ -719,7 +843,8 @@ def build_materials():
     return mats
 
 
-MASK_CHANNELS = ["badge_" + b for b in BADGES] + ["line_" + n for n in LINE_PATTERNS]
+MASK_CHANNELS = (["badge_" + b for b in BADGES] + ["line_" + n for n in LINE_PATTERNS] +
+                 ["layer_" + n for n in LAYERS] + ["mat_" + n for n in MATERIALS])
 
 
 EXPRESSION_INDEX = {n: i for i, n in enumerate(make_textures.EXPRESSIONS)}
@@ -1853,14 +1978,32 @@ def linear_to_srgb(c):
     return np.where(c <= 0.0031308, c * 12.92, 1.055 * np.power(c, 1 / 2.4) - 0.055)
 
 
-BAKE_SCHEMA = "1.10-b"  # bump when the baking code changes in a way the cache key cannot see
+BAKE_SCHEMA = "1.11-a"  # bump when the baking code changes in a way the cache key cannot see
 STATIC_TEXTURES = ("T_Robot_MetallicSmoothness.png", "T_Robot_Occlusion.png", "T_Robot_ColorMask.png",
-                   "T_Robot_LightMask.png", "T_Robot_Normal.png") + tuple(BADGE_TEXTURES + LINE_TEXTURES + ZONE_TEXTURES)
+                   "T_Robot_LightMask.png", "T_Robot_Normal.png") + tuple(BADGE_TEXTURES + LINE_TEXTURES + ZONE_TEXTURES +
+                                                                         LAYER_TEXTURES + MATERIAL_TEXTURES)
 LAYER_SCALE = 16383.75  # cached float maps as uint16 over 0..4: steps of 6e-5, far below one 8-bit step
 COMPOSE_TOLERANCE = 2e-3
 
 
-def bake_textures(objs, mats, size, ao_samples, tex_dir, cache_dir=None, check_compose=False, device="auto"):
+def compare_skins():
+    """The weathering comparison: Classic with every layer at three amounts, every material, three wear steps."""
+    base = SKIN_DATA[DEFAULT_SKIN]
+    out = []
+    for lid, d in LAYER_DEFAULTS.items():
+        for a in (0.3, 0.6, 1.0):
+            out.append(("%s %d%%" % (lid, a * 100), dict(base, layers=[{"id": lid, "amount": a,
+                                                                        "color": parse_color(d["color"])}])))
+    for mid, d in MATERIAL_DEFAULTS.items():
+        pal_ = dict(base["palette"], armor=parse_color(d["base"]))
+        out.append((mid, dict(base, palette=pal_, material={"id": mid, "color": parse_color(d["color"])})))
+    for w in (0.0, 0.5, 1.0):
+        out.append(("Abnutzung %d%%" % (w * 100), dict(base, wear=w)))
+    return out
+
+
+def bake_textures(objs, mats, size, ao_samples, tex_dir, cache_dir=None, check_compose=False, device="auto",
+                  compare_dir=None):
     """Atlas textures. Skins are not baked one by one: every colour of the body is linear in the palette (palette
     colours only pass through mixes and multiplies with scalar factors), so base = C + sum(w_k * palette_k) with
     grey weight maps w_k. One bake with the palette black gives C, one bake per three palette colours (one per RGB
@@ -1907,6 +2050,20 @@ def bake_textures(objs, mats, size, ao_samples, tex_dir, cache_dir=None, check_c
         for out in pool.map(write_skin, list(SKINS)):
             paths.update(out)
     LOG.info("  composed %d skins in %.1fs", len(SKINS), time.time() - t0)
+    if compare_dir:            # half-size textures for the weathering comparison renders
+        os.makedirs(compare_dir, exist_ok=True)
+        half = {k: (v[::2, ::2] if isinstance(v, np.ndarray) else {n: w[::2, ::2] for n, w in v.items()})
+                for k, v in layers.items()}
+
+        def write_compare(item):
+            i, (_, rec) = item
+            b, e = decorate_skin(half, rec, *compose_skin(half, rec["palette"]))
+            write_png(os.path.join(compare_dir, "base_%02d.png" % i), linear_to_srgb(b * half["ao_soft"][..., None]),
+                      size // 2, size // 2, 3, level=3)
+            write_png(os.path.join(compare_dir, "emit_%02d.png" % i), linear_to_srgb(e), size // 2, size // 2, 3, level=3)
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+            list(pool.map(write_compare, enumerate(compare_skins())))
     for key_ in ("eyes", "displays", "flipbook"):       # runtime atlases ship next to the baked set
         dst = os.path.join(tex_dir, os.path.basename(SRC[key_].filepath))
         shutil.copyfile(bpy.path.abspath(SRC[key_].filepath), dst)
@@ -2019,7 +2176,9 @@ def bake_layers(objs, mats, size, ao_samples, tex_dir, check_compose, device, ao
     armor, painted = cmask[..., 0], np.clip(cmask[..., 0] + cmask[..., 2], 0, 1)     # armour; armour + metal
     for kind, chans in (("badge_masks", ["badge_" + b for b in BADGES]),
                         ("line_masks", ["line_" + n for n in LINE_PATTERNS]),
-                        ("zone_masks", ["zone_" + z for z in PAINT_ZONES])):
+                        ("zone_masks", ["zone_" + z for z in PAINT_ZONES]),
+                        ("layer_masks", ["layer_" + n for n in LAYERS]),
+                        ("material_masks", ["mat_" + n for n in MATERIALS])):
         planes = []
         for i in range(0, len(chans), 3):
             pack = chans[i:i + 3]
@@ -2027,8 +2186,12 @@ def bake_layers(objs, mats, size, ao_samples, tex_dir, check_compose, device, ao
                            tuple(pack + ["zero"] * (3 - len(pack))), "data")
             for j, ch in enumerate(pack):
                 # badges and zones paint armour and metal (an ear cap), glow lines the armour, joints their parts
-                limit = {"badge": painted, "zone": painted}.get(kind[:-6], armor if ch != "line_Joints" else 1.0)
-                planes.append(np.clip(px[..., j], 0, 1) * limit)
+                limit = {"badge": painted, "zone": painted, "material": armor,
+                         "layer": np.clip(cmask.sum(axis=-1), 0, 1)}.get(kind[:-6], armor if ch != "line_Joints" else 1.0)
+                plane = np.clip(px[..., j], 0, 1)
+                if ch[len("layer_"):] in EQUALISED_LAYERS and ch.startswith("layer_"):
+                    plane = equalise(plane, limit > 0.5)
+                planes.append(plane * limit)
         layers[kind] = np.stack(planes, axis=-1)
     bake.normal_space = "TANGENT"
     results["normal"] = bake_pass("Normal", None, "data", samples=4, bake_type="NORMAL")
@@ -2053,7 +2216,8 @@ def bake_layers(objs, mats, size, ao_samples, tex_dir, check_compose, device, ao
         "T_Robot_LightMask.png": (np.clip(results["mask_a"][..., :1], 0, 1), 1),
         "T_Robot_Normal.png": (np.clip(results["normal"][..., :3], 0, 1), 3),
     }
-    for kind, names in (("badge_masks", BADGE_TEXTURES), ("line_masks", LINE_TEXTURES), ("zone_masks", ZONE_TEXTURES)):
+    for kind, names in (("badge_masks", BADGE_TEXTURES), ("line_masks", LINE_TEXTURES), ("zone_masks", ZONE_TEXTURES),
+                        ("layer_masks", LAYER_TEXTURES), ("material_masks", MATERIAL_TEXTURES)):
         for t, name in enumerate(names):
             planes = layers[kind][..., 4 * t:4 * t + 4]
             if planes.shape[-1] < 4:            # unused channels stay black (room for later patterns)
@@ -2116,16 +2280,97 @@ def compose_skin(layers, palette):
     return base, emit
 
 
+def equalise(field, inside):
+    """Rank transform inside the painted surface: afterwards the share of pixels above 1 - a is a, so a layer amount
+    reads as the covered share. Ties keep their order (stable), pixels outside stay as they are."""
+    out = field.copy()
+    vals = field[inside]
+    if vals.size:
+        order = np.argsort(vals, kind="stable")
+        ranks = np.empty(vals.size, dtype=np.float32)
+        ranks[order] = np.arange(vals.size, dtype=np.float32) / max(vals.size - 1, 1)
+        out[inside] = ranks
+    return out
+
+
 LUMA = np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)
 LINE_PAINT = 0.85       # glow lines also tint the albedo (visible in daylight): share of the line colour x 0.6
 
 
+COVER_SOFT = 0.1           # layer edge: cover = clamp((field - (1 - amount)) / COVER_SOFT, 0, 1)
+BARE_METAL = np.array([0.62, 0.63, 0.65], dtype=np.float32)
+
+
+def cover(field, amount, soft=COVER_SOFT):
+    return np.clip((field - (1.0 - amount)) / soft, 0.0, 1.0)
+
+
 def decorate_skin(layers, skin, base, emit):
-    """Badges and glow lines of a skin on top of the composed palette colours (same formulas as the runtime shader):
-    a badge recolours the armour keeping its shading (luminance ratio to the armour colour), glow lines tint the albedo
-    and add emission."""
-    if not skin["badges"] and not skin["lines"] and not skin["zones2"]:
+    """Everything of a skin on top of the composed palette colours, in this order (same formulas as the viewer and the
+    Unity shader): second colour in its zones -> material pattern of the armour -> badges -> surface layers (rust,
+    moss, frost, camo, embers) -> wear (0 clean, 0.5 as baked, 1 battered) -> glow lines. Colour replacements keep the
+    shading (luminance ratio to the region's palette colour)."""
+    if not (skin["badges"] or skin["lines"] or skin["zones2"] or skin["material"] or skin["layers"] or
+            abs(skin["wear"] - WEAR_DEFAULT) > 1e-6):
         return base, emit
+    pal_ = skin["palette"]
+    cm = layers["cmask"]
+    lum = {k: float(np.asarray(pal_[k], np.float32) @ LUMA) for k in ("armor", "mech", "metal")}
+    blum = base @ LUMA
+    ratio = np.clip(blum / np.maximum(cm[..., 0] * lum["armor"] + cm[..., 2] * lum["metal"], 1e-3), 0.2, 1.6)[..., None]
+    ratio_all = np.clip(blum / np.maximum(cm[..., 0] * lum["armor"] + cm[..., 1] * lum["mech"] + cm[..., 2] * lum["metal"],
+                                          1e-3), 0.2, 1.6)[..., None]
+    region = (cm[..., 0:1] * np.asarray(pal_["armor"], np.float32) + cm[..., 1:2] * np.asarray(pal_["mech"], np.float32) +
+              cm[..., 2:3] * np.asarray(pal_["metal"], np.float32))
+    if skin["zones2"]:
+        m = np.clip(sum(layers["zone_masks"][..., list(PAINT_ZONES).index(z)] for z in skin["zones2"]), 0, 1)[..., None]
+        base = base * (1.0 - m) + m * np.asarray(pal_["armor2"], dtype=np.float32) * ratio
+        region = region * (1.0 - m) + m * np.asarray(pal_["armor2"], dtype=np.float32)
+    if skin["material"]:
+        mat = skin["material"]
+        p = layers["material_masks"][..., MATERIALS.index(mat["id"])][..., None]
+        armor = cm[..., 0:1]
+        base = base * (1.0 - armor) + armor * (base * p + np.asarray(mat["color"], np.float32) * ratio * (1.0 - p))
+    for b in skin["badges"]:
+        m = layers["badge_masks"][..., BADGES.index(b["id"])][..., None]
+        base = base * (1.0 - m) + m * np.asarray(b["color"], dtype=np.float32) * ratio
+    fields = {n: layers["layer_masks"][..., i][..., None] for i, n in enumerate(LAYERS)}
+    by_id = {ly["id"]: ly for ly in skin["layers"]}
+    for lid in ("Rust", "Moss", "Frost"):
+        if lid in by_id:
+            c = cover(fields[lid], by_id[lid]["amount"])
+            col = np.asarray(by_id[lid]["color"], np.float32) * (0.6 + 0.6 * fields["Grime"])   # patchy, not flat
+            base = base * (1.0 - c) + c * col * ratio_all
+    if "Camo" in by_id:
+        a, col = by_id["Camo"]["amount"], np.asarray(by_id["Camo"]["color"], np.float32)
+        c1, c2 = cover(fields["Camo"], a), cover(fields["Camo"], a * 0.45)
+        base = base * (1.0 - c1) + c1 * col * ratio_all
+        base = base * (1.0 - c2) + c2 * col * 0.45 * ratio_all
+    w = skin["wear"]
+    if w < WEAR_DEFAULT:                         # cleaner: scratches and grime back to the paint
+        clean = (WEAR_DEFAULT - w) * 2.0
+        sc = np.clip(fields["Wear"] * 1.6, 0, 1) * clean
+        base = base * (1.0 - sc) + sc * region
+        gr = fields["Grime"] * clean * 0.4
+        base = base * (1.0 - gr) + gr * region
+    elif w > WEAR_DEFAULT:                       # battered: more bare metal, dirt in the dents
+        more = (w - WEAR_DEFAULT) * 2.0
+        sc = np.clip(fields["Wear"] * 4.0 * more, 0, 1) * 0.85
+        base = base * (1.0 - sc) + sc * BARE_METAL
+        base = base * (1.0 - 0.6 * more * fields["Grime"])
+    if "Embers" in by_id:
+        a, col = by_id["Embers"]["amount"], np.asarray(by_id["Embers"]["color"], np.float32)
+        char = cover(fields["Embers"], min(1.0, a * 2.5))
+        glow = cover(fields["Embers"], a * 0.3, 0.04)                  # glowing veins in the charred area
+        base = base * (1.0 - 0.88 * char)
+        emit = emit + glow * col * 1.5
+    if skin["lines"]:
+        ln = skin["lines"]
+        m = layers["line_masks"][..., LINE_PATTERNS.index(ln["pattern"])][..., None]
+        col = np.asarray(ln["color"], dtype=np.float32)
+        base = base * (1.0 - m * LINE_PAINT) + m * LINE_PAINT * 0.6 * col
+        emit = emit + m * col * ln["strength"]
+    return base, emit
     pal_ = skin["palette"]
     cm = layers["cmask"]
     ref = cm[..., 0] * float(np.asarray(pal_["armor"], np.float32) @ LUMA) + \
@@ -2149,7 +2394,8 @@ def decorate_skin(layers, skin, base, emit):
 def save_layers(path, layers):
     flat = {"c_base": layers["c_base"], "c_emit": layers["c_emit"], "ao_soft": layers["ao_soft"],
             "badge_masks": layers["badge_masks"], "line_masks": layers["line_masks"],
-            "zone_masks": layers["zone_masks"], "cmask": layers["cmask"]}
+            "zone_masks": layers["zone_masks"], "cmask": layers["cmask"], "layer_masks": layers["layer_masks"],
+            "material_masks": layers["material_masks"]}
     for kind in ("w_base", "w_emit"):
         for k, w in layers[kind].items():
             flat["%s__%s" % (kind, k)] = w
@@ -4931,7 +5177,11 @@ def set_look(ob, tex_dir, skin=DEFAULT_SKIN, expression="Normal", display="Statu
             if "TintColor" in nt.nodes:
                 nt.nodes["TintColor"].outputs[0].default_value = (*pal_["fabric"], 1.0)
             if "FinishRough" in nt.nodes:
-                rough, metal = FINISH_PARAMS[SKIN_DATA[skin]["finish"]]
+                rec = SKIN_DATA[skin]
+                rough, metal = FINISH_PARAMS[rec["finish"]]
+                if rec["material"] and rec["finish"] == "Standard":     # the material brings its own surface
+                    d = MATERIAL_DEFAULTS[rec["material"]["id"]]
+                    rough, metal = d["roughness"], d["metalOffset"]
                 nt.nodes["FinishRough"].outputs[0].default_value = rough
                 nt.nodes["FinishMetal"].outputs[0].default_value = metal
             suffix = "" if skin == DEFAULT_SKIN else "_" + skin
@@ -5042,6 +5292,29 @@ def card_objects(part_objs, robot_mesh, kind, name):
     cfg = default_config()
     cfg.update(variants)
     return [part_objs[g] for g in config_groups(cfg)], skin, expr, disp
+
+
+def render_compare(cam, ob, out_dir, compare_dir):
+    """Classic with the comparison textures (compare_skins), front three-quarter view; returns [(label, file)]."""
+    scene = bpy.context.scene
+    scene.eevee.taa_render_samples = preview_samples(32)
+    scene.render.resolution_x, scene.render.resolution_y = 300, 330
+    cam.data.type = "PERSP"
+    cam.data.lens = 58
+    cam.location = (-1.03, -2.20, 1.00)
+    look_at(cam, (0.02, 0, 0.66))
+    tiles = []
+    for i, (label, _) in enumerate(compare_skins()):
+        for mat in ob.data.materials:
+            if not mat.name.startswith("M_Robot") or mat.name.startswith(("M_RobotEyes", "M_RobotDisplay")):
+                continue
+            for nd in mat.node_tree.nodes:
+                if nd.type == "TEX_IMAGE" and nd.image.name.startswith(("T_Robot_BaseColor", "base_")):
+                    nd.image = bpy.data.images.load(os.path.join(compare_dir, "base_%02d.png" % i), check_existing=True)
+                elif nd.type == "TEX_IMAGE" and nd.image.name.startswith(("T_Robot_Emission", "emit_")):
+                    nd.image = bpy.data.images.load(os.path.join(compare_dir, "emit_%02d.png" % i), check_existing=True)
+        tiles.append((label, render_still(os.path.join(out_dir, "compare_%02d.png" % i))))
+    return tiles
 
 
 def card_compositor(on):
@@ -5271,6 +5544,9 @@ BADGE_LABELS = {"HazardStripes": "Warnstreifen", "Cross": "Kreuz", "Cloud": "Wol
                 "Biohazard": "Biohazard", "Glyph": "Schriftzeichen", "RacingStripes": "Rennstreifen",
                 "Target": "Zielmarke"}
 LINE_LABELS = {"Circuit": "Leiterbahnen", "Rings": "Ringe", "Seams": "Kanten", "Bolt": "Blitze", "Joints": "Gelenke"}
+MATERIAL_LABELS = {"Wood": "Holz", "Stone": "Stein", "Sand": "Sand", "Paper": "Papier", "Concrete": "Beton",
+                   "Brass": "Messing", "Circuit": "Platine"}
+LAYER_LABELS = {"Rust": "Rost", "Moss": "Moos", "Frost": "Frost", "Embers": "Glutrisse", "Camo": "Tarnung"}
 ZONE_LABELS = {"Head": "Kopf", "Ears": "Ohren", "Chest": "Brust", "Pads": "Schultern", "Arms": "Arme", "Hips": "Hüfte",
                "Legs": "Beine", "Feet": "Füße"}
 CARD_FONT, CARD_FONT_BOLD = "Arial", "Arial-Bold"
@@ -5289,13 +5565,18 @@ def skin_card(i, sid, render, path):
     if rec["zones2"]:
         info.append("2. Farbe: " + ", ".join(ZONE_LABELS[z] for z in rec["zones2"][:2]) +
                     (" +%d" % (len(rec["zones2"]) - 2) if len(rec["zones2"]) > 2 else ""))
+    if rec["material"]:
+        info.append("Werkstoff: " + MATERIAL_LABELS[rec["material"]["id"]])
+    info += ["%s %d %%" % (LAYER_LABELS[ly["id"]], round(ly["amount"] * 100)) for ly in rec["layers"]]
+    if abs(rec["wear"] - WEAR_DEFAULT) > 1e-6:
+        info.append("Abnutzung %d %%" % round(rec["wear"] * 100))
     info += [BADGE_LABELS[b["id"]] for b in rec["badges"]]
     if rec["lines"]:
         info.append("Linien: " + LINE_LABELS[rec["lines"]["pattern"]])
     if rec["parts"]:
         info.append("eigene Teile")
     text = []
-    for j, line in enumerate(info[:4]):
+    for j, line in enumerate(info[:6]):
         text += ["-annotate", "+318+%d" % (104 + 26 * j), line]
     magick("-size", "520x420", "xc:#0f1620", "-fill", "none", "-stroke", "#26394c", "-strokewidth", 2,
            "-draw", "roundrectangle 1,1 518,418 12,12", "-stroke", "none",
@@ -5438,7 +5719,7 @@ def export_fbx(path, objs, arm_ob, animations=True):
 # workers right after it (they take the UVs from the cache and load the baked textures). Results are merged in a
 # fixed order, so the report does not depend on who ran what.
 
-STILL_JOBS = ("views", "skins", "expressions", "types", "cards", "icons")
+STILL_JOBS = ("views", "skins", "expressions", "types", "cards", "icons", "compare")
 EXACT_JOBS = ("views", "expressions")       # the deliverable look; everything else uses the fast preview look
 
 
@@ -5479,6 +5760,7 @@ def make_jobs(type_names, actions_available, args, n_proc):
         for i, items in enumerate(chunks(card_items, 9)):
             render("cards", i, len(items) * 48, items=items)
         render("icons", "accessories", 20 * 32)
+        render("compare", "weathering", len(compare_skins()) * 32)
         if not args.no_anim_sheets:
             for a in ANIMS:
                 render("sheet", a.name, 2 * 6 * 12, clip=a.name)
@@ -5604,6 +5886,10 @@ def run_job(ctx, job):
         return render_cards(cam, ctx.part_objs, ctx.robot_mesh, ctx.preview_dir, ctx.tex_dir, job["items"])
     if kind == "icons":
         return render_accessory_icons(cam, ctx.part_objs, ctx.preview_dir, ctx.tex_dir)
+    if kind == "compare":
+        tiles = render_compare(cam, ctx.robot_mesh, ctx.preview_dir, os.path.join(ctx.preview_dir, ".compare"))
+        set_look(ctx.robot_mesh, ctx.tex_dir)
+        return tiles
     if kind == "sheet":
         return render_anim_rows(cam, ctx.arm_ob, ctx.actions, ctx.preview_dir, job["clip"])
     if kind == "gif":
@@ -5702,6 +5988,9 @@ def finish_previews(results, preview_dir, report, tex_dir):
             acc.update(res)
         report["icons"], report["icon_hints"] = build_icons(cards, acc, os.path.dirname(preview_dir), tex_dir)
         build_skin_sheet(cards, preview_dir)
+    for _, res in by_kind["compare"]:          # the weathering comparison: 5 layers x 3 amounts, materials, wear
+        montage_sheet([tuple(t) for t in res], os.path.join(preview_dir, "weathering.png"), 18)
+        shutil.rmtree(os.path.join(preview_dir, ".compare"), ignore_errors=True)
     if by_kind["sheet"]:
         build_contact_sheets({job["clip"]: rows for job, rows in by_kind["sheet"]}, preview_dir)
     frames_dir = os.path.join(preview_dir, "anim_frames")
@@ -5793,7 +6082,8 @@ def main():
             tex_paths = textures_in(args.use_textures)
         else:
             tex_paths = bake_textures(list(part_objs.values()), mats, args.tex_size, args.ao_samples, tex_dir,
-                                      None if args.no_cache else cache_dir, args.check_compose, args.bake_device)
+                                      None if args.no_cache else cache_dir, args.check_compose, args.bake_device,
+                                      None if args.no_render else os.path.join(preview_dir, ".compare"))
         final = [build_baked_material(tex_paths), build_baked_material(tex_paths, "M_RobotFabric",
                                                                         SKINS[DEFAULT_SKIN]["fabric"]),
                  mats["EyeScreen"], mats["Display"]]
@@ -5956,6 +6246,10 @@ def viewer_config():
                   for i, (z, parts) in enumerate(PAINT_ZONES.items())],
         "glowParts": list(GLOW_PARTS),
         "linePaint": LINE_PAINT,
+        "layers": [catalog_entry(n, LAYER_TEXTURES, i, LAYER_DEFAULTS.get(n)) for i, n in enumerate(LAYERS)],
+        "materials": [catalog_entry(n, MATERIAL_TEXTURES, i, MATERIAL_DEFAULTS[n]) for i, n in enumerate(MATERIALS)],
+        "weathering": {"coverSoft": COVER_SOFT, "wearDefault": WEAR_DEFAULT, "bareMetal": [float(v) for v in BARE_METAL],
+                       "equalised": EQUALISED_LAYERS},
         "expressions": list(make_textures.EXPRESSIONS),
         "expressionStyles": make_textures.EXPRESSION_STYLES,
         "blink": make_textures.BLINK,
@@ -5974,11 +6268,24 @@ def viewer_config():
     }
 
 
+def catalog_entry(name, textures, i, defaults):
+    """A layer or material for robot_config.json: mask channel plus default colour (linear) and surface."""
+    e = {"id": name, "texture": textures[i // 4], "channel": i % 4}
+    if defaults:
+        e.update(color=list(parse_color(defaults["color"])), roughness=defaults["roughness"],
+                 metalOffset=defaults["metalOffset"])
+        if "base" in defaults:
+            e["base"] = list(parse_color(defaults["base"]))
+    return e
+
+
 def skin_config(sid):
     """A skin for robot_config.json: palette as linear lists (flat, as before 1.10) plus the 1.10 fields."""
     rec = SKIN_DATA[sid]
     cfg = dict(name=sid, **{k: list(v) for k, v in rec["palette"].items()})
-    cfg.update({"zones2": rec["zones2"], "finish": rec["finish"],
+    cfg.update({"zones2": rec["zones2"], "finish": rec["finish"], "wear": rec["wear"],
+                "material": dict(rec["material"], color=list(rec["material"]["color"])) if rec["material"] else None,
+                "layers": [dict(ly, color=list(ly["color"])) for ly in rec["layers"]],
                 "badges": [{"id": b["id"], "color": list(b["color"])} for b in rec["badges"]],
                 "lines": dict(rec["lines"], color=list(rec["lines"]["color"])) if rec["lines"] else None,
                 "parts": rec["parts"], "theme": rec["theme"], "since": rec["since"], "stage": rec["stage"],
@@ -6025,7 +6332,7 @@ def write_config(out, clips, bounds):
 # ---------------------------------- player looks ----------------------------------
 # A look is what the player saves. Names of skins, variants, expressions and displays are IDs: never rename them.
 LOOK_FORMAT = "CubeEscapeRobotLook"
-LOOK_VERSION = 3            # 1 = viewer 1.6 files without format/version fields, 2 = 1.7-1.9 (both migrated on load)
+LOOK_VERSION = 4            # 1 = viewer 1.6 (no format/version), 2 = 1.7-1.9, 3 = 1.10 (all migrated on load)
 LOOK_COLORS = {"armor": "armor", "mech": "mech", "metal": "metal", "lights": "accent", "screen": "screen",
                "eyes": "eye", "visor": "visor", "fabric": "fabric", "armor2": "armor2"}     # look key -> skin key
 
@@ -6046,7 +6353,11 @@ def type_look(tname):
                  "display": spec["display"], "autoExpression": True, "autoDisplay": True,
                  "zones2": list(rec["zones2"]),
                  "badges": [{"id": b["id"], "color": rgb(b["color"])} for b in rec["badges"]],
-                 "lines": {"pattern": lines["pattern"], "color": rgb(lines["color"]), "strength": lines["strength"]}})
+                 "lines": {"pattern": lines["pattern"], "color": rgb(lines["color"]), "strength": lines["strength"]},
+                 "material": ({"id": rec["material"]["id"], "color": rgb(rec["material"]["color"])} if rec["material"]
+                              else {"id": "None", "color": rgb(skin["armor"])}),
+                 "layers": [{"id": ly["id"], "amount": ly["amount"], "color": rgb(ly["color"])} for ly in rec["layers"]],
+                 "wear": rec["wear"]})
     return look
 
 
@@ -6071,6 +6382,15 @@ def look_schema():
             "properties": {"id": {"enum": BADGES}, "color": rgb}}},
         "zones2": {"type": "array", "uniqueItems": True, "items": {"enum": list(PAINT_ZONES)},
                    "description": "parts painted in armor2 (version 3)"},
+        "material": {"type": "object", "required": ["id"], "additionalProperties": False,
+                     "description": "armour material (version 4)",
+                     "properties": {"id": {"enum": ["None"] + MATERIALS}, "color": rgb}},
+        "layers": {"type": "array", "description": "surface layers (version 4)", "items": {
+            "type": "object", "required": ["id", "amount"], "additionalProperties": False,
+            "properties": {"id": {"enum": list(LAYER_DEFAULTS)}, "amount": {"type": "number", "minimum": 0, "maximum": 1},
+                           "color": rgb}}},
+        "wear": {"type": "number", "minimum": 0, "maximum": 1,
+                 "description": "0 clean, 0.5 as baked, 1 battered (version 4)"},
         "lines": {"type": "object", "required": ["pattern"], "additionalProperties": False, "properties": {
             "pattern": {"enum": ["None"] + LINE_PATTERNS}, "color": rgb,
             "strength": {"type": "number", "minimum": 0, "maximum": 2}}},
@@ -6079,8 +6399,7 @@ def look_schema():
     return {"$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "robot_look.schema.json",
             "title": "Cube Escape robot look (version %d)" % LOOK_VERSION,
             "description": "Player customisation. Names are permanent IDs; unknown values fall back to the default "
-                           "with a warning. Version 1 files (no format/version) and version 2 files (no skin, "
-                           "badges, lines) are migrated on load.",
+                           "with a warning. Versions 1-3 are migrated on load (missing fields take their defaults).",
             "type": "object", "required": ["format", "version", "variants", "expression", "display"],
             "properties": props, "additionalProperties": False}
 

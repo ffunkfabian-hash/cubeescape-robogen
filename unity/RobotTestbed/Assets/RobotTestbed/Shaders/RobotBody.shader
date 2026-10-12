@@ -18,6 +18,10 @@ Shader "CubeEscape/RobotBody"
         _LineMask2 ("Line mask 2", 2D) = "black" {}
         _ZoneMask ("Zone mask 1", 2D) = "black" {}
         _ZoneMask2 ("Zone mask 2", 2D) = "black" {}
+        _LayerMask ("Layer mask 1 (rust, moss, frost, embers)", 2D) = "black" {}
+        _LayerMask2 ("Layer mask 2 (camo, wear, grime)", 2D) = "black" {}
+        _MaterialMask ("Material mask 1", 2D) = "white" {}
+        _MaterialMask2 ("Material mask 2", 2D) = "white" {}
         _Armor ("Armour", Vector) = (0.66, 0.685, 0.72, 0)
         _Armor2 ("Second armour colour", Vector) = (0.66, 0.685, 0.72, 0)
         _Mech ("Mechanics", Vector) = (0.075, 0.08, 0.092, 0)
@@ -40,6 +44,20 @@ Shader "CubeEscape/RobotBody"
         _LineSel1 ("Line pattern (mask 2)", Vector) = (0, 0, 0, 0)
         _LineColor ("Line colour (w = strength)", Vector) = (0, 0, 0, 0)
         _LinePaint ("Line albedo share", Float) = 0.85
+        _MaterialSel0 ("Material channel (mask 1)", Vector) = (0, 0, 0, 0)
+        _MaterialSel1 ("Material channel (mask 2)", Vector) = (0, 0, 0, 0)
+        _MaterialColor ("Material colour (w = on)", Vector) = (0, 0, 0, 0)
+        _LayerAmount ("Amount: rust, moss, frost, embers", Vector) = (0, 0, 0, 0)
+        _LayerAmount2 ("Amount: camo, -, -, - ; y = cover softness", Vector) = (0, 0.1, 0, 0)
+        _RustColor ("Rust", Vector) = (0.25, 0.04, 0.006, 0)
+        _MossColor ("Moss", Vector) = (0.07, 0.15, 0.012, 0)
+        _FrostColor ("Frost", Vector) = (0.62, 0.82, 1, 0)
+        _EmberColor ("Embers", Vector) = (1, 0.11, 0.003, 0)
+        _CamoColor ("Camo", Vector) = (0.09, 0.12, 0.028, 0)
+        _LayerRough ("Roughness factor: rust, moss, frost, embers", Vector) = (1, 1, 1, 1)
+        _LayerMetal ("Metal offset: rust, moss, frost, embers", Vector) = (0, 0, 0, 0)
+        _Wear ("Wear (0 clean, 0.5 baked, 1 battered)", Float) = 0.5
+        _BareMetal ("Bare metal", Vector) = (0.62, 0.63, 0.65, 0)
         _Glow ("Glow (power x look glow)", Float) = 1
         _EmissionStrength ("Emission strength", Float) = 3
         _OcclusionStrength ("Occlusion strength", Float) = 1
@@ -80,16 +98,23 @@ Shader "CubeEscape/RobotBody"
             TEXTURE2D(_LineMask2);
             TEXTURE2D(_ZoneMask);
             TEXTURE2D(_ZoneMask2);
+            TEXTURE2D(_LayerMask);
+            TEXTURE2D(_LayerMask2);
+            TEXTURE2D(_MaterialMask);
+            TEXTURE2D(_MaterialMask2);
 
             CBUFFER_START(UnityPerMaterial)
                 float4 _BaseMap_ST;
                 float4 _Armor, _Armor2, _Mech, _Metal, _Lights, _Visor, _FabricColor, _RefA, _RefB, _Finish;
                 float4 _ZoneSel0, _ZoneSel1, _BadgeA0, _BadgeA1, _BadgeB0, _BadgeB1, _BadgeAColor, _BadgeBColor;
                 float4 _LineSel0, _LineSel1, _LineColor;
-                float _LinePaint, _Glow, _EmissionStrength, _OcclusionStrength, _Fabric;
+                float4 _MaterialSel0, _MaterialSel1, _MaterialColor, _LayerAmount, _LayerAmount2;
+                float4 _RustColor, _MossColor, _FrostColor, _EmberColor, _CamoColor, _LayerRough, _LayerMetal, _BareMetal;
+                float _LinePaint, _Glow, _EmissionStrength, _OcclusionStrength, _Fabric, _Wear;
             CBUFFER_END
 
             #define SAMPLE(t, uv) SAMPLE_TEXTURE2D(t, sampler_BaseMap, uv)
+            #define COVER(f, a) saturate(((f) - (1.0 - (a))) / _LayerAmount2.y)
 
             struct Attributes
             {
@@ -133,7 +158,7 @@ Shader "CubeEscape/RobotBody"
                 float4 ms = SAMPLE(_MetallicSmoothness, uv);
                 float rough = 1.0 - ms.a;
                 float metal = ms.r;
-                float ml = 0.0;
+                float ml = 0.0, ember = 0.0;
                 if (_Fabric > 0.5)
                 {
                     c = _FabricColor.rgb * (lum / max(_RefB.y, 1e-4));
@@ -152,18 +177,53 @@ Shader "CubeEscape/RobotBody"
                     metal = lerp(metal, saturate(metal + _Finish.y), mk.r);
                     rough = lerp(rough, lerp(rough, 0.04, 0.8), vis);
                     float ratio = clamp(lum / max(mk.r * _RefA.x + mk.b * _RefA.z, 1e-3), 0.2, 1.6);
+                    float ratioAll = clamp(lum / max(mk.r * _RefA.x + mk.g * _RefA.y + mk.b * _RefA.z, 1e-3), 0.2, 1.6);
                     float mz = saturate(dot(SAMPLE(_ZoneMask, uv), _ZoneSel0) + dot(SAMPLE(_ZoneMask2, uv), _ZoneSel1));
                     c = lerp(c, _Armor2.rgb * ratio, mz);
+                    float3 region = lerp(mk.r * _Armor.rgb + mk.g * _Mech.rgb + mk.b * _Metal.rgb, _Armor2.rgb, mz);
+                    if (_MaterialColor.w > 0.5)
+                    {
+                        float pm = saturate(dot(SAMPLE(_MaterialMask, uv), _MaterialSel0) + dot(SAMPLE(_MaterialMask2, uv), _MaterialSel1));
+                        c = lerp(c, lerp(_MaterialColor.rgb * ratio, c, pm), mk.r);
+                    }
                     float4 b0 = SAMPLE(_BadgeMask, uv), b1 = SAMPLE(_BadgeMask2, uv);
                     c = lerp(c, _BadgeAColor.rgb * ratio, saturate(dot(b0, _BadgeA0) + dot(b1, _BadgeA1)));
                     c = lerp(c, _BadgeBColor.rgb * ratio, saturate(dot(b0, _BadgeB0) + dot(b1, _BadgeB1)));
+                    float4 lay = SAMPLE(_LayerMask, uv), lay2 = SAMPLE(_LayerMask2, uv);
+                    float wearF = lay2.g, grime = lay2.b, patchy = 0.6 + 0.6 * grime;
+                    float cv = COVER(lay.r, _LayerAmount.x);
+                    c = lerp(c, _RustColor.rgb * patchy * ratioAll, cv);
+                    rough = lerp(rough, saturate(rough * _LayerRough.x), cv); metal = lerp(metal, saturate(metal + _LayerMetal.x), cv);
+                    cv = COVER(lay.g, _LayerAmount.y);
+                    c = lerp(c, _MossColor.rgb * patchy * ratioAll, cv);
+                    rough = lerp(rough, saturate(rough * _LayerRough.y), cv); metal = lerp(metal, saturate(metal + _LayerMetal.y), cv);
+                    cv = COVER(lay.b, _LayerAmount.z);
+                    c = lerp(c, _FrostColor.rgb * patchy * ratioAll, cv);
+                    rough = lerp(rough, saturate(rough * _LayerRough.z), cv); metal = lerp(metal, saturate(metal + _LayerMetal.z), cv);
+                    c = lerp(c, _CamoColor.rgb * ratioAll, COVER(lay2.r, _LayerAmount2.x));
+                    c = lerp(c, _CamoColor.rgb * 0.45 * ratioAll, COVER(lay2.r, _LayerAmount2.x * 0.45));
+                    if (_Wear < 0.5)
+                    {
+                        float clean = (0.5 - _Wear) * 2.0;
+                        c = lerp(c, region, saturate(wearF * 1.6) * clean);
+                        c = lerp(c, region, grime * clean * 0.4);
+                    }
+                    else
+                    {
+                        float more = (_Wear - 0.5) * 2.0;
+                        c = lerp(c, _BareMetal.rgb, saturate(wearF * 4.0 * more) * 0.85);
+                        c *= 1.0 - 0.6 * more * grime;
+                    }
+                    float charred = saturate((lay.a - (1.0 - min(1.0, _LayerAmount.w * 2.5))) / _LayerAmount2.y);
+                    ember = saturate((lay.a - (1.0 - _LayerAmount.w * 0.3)) / 0.04);
+                    c *= 1.0 - 0.88 * charred;
                     ml = saturate(dot(SAMPLE(_LineMask, uv), _LineSel0) + dot(SAMPLE(_LineMask2, uv), _LineSel1));
                     c = c * (1.0 - ml * _LinePaint) + ml * _LinePaint * 0.6 * _LineColor.rgb;
                 }
                 float3 e = SAMPLE(_EmissionMap, uv).rgb;
                 float le = dot(e, LUMA);
-                float3 emission = (lerp(e, _Lights.rgb * (le / max(_RefA.w, 1e-4)), mk.a) + _LineColor.rgb * (ml * _LineColor.w))
-                                  * _EmissionStrength * _Glow;
+                float3 emission = (lerp(e, _Lights.rgb * (le / max(_RefA.w, 1e-4)), mk.a) + _LineColor.rgb * (ml * _LineColor.w)
+                                   + _EmberColor.rgb * (ember * 1.5)) * _EmissionStrength * _Glow;
 
                 SurfaceData s = (SurfaceData)0;
                 s.albedo = c;

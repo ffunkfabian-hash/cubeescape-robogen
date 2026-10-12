@@ -2,7 +2,7 @@
 https://claude.ai/code/artifact/ed285e14-821e-4986-8b02-3a281874174a – Änderungen dort vornehmen und hier nachziehen. -->
 
 > **Führende Fassung:** [Claude Doc „Fahrplan Roboter-Generator“](https://claude.ai/code/artifact/ed285e14-821e-4986-8b02-3a281874174a).
-> Diese Datei ist ein Abbild (Stand 13.10.2026, Generator 1.10.1).
+> Diese Datei ist ein Abbild (Stand 13.10.2026, Generator 1.11.0).
 
 # Fahrplan Roboter-Generator
 
@@ -84,6 +84,10 @@ Silhouetten, 113 UI-Icons, Viewer mit A/B-Vergleich und GIF/MP4-Export. Aus dem 
 Zweitfarbe, Leuchtzonen an Bauteilen, größere Abzeichen-Plätze (Ohrscheibe, Brust) und die Konzept-Vorschau dazu.
 Modell, QA, Clip-Daten und Typ-Maße sind identisch mit 1.9. Techniken für Cubegen: `docs/TECHNIK.md`.
 
+**1.11 Weathering veröffentlicht** (13.10., v1.11.0): Schichten Rost, Moos, Frost, Glutrisse, Tarnung mit Regler
+(normiert: Stärke = bedeckter Anteil), Werkstoffe Holz, Stein, Sand, Papier, Beton, Messing, Platine, Abnutzung je
+Skin, 47 Skins (9 neue), Gegenüberstellung `Previews/weathering.png`, Look-Format 4, Viewer und Unity-Testpaket.
+
 ## Spiel-Versionen
 
 Fünf Spielversionen holen den Roboter ins Spiel; jede ist für sich spielbar. Die Nummern werden beim Start vergeben (je Auftrag Minor +1), hier gezählt ab 0.44.
@@ -104,7 +108,7 @@ Neunzehn weitere Punkte (zwei Vorschläge vom 12. Oktober 2026 wurden in Generat
 - [ ] **Detailstufen (LOD):** vereinfachte Meshes mit etwa 6 000 und 2 500 Dreiecken für Entfernung und Menge – vor Spiel 0.44
 - [ ] **Treffer-Kapseln pro Knochen** als Daten für Treffererkennung und eine spätere Ragdoll – vor Spiel 0.44 (Daten), genutzt ab 0.48
 - [x] **Animierte Display-Motive** wie Herzschlag, Ladekreisel, Sprechen als Flipbook-Atlas – umgesetzt in Generator 1.10 (Heartbeat, Spinner, Talk)
-- [ ] **Abnutzungsstufen** von sauber bis verbeult als Masken-Kanal – Generator 1.11 (Teil der Oberflächen-Schichten)
+- [x] **Abnutzungsstufen** von sauber bis verbeult als Masken-Kanal – umgesetzt in Generator 1.11 (Regler 0 sauber, 0,5 gebacken, 1 verbeult)
 - [ ] **Typ-eigene Emotes:** Gentleman lüftet den Hut, King schwenkt die Fahne – Generator 1.12
 - [ ] **Nachschwingen** für Umhang und Antenne – Generator 1.12
 - [ ] **Servo-Geräusch-Ereignisse** aus der Gelenkgeschwindigkeit berechnet (in die Clip-Daten wie die Fußschritte) – vor Spiel 0.44
@@ -115,7 +119,7 @@ Neunzehn weitere Punkte (zwei Vorschläge vom 12. Oktober 2026 wurden in Generat
 - [x] **Konzeptbögen auswerten:** umgesetzt in Generator 1.10 ohne Neural Engine – `scripts/concept_palettes.py` liest die vier Farbpunkte aller 42 Karten der Bögen A und C an vermessenen Positionen aus (`data/concept_palettes.json`), Namen abgetippt; innerhalb der Zeitregel (eine Sitzung)
 - [x] **Icon-Lesbarkeit prüfen:** umgesetzt in Generator 1.10 ohne Neural Engine – Füllgrad und Lage des Motivs je Icon per ImageMagick (unter 1 s, nur Hinweis im Bericht); ein Saliency-Modell war nicht nötig
 - [ ] **Proportionen des Basismodells** (Konzeptvergleich 12.10.): gedrungener, größerer Kopf, klobigere Platten, Fugen und Schrauben wie auf den Konzeptbildern – betrifft alle 69 Clips und die QA, eigene Entscheidung des Nutzers, spätestens vor Generator 2.0
-- [ ] **Abnutzung je Skin** statt für alle Skins gleicher Schmutz und Kratzer (Konzeptvergleich 12.10.) – Generator 1.11, zusammen mit den Abnutzungsstufen
+- [x] **Abnutzung je Skin** statt für alle Skins gleicher Schmutz und Kratzer (Konzeptvergleich 12.10.) – umgesetzt in Generator 1.11 (`wear` je Skin)
 - [ ] **Masken für Unity packen:** Lackzonen und Gelenke als ID-Kanal, Masken in 1024² (der Viewer packt schon beim Laden) – vor Spiel-Roboter
 - [ ] **Bloom im Spiel:** URP-Bloom so, dass nur Emission strahlt (wie auf den Skin-Karten) – Spiel-Roboter
 - [ ] **Cubegen übernimmt die Techniken** aus `docs/TECHNIK.md` im Robogen-Repo (Checkliste dort: Looks als Daten, Masken, Zonen, Decal-Anker, Präsentationskarten, Icons, Vorschau-App) – vorerst nur in Robogen verzeichnet, Übertrag bei einer späteren Cubegen-Version

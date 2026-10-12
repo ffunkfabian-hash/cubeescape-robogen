@@ -70,13 +70,27 @@ struct LineLook: Codable, Equatable {
     var strength: Double = 1.0
 }
 
+/// Material of the armour (version 4): "None" or an ID from robot_config.json > materials.
+struct MaterialLook: Codable, Equatable {
+    var id: String = "None"
+    var color = RGB(0.3, 0.2, 0.1)
+}
+
+/// A surface layer (version 4): ID from robot_config.json > layers, amount 0..1 = covered share.
+struct LayerLook: Codable, Equatable {
+    var id: String
+    var amount: Double
+    var color: RGB
+}
+
 /// Everything the player can customise. Saved/loaded as JSON ("Look", schema: robot_look.schema.json).
 /// Names of skins, variants, expressions, displays, badges and line patterns are permanent IDs. Older files are
 /// migrated on load: version 1 (viewer 1.6, without format/version) and version 2 (1.7-1.9, without skin, badges
 /// and lines) take the defaults for missing fields; a version 2 look keeps its colours and gets skin "Custom".
 struct Look: Codable, Equatable {
     static let format = "CubeEscapeRobotLook"
-    static let currentVersion = 3
+    static let currentVersion = 4
+    static let wearDefault = 0.5
     static let maxBadges = 2
 
     var name: String = "Classic"
@@ -100,10 +114,13 @@ struct Look: Codable, Equatable {
     var zones2: [String] = []
     var badges: [BadgeLook] = []
     var lines = LineLook()
+    var material = MaterialLook()
+    var layers: [LayerLook] = []
+    var wear: Double = Look.wearDefault
 
     enum CodingKeys: String, CodingKey {
         case format, version, name, variants, armor, mech, metal, lights, screen, eyes, visor, fabric, finish, glow,
-             expression, display, autoExpression, autoDisplay, skin, armor2, zones2, badges, lines
+             expression, display, autoExpression, autoDisplay, skin, armor2, zones2, badges, lines, material, layers, wear
     }
 
     init() {}
@@ -142,6 +159,10 @@ struct Look: Codable, Equatable {
         zones2 = try c.decodeIfPresent([String].self, forKey: .zones2) ?? []
         badges = try c.decodeIfPresent([BadgeLook].self, forKey: .badges) ?? []
         lines = try c.decodeIfPresent(LineLook.self, forKey: .lines) ?? LineLook()
+        // version 4: no material, no layers, the baked wear
+        material = try c.decodeIfPresent(MaterialLook.self, forKey: .material) ?? MaterialLook()
+        layers = try c.decodeIfPresent([LayerLook].self, forKey: .layers) ?? []
+        wear = try c.decodeIfPresent(Double.self, forKey: .wear) ?? Look.wearDefault
     }
 
     func encode(to encoder: Encoder) throws {
@@ -165,6 +186,9 @@ struct Look: Codable, Equatable {
         try c.encode(zones2, forKey: .zones2)
         try c.encode(badges, forKey: .badges)
         try c.encode(lines, forKey: .lines)
+        try c.encode(material, forKey: .material)
+        try c.encode(layers, forKey: .layers)
+        try c.encode(wear, forKey: .wear)
     }
 
     /// Replaces unknown IDs with defaults (e.g. a look saved by a newer generator) and clamps values.
@@ -213,6 +237,20 @@ struct Look: Codable, Equatable {
             l.lines.pattern = "None"
         }
         l.lines.strength = min(max(lines.strength, 0), 2)
+        if material.id != "None" && !(config.materials ?? []).contains(where: { $0.id == material.id }) {
+            warnings.append("Werkstoff „\(material.id)“ unbekannt")
+            l.material = MaterialLook()
+        }
+        l.material.color = l.material.color.clamped
+        let layerIDs = Set((config.layers ?? []).filter { $0.color != nil }.map(\.id))
+        var seenLayers = Set<String>()
+        l.layers = []
+        for ly in layers {
+            if !layerIDs.contains(ly.id) { warnings.append("Schicht „\(ly.id)“ unbekannt"); continue }
+            if !seenLayers.insert(ly.id).inserted { continue }
+            l.layers.append(LayerLook(id: ly.id, amount: min(max(ly.amount, 0), 1), color: ly.color.clamped))
+        }
+        l.wear = min(max(wear, 0), 1)
         l.glow = min(max(glow, 0.2), 2.5)
         for kp in [\Look.armor, \.mech, \.metal, \.lights, \.screen, \.eyes, \.visor, \.fabric] {
             l[keyPath: kp] = l[keyPath: kp].clamped
@@ -232,6 +270,9 @@ struct Look: Codable, Equatable {
         zones2 = s.zones2 ?? []
         finish = Finish(rawValue: s.finish ?? "Standard") ?? .standard
         badges = (s.badges ?? []).map { BadgeLook(id: $0.id, color: RGB($0.color)) }
+        material = s.material.map { MaterialLook(id: $0.id, color: RGB($0.color)) } ?? MaterialLook()
+        layers = (s.layers ?? []).map { LayerLook(id: $0.id, amount: $0.amount, color: RGB($0.color)) }
+        wear = s.wear ?? Look.wearDefault
         if let ln = s.lines {
             lines = LineLook(pattern: ln.pattern, color: RGB(ln.color), strength: ln.strength)
         } else {

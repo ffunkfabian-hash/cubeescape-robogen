@@ -1,12 +1,12 @@
-# Cube Escape – Roboter-Charakter (Generator 1.10.1)
+# Cube Escape – Roboter-Charakter (Generator 1.11.0)
 
 Der spielbare Roboter aus dem Cube-Escape-Keyart, vollständig per Skript erzeugt: Geometrie mit Bauteil-Varianten
 und Accessoires, Materialien, gebackene Texturen (Detail- und Ausdrucks-Texturen per ImageMagick), Rig mit Bein- und
 Arm-IK, 69 Animationen, maschinenlesbare Clip-Daten fürs Spiel, automatische QA, Vorschaurender, `.blend`,
 Unity-fertige `.fbx` (Standard, modular und je Robotertyp) und ein eigener **Robot Viewer** zum Anpassen: 69
-Animationen in 8 Gruppen, 38 Skins als Daten (Palette mit Zweitfarbe, Oberfläche, Abzeichen, Leuchtlinien), 33
-Augen-Ausdrücke, 16 Display-Motive und 3 animierte, 20 Accessoires, 14 Robotertypen, Skin-Bogen im Stil der
-Konzeptbilder und UI-Icons.
+Animationen in 8 Gruppen, 47 Skins als Daten (Palette mit Zweitfarbe, Oberfläche, Werkstoff, Abzeichen,
+Leuchtlinien, Schichten wie Rost, Moos, Frost, Glutrisse, Tarnung, Abnutzung), 33 Augen-Ausdrücke, 16 Display-Motive
+und 3 animierte, 20 Accessoires, 14 Robotertypen, Skin-Bogen im Stil der Konzeptbilder und UI-Icons.
 **Das Spielprojekt wurde nicht verändert** – dieser Ordner steht für sich.
 
 ![Robotertypen](docs/images/types.png)
@@ -18,7 +18,7 @@ Konzeptbilder und UI-Icons.
 | Pfad | Inhalt |
 |---|---|
 | `output/RobotViewer.app` | **Robot Viewer** – macOS-App zum Anpassen und Ansehen (Doppelklick) |
-| `data/skins.json` | **Skins als Daten** (Format `CubeEscapeRobotSkins` 1): Palette, Zweitfarben-Zonen, Oberfläche, Abzeichen, Leuchtlinien, Teile, Ausdruck, Display, Stufe/Startset |
+| `data/skins.json` | **Skins als Daten** (Format `CubeEscapeRobotSkins` 1): Palette, Zweitfarben-Zonen, Oberfläche, Werkstoff, Schichten, Abnutzung, Abzeichen, Leuchtlinien, Teile, Ausdruck, Display, Stufe/Startset |
 | `data/concept_palettes.json`, `docs/concepts/` | Farbpunkte der Konzeptbögen (`scripts/concept_palettes.py`) und die Bögen selbst |
 | `output/CubeEscape_Robot.fbx` | Unity: Standard-Look als 1 Mesh (3 Materialien) + Rig + 69 Takes |
 | `output/CubeEscape_Robot_Modular.fbx` | Unity: alle Bauteil-Varianten und Accessoires als einzelne Meshes am selben Rig (ohne Animation) |
@@ -27,10 +27,10 @@ Konzeptbilder und UI-Icons.
 | `output/CubeEscape_Robot.blend` | Blender-Szene: Standard-Mesh, `Robot_Parts` (alle Teile), Rig, NLA-Spur je Animation |
 | `output/robot_config.json` | Slots, Varianten, Robotertypen (mit Maßen), Skins, Ausdrücke, Display-Motive, Atlas-Zellen und **Clip-Daten** (für Unity) |
 | `output/ANIMATIONS.md` | automatisch erzeugte Clip-Liste (Frames, Loop, Grundtempo, Höhe, Schritt-Frames, Unity-Hinweise) |
-| `output/Textures/` | 2048² PNGs: BaseColor/Emission je Skin, MetallicSmoothness, Normal, Occlusion, ColorMask, LightMask, **Masken** (Badge ×2, Line ×2, Zone ×2), Eye-Atlas (2048 × 2560), Display-Atlas, Display-Flipbook |
+| `output/Textures/` | 2048² PNGs: BaseColor/Emission je Skin, MetallicSmoothness, Normal, Occlusion, ColorMask, LightMask, **Masken** (Badge ×2, Line ×2, Zone ×2, Layer ×2, Material ×2), Eye-Atlas (2048 × 2560), Display-Atlas, Display-Flipbook |
 | `output/Icons/` | UI-Icons 256²: `Skins/`, `Expressions/`, `Displays/`, `Badges/`, `Accessories/` |
 | `output/ViewerData/` | Daten für den Viewer (Geometrie, Rig, Animationen, Texturen) |
-| `output/Previews/` | Ansichten, Typen, Skins, **Skin-Bogen** (`skin_sheet.png`), **Silhouetten**, Ausdrücke, Kontaktbögen je Phase, GIFs |
+| `output/Previews/` | Ansichten, Typen, Skins, **Skin-Bogen** (`skin_sheet.png`), **Silhouetten**, **Gegenüberstellung** der Schichten, Werkstoffe und Abnutzung (`weathering.png`), Ausdrücke, Kontaktbögen je Phase, GIFs |
 | `scripts/generate_robot.py` | Generator (Blender 5.2 LTS) |
 | `scripts/make_textures.py` | ImageMagick: Gebrauchsspuren, Metall, Kratzer, Decals, Abzeichen, Leiterbahnen, Blitze, 33 Augen-Ausdrücke, 16 Display-Motive, 3 animierte (Flipbook) |
 | `scripts/concept_palettes.py` | einmaliges Werkzeug: Farbpunkte der Konzeptbögen auslesen (nie im Generatorlauf) |
@@ -189,6 +189,10 @@ Fahrplan: [docs/FAHRPLAN.md](docs/FAHRPLAN.md); Techniken und Lehren (für Cubeg
 - **Abzeichen:** bis zu zwei mit eigener Farbe – Warnstreifen, Kreuz, Wolke, Nummer, Biohazard, Schriftzeichen,
   Rennstreifen, Zielmarke (Ohrscheibe, Brust, Schulter, Oberschenkel, Rücken, Hinterkopf je nach Abzeichen).
 - **Leuchtlinien:** Leiterbahnen, Ringe, Kanten, Blitze, Gelenke mit Farbe und Stärke.
+- **Werkstoff:** Holz, Stein (mit Gravurbändern), Sand, Papier, Beton, Messing, Platine – Muster auf der Panzerung mit
+  eigener Musterfarbe und eigener Rauheit; beim Wählen wird eine passende Panzerfarbe gesetzt.
+- **Schichten:** Rost, Moos, Frost, Glutrisse (leuchtend), Tarnung je mit Regler 0–1 (= bedeckter Anteil der Fläche)
+  und Farbe; **Abnutzung** 0 sauber, 0,5 wie gebacken, 1 verbeult.
 - **Augen:** 33 Ausdrücke (Normal, Happy, Excited, Love, Angry, Sad, Sleepy, Surprised, Skeptical, Confused, Wink,
   Focused, Glitch, Pixel, Off, Cute, Laugh, Crying, Shy, Dollar, Question, Exclaim, Loading, LookLeft, LookRight,
   Determined, Sleeping, Target; 1.10: Damage rot, LowPower gedimmt, Check, Warning orange, Blink), Leuchtkraft; optional
@@ -237,6 +241,13 @@ Clip). `viewer/test_viewer.sh` nutzt das für Migrations-, Round-Trip- und Expor
 - **Farben ohne neue Texturen:** `T_Robot_ColorMask.png` – R Panzerung, G Mechanik, B Metall; `T_Robot_LightMask.png`
   – Lichter; Rest auf Körper-Flächen = Visier. Ein Shader färbt mit `Farbe × Helligkeit(Albedo) / Helligkeit(Classic-Farbe)` um; Schmutz,
   Kratzer, AO und Decals bleiben erhalten. Alternativ fertige Texturen je Skin (`T_Robot_BaseColor_<Skin>.png`).
+- **Schichten, Werkstoffe, Abnutzung (1.11):** gebackene Felder in `T_Robot_LayerMask*` (Rost, Moos, Frost,
+  Glutrisse / Tarnung, Kratzer, Schmutz) und `T_Robot_MaterialMask*` (sieben Werkstoff-Muster), Zuordnung in
+  `robot_config.json` › `layers`, `materials`, `weathering`. Die Schichtfelder sind auf die Lackfläche normiert
+  (Rangfolge): Stärke a bedeckt den Anteil a, `cover = clamp((Feld − (1 − a)) / 0,1, 0, 1)`. Rost sitzt in Ecken und
+  Fugen, Moos oben und in Fugen, Frost oben und an Kanten, Glutrisse folgen einem Rissnetz (verkohlt, Adern leuchten),
+  Tarnung sind zwei Schwellen eines Fleckenfelds. Werkstoff: `mix(Musterfarbe · r, Farbe, Muster)` auf der Panzerung.
+  Reihenfolge: Zweitfarbe → Werkstoff → Abzeichen → Rost/Moos/Frost → Tarnung → Abnutzung → Glutrisse → Leuchtlinien.
 - **Skins = Daten (1.10):** Zweitfarbe, Abzeichen und Leuchtlinien kommen aus Masken (je Kanal eine ID, Zuordnung in
   `robot_config.json` › `badges`, `linePatterns`, `zones`). Reihenfolge im Shader: Grundfarben → Zweitfarbe
   (`mix(c, armor2 · r, Zone)`) → Abzeichen (`mix(c, Abzeichenfarbe · r, Maske)`) → Leuchtlinien (Albedo
@@ -355,10 +366,12 @@ CrouchWalk/Walk/Run/RunFast/Sprint nach `naturalSpeed`. Als neue Variante neben 
 `RobotAnimator` einführen (Golden Rule). Für einen festen Robotertyp die FBX aus `output/Types/` nehmen (1 Mesh statt
 eines Meshes je Bauteil).
 
-**Spieler-Looks:** Format `CubeEscapeRobotLook` Version 3 (`robot_look.schema.json`, Beispiele in `output/Looks/`):
-zusätzlich `skin`, `armor2`, `zones2`, `badges` (höchstens 2), `lines`. Namen von Skins, Bauteilen, Ausdrücken, Motiven,
-Oberflächen, Abzeichen, Mustern und Zonen sind **ewige IDs**. Version 1 (ohne `format`/`version`) und Version 2 werden
-beim Laden übernommen (ein v2-Look behält seine Farben und heißt Skin „Custom“), unbekannte IDs durch Standardwerte
+**Spieler-Looks:** Format `CubeEscapeRobotLook` Version 4 (`robot_look.schema.json`, Beispiele in `output/Looks/`):
+seit Version 3 `skin`, `armor2`, `zones2`, `badges` (höchstens 2), `lines`; seit Version 4 `material`, `layers`
+(ID, Stärke, Farbe), `wear`. Namen von Skins, Bauteilen, Ausdrücken, Motiven,
+Oberflächen, Abzeichen, Mustern und Zonen sind **ewige IDs**. Versionen 1 bis 3 werden
+beim Laden übernommen (ein v2-Look behält seine Farben und heißt Skin „Custom“, v3 bekommt keinen Werkstoff, keine
+Schichten und die gebackene Abnutzung), unbekannte IDs durch Standardwerte
 ersetzt, neuere Versionen abgelehnt – dieselben Regeln gehören in die Spielstand-Migration.
 
 ## Offene Punkte
@@ -374,6 +387,7 @@ ersetzt, neuere Versionen abgelehnt – dieselben Regeln gehören in die Spielst
 | Robot Viewer | Universal-App ab macOS 13, lokal (ad hoc) signiert | für Weitergabe mit einer Apple-Developer-ID signieren und notarisieren |
 | Masken im Spiel | 6 RGBA-Masken à 2048² (Abzeichen, Linien, Zonen) | für Unity packen: Zonen und Gelenke als ID-Kanal, Masken in 1024² (der Viewer macht es beim Laden schon so) |
 | Leuchten im Spiel | Skin-Karten nutzen Bloom (Schwelle über der Beleuchtung) | URP-Bloom so einstellen, dass nur Emission strahlt |
+| Masken-Speicher | seit 1.11 zehn RGBA-Masken à 2048² | für Unity packen (Zonen/Gelenke als ID, Felder in 1024², nur genutzte Werkstoff-Kanäle laden) |
 
 ## Qualitätssicherung (automatisch bei jedem Lauf)
 

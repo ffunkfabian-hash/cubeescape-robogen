@@ -42,6 +42,12 @@ if command -v magick >/dev/null && [ -d "$REPORT/shots" ]; then
   done
 fi
 
+# Unity keeps running the last good assemblies when scripts do not compile - that must fail the run
+if grep -h "error CS" "$REPORT/pipeline.log" "$REPORT/tests.log" 2>/dev/null | sort -u | head -5 | grep .; then
+  echo "FAIL scripts do not compile (Unity used the previous assemblies)"
+  code=3
+fi
+
 python3 - "$REPORT" "$code" "$tcode" "$((t1 - t0))" "$((t2 - t1))" <<'PY'
 import json, os, sys, xml.etree.ElementTree as ET
 report, code, tcode, tp, tt = sys.argv[1], int(sys.argv[2]), int(sys.argv[3]), sys.argv[4], sys.argv[5]

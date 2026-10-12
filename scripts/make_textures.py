@@ -9,6 +9,8 @@ Creates deterministic detail textures that the Blender shaders project onto the 
     T_Src_Badges.png      RGBA badge atlas (BADGE_ART): cross, cloud, number, biohazard, glyph, crash-test target
     T_Src_Circuit.png     tileable circuit traces (glow line pattern "Circuit")
     T_Src_Bolt.png        tileable zigzag lightning lines (glow line pattern "Bolt")
+    T_Src_Cracks.png      tileable crack field (layer "Embers": bright on the cracks, fading away from them)
+    T_Src_Camo.png        tileable low-frequency blotch field (layer "Camo", thresholded at runtime)
     T_Robot_DisplayFlipbook.png  animated chest display motifs (DISPLAY_ANIMS), one row of frames per motif
 
 Every call uses a fixed seed, so a rerun produces identical images.
@@ -179,6 +181,8 @@ def makers():
         "circuit": (make_circuit, "T_Src_Circuit.png"),
         "bolt": (make_bolt, "T_Src_Bolt.png"),
         "flipbook": (make_display_flipbook, "T_Robot_DisplayFlipbook.png"),
+        "cracks": (make_cracks, "T_Src_Cracks.png"),
+        "camo": (make_camo, "T_Src_Camo.png"),
     }
 
 
@@ -695,6 +699,34 @@ def make_bolt(magick, out):
         lines.append(pts)
     run(magick, ["-size", "%dx%d" % (SIZE, SIZE), "xc:black"] + _tiled_polylines(lines, 9) +
         ["-blur", "0x0.7", "-colorspace", "Gray", "-depth", "8", path])
+    return path
+
+
+def make_cracks(magick, out):
+    """Crack network as a field: two coarse tileable noises, the level-0.5 crossings of each are the cracks
+    (1 on the crack, falling off over about 12 px). Combined with max, auto-levelled."""
+    path = os.path.join(out, "T_Src_Cracks.png")
+    fields = []
+    for k, (seed, blurs, weights) in enumerate(((61, [64, 22, 7], [0.72, 0.23, 0.05]), (67, [90, 30], [0.8, 0.2]))):
+        n = path + ".n%d.png" % k
+        tile_noise(magick, n, seed, blurs, weights)
+        f = path + ".f%d.png" % k
+        run(magick, [n, "-alpha", "off", "-colorspace", "Gray", "-fx", "max(0, 1 - abs(u - 0.5) * 14)",
+                     "-virtual-pixel", "tile", "-blur", "0x1.2", f])
+        fields.append(f)
+        os.remove(n)
+    run(magick, [fields[0], fields[1], "-compose", "lighten", "-composite", "-auto-level", "-alpha", "off",
+                 "-colorspace", "Gray", "-depth", "8", path])
+    for f in fields:
+        os.remove(f)
+    return path
+
+
+def make_camo(magick, out):
+    """Low-frequency blotches (tileable); the runtime cuts it at two thresholds into two camo colours."""
+    path = os.path.join(out, "T_Src_Camo.png")
+    tile_noise(magick, path, 83, [70, 30, 10], [0.55, 0.32, 0.13],
+               extra=["-sigmoidal-contrast", "4,50%", "-alpha", "off", "-colorspace", "Gray", "-depth", "8"])
     return path
 
 

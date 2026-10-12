@@ -38,7 +38,10 @@ TEXTURES = ["T_Robot_BaseColor.png", "T_Robot_MetallicSmoothness.png", "T_Robot_
             "T_Robot_Occlusion.png", "T_Robot_ColorMask.png", "T_Robot_LightMask.png", "T_Robot_EyeAtlas.png", "T_Robot_DisplayAtlas.png",
             "T_Robot_DisplayFlipbook.png"]
 MASK_TEXTURES = ["T_Robot_BadgeMask.png", "T_Robot_BadgeMask2.png", "T_Robot_LineMask.png", "T_Robot_LineMask2.png",
-                 "T_Robot_ZoneMask.png", "T_Robot_ZoneMask2.png"]       # 1.10: RGBA masks (alpha = a mask channel)
+                 "T_Robot_ZoneMask.png", "T_Robot_ZoneMask2.png",       # 1.10: RGBA masks (alpha = a mask channel)
+                 "T_Robot_LayerMask.png", "T_Robot_LayerMask2.png", "T_Robot_MaterialMask.png",
+                 "T_Robot_MaterialMask2.png"]                            # 1.11
+START_SET_1_11 = {"Rust", "Moss", "Arctic", "Inferno", "Circuit"}
 START_SET_1_10 = {"Classic", "Shadow", "Hazard", "Medic", "Volt", "Gold", "Candy"}
 MAIN_MATERIALS = {"M_Robot", "M_RobotEyes", "M_RobotDisplay"}
 import math  # noqa: E402
@@ -385,7 +388,14 @@ def verify_paintjob():
            or any(b["id"] not in badges for b in sk["badges"]) or (sk["lines"] and sk["lines"]["pattern"] not in lines)
            or not set(sk["zones2"]) <= zones or len(sk["armor2"]) != 3]
     check("skins: data valid (finish, badges, lines, zones, armor2)", not bad, bad or len(skins))
-    check("skins: at least 38 (20 from 1.7 + 18 new in 1.10)", len(skins) >= 38, len(skins))
+    check("skins: at least 47 (20 from 1.7, 18 new in 1.10, 9 in 1.11)", len(skins) >= 47, len(skins))
+    layers = {e["id"] for e in cfg["layers"]}
+    materials = {e["id"] for e in cfg["materials"]}
+    bad = [n for n, sk in skins.items() if (sk["material"] and sk["material"]["id"] not in materials)
+           or any(ly["id"] not in layers or not 0 <= ly["amount"] <= 1 for ly in sk["layers"]) or not 0 <= sk["wear"] <= 1]
+    check("skins: materials, layers and wear valid", not bad, bad)
+    start11 = {n for n, sk in skins.items() if sk["startSet"] and sk["stage"] == "1.11"}
+    check("skins: start set of stage 1.11", start11 == START_SET_1_11, sorted(start11 ^ START_SET_1_11))
     start = {n for n, sk in skins.items() if sk["startSet"] and sk["stage"] == "1.10"}
     check("skins: start set of stage 1.10", start == START_SET_1_10, sorted(start ^ START_SET_1_10))
     missing = [n for n in skins if not os.path.exists(os.path.join(tex_dir, "T_Robot_BaseColor%s.png" %
@@ -404,6 +414,18 @@ def verify_paintjob():
         check("masks: every badge, line pattern and zone has pixels", not empty, empty)
         zsum = sum(planes[z["texture"]][..., z["channel"]] for z in cfg["zones"])
         check("masks: paint zones do not overlap", float(zsum.max()) < 1.05, round(float(zsum.max()), 3))
+        cm = mask_planes(tex_dir, "T_Robot_ColorMask.png")
+        painted = cm[..., :3].sum(axis=-1) > 0.5
+        shares = {}
+        for e in cfg["layers"]:
+            if e["id"] in cfg["weathering"]["equalised"]:
+                f = planes[e["texture"]][..., e["channel"]][painted]
+                shares[e["id"]] = round(float((f > 0.5).mean()), 3)
+        check("masks: layers equalised (amount 0.5 covers about half)", all(0.4 < v < 0.6 for v in shares.values()),
+              shares)
+        for kind in ("layers", "materials"):
+            empty = [e["id"] for e in cfg[kind] if float((planes[e["texture"]][..., e["channel"]] > 0.05).mean()) < 1e-3]
+            check("masks: every %s channel has pixels" % kind[:-1], not empty, empty)
     styles = cfg.get("expressionStyles", {})
     check("expressions: 1.10 faces, styles and blink", {"Damage", "LowPower", "Check", "Warning", "Blink"} <=
           set(cfg["expressions"]) and set(styles) <= set(cfg["expressions"]) and
@@ -414,7 +436,8 @@ def verify_paintjob():
           [a["name"] for a in anims])
     previews = os.path.join(OUT, "Previews")
     if os.path.exists(os.path.join(previews, "skins.png")):          # tiers with renders
-        need = [os.path.join(previews, "skin_sheet.png"), os.path.join(previews, "silhouettes.png")]
+        need = [os.path.join(previews, "skin_sheet.png"), os.path.join(previews, "silhouettes.png"),
+                os.path.join(previews, "weathering.png")]
         need += [os.path.join(OUT, "Icons", k, n + ".png") for k, names in
                  (("Skins", list(skins)), ("Expressions", cfg["expressions"]), ("Displays", cfg["displays"])) for n in names]
         missing = [os.path.relpath(p, OUT) for p in need if not os.path.exists(p)]

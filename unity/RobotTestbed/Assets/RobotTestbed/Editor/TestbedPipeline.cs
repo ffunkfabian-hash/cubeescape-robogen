@@ -23,7 +23,8 @@ namespace RobotTestbed.Editor
             "T_Robot_BaseColor.png", "T_Robot_Emission.png", "T_Robot_MetallicSmoothness.png", "T_Robot_Normal.png",
             "T_Robot_Occlusion.png", "T_Robot_ColorMask.png", "T_Robot_LightMask.png", "T_Robot_BadgeMask.png",
             "T_Robot_BadgeMask2.png", "T_Robot_LineMask.png", "T_Robot_LineMask2.png", "T_Robot_ZoneMask.png",
-            "T_Robot_ZoneMask2.png", "T_Robot_EyeAtlas.png", "T_Robot_DisplayAtlas.png", "T_Robot_DisplayFlipbook.png",
+            "T_Robot_ZoneMask2.png", "T_Robot_LayerMask.png", "T_Robot_LayerMask2.png", "T_Robot_MaterialMask.png",
+            "T_Robot_MaterialMask2.png", "T_Robot_EyeAtlas.png", "T_Robot_DisplayAtlas.png", "T_Robot_DisplayFlipbook.png",
         };
         static readonly string[] RequiredBones =
         {
@@ -232,6 +233,10 @@ namespace RobotTestbed.Editor
                 m.SetTexture("_LineMask2", Tex("T_Robot_LineMask2.png"));
                 m.SetTexture("_ZoneMask", Tex("T_Robot_ZoneMask.png"));
                 m.SetTexture("_ZoneMask2", Tex("T_Robot_ZoneMask2.png"));
+                m.SetTexture("_LayerMask", Tex("T_Robot_LayerMask.png"));
+                m.SetTexture("_LayerMask2", Tex("T_Robot_LayerMask2.png"));
+                m.SetTexture("_MaterialMask", Tex("T_Robot_MaterialMask.png"));
+                m.SetTexture("_MaterialMask2", Tex("T_Robot_MaterialMask2.png"));
             }
             mats.Fabric.SetFloat("_Fabric", 1f);
             mats.Eyes.SetTexture("_Atlas", Tex("T_Robot_EyeAtlas.png"));

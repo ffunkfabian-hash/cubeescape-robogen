@@ -1,6 +1,6 @@
 # Techniken des Roboter-Generators – Übertrag auf Cubegen
 
-Stand: Generator 1.10.1 „Paintjob“. Diese Datei sammelt, **wie** der Generator arbeitet und was sich dabei bewährt
+Stand: Generator 1.11.0 „Weathering“. Diese Datei sammelt, **wie** der Generator arbeitet und was sich dabei bewährt
 oder als Falle erwiesen hat. Ziel: Der Modell-Editor von Cubegen soll genauso leistungsfähig werden. Jede Technik
 nennt die Fundstelle im Generator und was Cubegen davon übernehmen sollte. Pflegen bei jeder Generator-Version
 (neue Technik → neuer Abschnitt, geänderte Messwerte → hier ändern).
@@ -85,6 +85,22 @@ Statt eines Textursatzes je Skin liefert der Generator Masken (alle 2048², RGBA
 **Für Cubegen:** Modellsets mit Laufzeit-Varianten (Fraktionsfarben, Warnmarkierungen, Leuchtstreifen, Schadenszonen)
 als Maskenkanäle liefern; Zonen über benannte Teile und Flächenattribute; Decal-Anker je Modellfamilie definieren.
 
+### Schichten und Werkstoffe (1.11)
+
+- **Felder statt fertiger Bilder:** Jede Schicht ist ein gebackenes Skalarfeld aus Geometrie und Rauschen (Normale
+  nach oben, Ambient Occlusion für Fugen, Kanten über die Normalen, ImageMagick-Rissnetz und -Flecken). Die Stärke ist
+  eine Schwelle auf dem Feld – ein Feld liefert alle Stufen von 0 bis 1.
+- **Rangfolge-Normierung:** Nach dem Backen wird jedes Feld innerhalb der Lackfläche durch seinen Rang ersetzt
+  (`equalise()`); danach bedeckt Stärke a genau den Anteil a (gemessen 49,9 % bei 0,5). Ohne das wären die Regler je
+  Schicht völlig unterschiedlich empfindlich.
+- **Werkstoffe** sind Muster (1 = Panzerfarbe, 0 = Musterfarbe) aus Blender-Prozeduraltexturen (Wave für Holz,
+  Voronoi für Stein/Beton, Rauschen für Sand/Papier, ImageMagick-Kacheln für Messing/Platine) plus eine passende
+  Grundfarbe – auf weißer Panzerung sieht sonst kein Werkstoff wie sich selbst aus.
+- **Abnutzung** als Interpolation um den gebackenen Stand: Kratzer- und Schmutzfeld getrennt backen, dann zur
+  Lackfarbe zurück (sauber) oder zu blankem Metall und Dreck hin (verbeult).
+
+**Für Cubegen:** Patina, Rost und Schmutz der Modellsets als normierte Felder mit Regler statt fester Stufen.
+
 ## 4. Leistung beim Aufbau
 
 - **Jeder Shader-Knoten kostet in Blender etwa 1 ms** (eindeutige Namen, wachsender Baum). Die Abzeichen erzeugten
@@ -136,6 +152,9 @@ als Maskenkanäle liefern; Zonen über benannte Teile und Flächenattribute; Dec
   (auch nicht im System-Log); Fehlersuche durch Weglassen. Abhilfe: Uniforms packen (vier Bezugshelligkeiten in einem
   `float4`, Zonen als Bitmaske in `finish.w`) und Masken beim Laden zusammenlegen (Zonen → eine Zonen-Nummer,
   `filter::nearest`).
+- **Parameter-Textur statt Argumenten (1.11):** alle Look-Werte als 32 × 1 `rgba32Float`-Textur
+  (`writeParams`), im Shader `#define P(i) params.read(uint2(i, 0))`. So passen Schichten, Werkstoffe und Abnutzung
+  dazu, ohne das Argument-Limit zu berühren; 8 Texturen plus Parameter-Textur liefen ohne Pink.
 - Den Shader-Text allein prüfen: `MTLDevice.makeLibrary(source:)` in einem kleinen Swift-Programm (die Metal-Toolchain
   fehlt ohne Xcode-Download).
 - Animierte Display-Motive als Flipbook (Zeile je Motiv, `fps` in den Daten), Blinzeln als Laufzeitregel (`blink`),
@@ -161,6 +180,9 @@ als Maskenkanäle liefern; Zonen über benannte Teile und Flächenattribute; Dec
 - **Laufzeit:** Farben linear per `MaterialPropertyBlock.SetVector` (SetColor rechnet im linearen Farbraum noch einmal
   um); Konfigurationen als `TextAsset` im Prefab speichern, nicht als geparstes Objekt (überlebt das Speichern nicht).
 - **Batch-Screenshots** in eine eigene RenderTexture (Batch-Bildschirm 640 × 480), zweimal rendern.
+- **Compiler-Fehler sind kein Abbruch:** Kompiliert ein Skript nicht, läuft Unity im Batch-Modus mit den letzten
+  guten Assemblies weiter – Prüfungen und Tests sind dann grün, aber alt. Logs nach `error CS` durchsuchen und den
+  Lauf scheitern lassen (`run_testbed.sh`).
 
 **Für Cubegen:** dasselbe Muster für Modellsets – ein kleines Unity-Testprojekt je Generator, das Import, Kollision,
 Materialien und Screenshots automatisch prüft.
@@ -187,3 +209,4 @@ Materialien und Screenshots automatisch prüft.
 - [ ] Vorschau-App: Daten-Texturen roh laden, Uniforms packen, A/B-Vergleich, GIF/MP4-Export
 - [ ] Bericht-Gate: Geometrie-/QA-Kennzahlen vor und nach jeder Änderung vergleichen
 - [ ] Unity-Testprojekt je Generator: Import, Blickrichtung, Materialien, Screenshots automatisch (Muster: `unity/`)
+- [ ] Verwitterung als normierte Felder mit Regler (Rost, Moos, Frost, Schmutz) und Werkstoff-Muster mit Grundfarbe

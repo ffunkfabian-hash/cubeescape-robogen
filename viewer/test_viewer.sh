@@ -12,11 +12,12 @@ ok() { echo "PASS $1"; }
 bad() { echo "FAIL $1"; fail=1; }
 
 "$BIN" --snapshot "$TMP/v1.png" --look "$HERE/tests/look_v1.json" --save-look "$TMP/v1_migrated.json" --size 300x300 >/dev/null
-# 1.10: the current look version is 3 (skin, armor2, zones2, badges, lines), so v1 files now migrate to 3
-python3 - "$TMP/v1_migrated.json" <<'PY' && ok "v1 look migrated to v3" || bad "v1 look migrated to v3"
+# the current look version is 4 (1.10: skin, armor2, zones2, badges, lines; 1.11: material, layers, wear)
+python3 - "$TMP/v1_migrated.json" <<'PY' && ok "v1 look migrated to v4" || bad "v1 look migrated to v4"
 import json, sys
 l = json.load(open(sys.argv[1]))
-assert l["format"] == "CubeEscapeRobotLook" and l["version"] == 3
+assert l["format"] == "CubeEscapeRobotLook" and l["version"] == 4
+assert l["material"]["id"] == "None" and l["layers"] == [] and l["wear"] == 0.5
 assert l["skin"] == "Custom" and l["badges"] == [] and l["zones2"] == [] and l["lines"]["pattern"] == "None"
 assert l["variants"]["Head"] == "TV" and l["variants"]["Hands"] == "Claw" and l["variants"]["Feet"] == "Boots"
 assert l["finish"] == "Glanz" and l["autoExpression"] is False and l["autoDisplay"] is True
@@ -24,13 +25,21 @@ assert abs(l["visor"]["r"] - 0.006) < 1e-6
 PY
 
 "$BIN" --snapshot "$TMP/v2.png" --look "$HERE/tests/look_v2.json" --save-look "$TMP/v2_migrated.json" --size 300x300 >/dev/null
-python3 - "$HERE/tests/look_v2.json" "$TMP/v2_migrated.json" <<'PY' && ok "v2 look migrated to v3" || bad "v2 look migrated to v3"
+python3 - "$HERE/tests/look_v2.json" "$TMP/v2_migrated.json" <<'PY' && ok "v2 look migrated to v4" || bad "v2 look migrated to v4"
 import json, sys
 old, l = json.load(open(sys.argv[1])), json.load(open(sys.argv[2]))
-assert l["version"] == 3 and l["skin"] == "Custom" and l["badges"] == [] and l["lines"]["pattern"] == "None"
+assert l["version"] == 4 and l["skin"] == "Custom" and l["badges"] == [] and l["lines"]["pattern"] == "None"
 assert l["armor2"] == old["armor"] and l["zones2"] == []          # a v2 look keeps exactly its colours
 for k in ("armor", "mech", "metal", "lights", "screen", "eyes", "visor", "fabric", "variants", "finish", "expression"):
     assert l[k] == old[k], k
+PY
+
+"$BIN" --snapshot "$TMP/v3.png" --look "$HERE/tests/look_v3.json" --save-look "$TMP/v3_migrated.json" --size 300x300 >/dev/null
+python3 - "$HERE/tests/look_v3.json" "$TMP/v3_migrated.json" <<'PY' && ok "v3 look migrated to v4" || bad "v3 look migrated to v4"
+import json, sys
+old, l = json.load(open(sys.argv[1])), json.load(open(sys.argv[2]))
+assert l["version"] == 4 and l["skin"] == old["skin"] and l["badges"] == old["badges"] and l["lines"] == old["lines"]
+assert l["material"]["id"] == "None" and l["layers"] == [] and l["wear"] == 0.5
 PY
 
 msg3="$("$BIN" --snapshot "$TMP/u3.png" --look "$HERE/tests/look_v3_unknown.json" --save-look "$TMP/u3.json" --size 300x300)"

@@ -117,6 +117,30 @@ final class ViewerModel: ObservableObject {
 
     var currentSkin: Skin? { config.skins.first { $0.name == selectedSkin } }
 
+    /// A material also offers its fitting armour colour (wood looks like wood on brown, not on white).
+    func setMaterial(_ id: String) {
+        var l = look
+        if let m = (config.materials ?? []).first(where: { $0.id == id }) {
+            l.material = MaterialLook(id: id, color: RGB(m.color ?? [0.3, 0.2, 0.1]))
+            if let base = m.base { l.armor = RGB(base) }
+        } else {
+            l.material = MaterialLook()
+        }
+        l.skin = "Custom"
+        look = l
+    }
+
+    func setLayer(_ info: LayerInfo, amount: Double) {
+        var l = look
+        if let i = l.layers.firstIndex(where: { $0.id == info.id }) {
+            if amount <= 0.001 { l.layers.remove(at: i) } else { l.layers[i].amount = amount }
+        } else if amount > 0.001 {
+            l.layers.append(LayerLook(id: info.id, amount: amount, color: RGB(info.color ?? [0.5, 0.5, 0.5])))
+        }
+        l.skin = "Custom"
+        look = l
+    }
+
     func setBadge(_ slot: Int, id: String) {
         var l = look
         if id == "None" {
@@ -337,6 +361,26 @@ struct Sidebar: View {
                         ForEach(Finish.allCases) { Text($0.rawValue).tag($0) }
                     }.pickerStyle(.segmented)
                 }
+                section("Werkstoff") {
+                    Picker("Werkstoff", selection: Binding(get: { model.look.material.id },
+                                                           set: { model.setMaterial($0) })) {
+                        Text("Keiner").tag("None")
+                        ForEach(model.config.materials ?? []) { Text(label($0.id)).tag($0.id) }
+                    }
+                    if model.look.material.id != "None" {
+                        ColorPicker("Musterfarbe", selection: Binding(get: { model.look.material.color.color },
+                                                                      set: { model.look.material.color = RGB(color: $0) }))
+                    }
+                }
+                section("Schichten") {
+                    ForEach((model.config.layers ?? []).filter { $0.color != nil }) { info in layerRow(info) }
+                    HStack {
+                        Text("Abnutzung")
+                        Slider(value: $model.look.wear, in: 0...1)
+                        Text(model.look.wear < 0.25 ? "sauber" : model.look.wear > 0.75 ? "verbeult" : "normal")
+                            .font(.caption).frame(width: 56)
+                    }
+                }
                 section("Zweitfarbe") {
                     ColorPicker("Farbe", selection: colorBinding(\.armor2))
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4), spacing: 4) {
@@ -451,9 +495,25 @@ struct Sidebar: View {
                                  "RacingStripes": "Rennstreifen", "Target": "Zielmarke", "Circuit": "Leiterbahnen",
                                  "Rings": "Ringe", "Seams": "Kanten", "Bolt": "Blitze", "Joints": "Gelenke",
                                  "Head": "Kopf", "Ears": "Ohren", "Chest": "Brust", "Pads": "Schultern",
-                                 "Arms": "Arme", "Hips": "Hüfte", "Legs": "Beine", "Feet": "Füße"]
+                                 "Arms": "Arme", "Hips": "Hüfte", "Legs": "Beine", "Feet": "Füße",
+                                 "Wood": "Holz", "Stone": "Stein", "Sand": "Sand", "Paper": "Papier",
+                                 "Concrete": "Beton", "Brass": "Messing", "Rust": "Rost", "Moss": "Moos",
+                                 "Frost": "Frost", "Embers": "Glutrisse", "Camo": "Tarnung"]
 
     private func label(_ id: String) -> String { Sidebar.labels[id] ?? id }
+
+    private func layerRow(_ info: LayerInfo) -> some View {
+        let i = model.look.layers.firstIndex { $0.id == info.id }
+        return HStack {
+            Text(label(info.id)).frame(width: 70, alignment: .leading)
+            Slider(value: Binding(get: { i.map { model.look.layers[$0].amount } ?? 0 },
+                                  set: { model.setLayer(info, amount: $0) }), in: 0...1)
+            if let i = i {
+                ColorPicker("", selection: Binding(get: { model.look.layers[i].color.color },
+                                                   set: { model.look.layers[i].color = RGB(color: $0) })).labelsHidden()
+            }
+        }
+    }
 
     private func badgeRow(_ i: Int) -> some View {
         HStack {

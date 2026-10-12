@@ -80,8 +80,8 @@
       "id": "Arctic",
       "theme": "Eis / Kalt",
       "since": "1.7.0",
-      "stage": "1.7",
-      "startSet": false,
+      "stage": "1.11",
+      "startSet": true,
       "palette": {
         "armor": [0.62, 0.8, 0.98],
         "mech": [0.1, 0.22, 0.42],
@@ -92,7 +92,8 @@
         "visor": [0.006, 0.007, 0.01],
         "fabric": [0.1, 0.25, 0.6]
       },
-      "finish": "Standard"
+      "finish": "Standard",
+      "layers": [{"id": "Frost", "amount": 0.4, "color": "#e4f4ff"}]
     },
     {
       "id": "Jungle",
@@ -288,7 +289,7 @@
       "id": "Sand",
       "theme": "Wüste / Erdig",
       "since": "1.7.0",
-      "stage": "1.7",
+      "stage": "1.11",
       "startSet": false,
       "palette": {
         "armor": [0.75, 0.62, 0.42],
@@ -300,7 +301,10 @@
         "visor": [0.006, 0.007, 0.01],
         "fabric": [0.6, 0.25, 0.12]
       },
-      "finish": "Standard"
+      "finish": "Standard",
+      "material": {"id": "Sand", "color": "#8f7449"},
+      "wear": 0.8,
+      "parts": {"AccNeck": "Scarf"}
     },
     {
       "id": "Cherry",
@@ -754,6 +758,203 @@
       "finish": "Matt",
       "badges": [{"id": "Number", "color": "#e2deda"}],
       "parts": {"Head": "Boxy", "Hands": "Claw", "Feet": "Mech", "Pads": "Square", "Backpack": "Battery"}
+    },
+    {
+      "id": "Rust",
+      "theme": "Schrott / Verrostet",
+      "since": "1.11.0",
+      "stage": "1.11",
+      "startSet": true,
+      "concept": "A15 Scrap",
+      "palette": {
+        "armor": "#b5a088",
+        "mech": "#3a3430",
+        "metal": "#6e625a",
+        "eye": "#ffb04a",
+        "screen": "#ffb04a",
+        "accent": "#ff6a1a",
+        "visor": "#060709",
+        "fabric": "#6b4a2e",
+        "armor2": "#c2602a"
+      },
+      "zones2": ["Pads", "Feet"],
+      "finish": "Standard",
+      "layers": [{"id": "Rust", "amount": 0.55, "color": "#8a3a12"}],
+      "wear": 0.9,
+      "expression": "Skeptical"
+    },
+    {
+      "id": "Moss",
+      "theme": "Natur / Organisch",
+      "since": "1.11.0",
+      "stage": "1.11",
+      "startSet": true,
+      "concept": "A05 Moss",
+      "palette": {
+        "armor": "#ddd0c0",
+        "mech": "#4a4436",
+        "metal": "#9c9180",
+        "eye": "#7cff6b",
+        "screen": "#9cff7a",
+        "accent": "#c7ff3a",
+        "visor": "#060709",
+        "fabric": "#5c740b"
+      },
+      "finish": "Matt",
+      "layers": [{"id": "Moss", "amount": 0.45, "color": "#5c740b"}],
+      "wear": 0.65
+    },
+    {
+      "id": "Inferno",
+      "theme": "Feuer / Hitze",
+      "since": "1.11.0",
+      "stage": "1.11",
+      "startSet": true,
+      "concept": "A18 Inferno",
+      "palette": {
+        "armor": "#3a1a12",
+        "mech": "#1a0c0a",
+        "metal": "#5a3a2c",
+        "eye": "#ffb604",
+        "screen": "#ff7a1a",
+        "accent": "#ef4307",
+        "visor": "#060709",
+        "fabric": "#ba2918",
+        "armor2": "#ba2918"
+      },
+      "zones2": ["Pads", "Head"],
+      "finish": "Standard",
+      "layers": [{"id": "Embers", "amount": 0.35, "color": "#ff6a10"}],
+      "expression": "Angry",
+      "display": "Lightning"
+    },
+    {
+      "id": "Circuit",
+      "theme": "Leiterplatte / Digital",
+      "since": "1.11.0",
+      "stage": "1.11",
+      "startSet": true,
+      "concept": "C19 Circuit",
+      "palette": {
+        "armor": "#0f6b3a",
+        "mech": "#062a18",
+        "metal": "#b8a27a",
+        "eye": "#b6ff4a",
+        "screen": "#b6ff4a",
+        "accent": "#99bd37",
+        "visor": "#060709",
+        "fabric": "#e0c2b0"
+      },
+      "finish": "Standard",
+      "material": {"id": "Circuit", "color": "#e0b04a"},
+      "lines": {"pattern": "Seams", "color": "#9cff3a", "strength": 0.7},
+      "display": "Wave"
+    },
+    {
+      "id": "Magma",
+      "theme": "Vulkan / Magma",
+      "since": "1.11.0",
+      "stage": "1.11",
+      "startSet": false,
+      "concept": "C21 Obsidian",
+      "palette": {
+        "armor": "#1c1416",
+        "mech": "#0c0809",
+        "metal": "#3a2a28",
+        "eye": "#ff6a1a",
+        "screen": "#ff4a1a",
+        "accent": "#f8741a",
+        "visor": "#060709",
+        "fabric": "#b22a1c"
+      },
+      "finish": "Glanz",
+      "layers": [{"id": "Embers", "amount": 0.6, "color": "#ff5a12"}]
+    },
+    {
+      "id": "Bamboo",
+      "theme": "Natur / Holz",
+      "since": "1.11.0",
+      "stage": "1.11",
+      "startSet": false,
+      "concept": "C06 Bamboo",
+      "palette": {
+        "armor": "#c9a46a",
+        "mech": "#3d3a1f",
+        "metal": "#8f8a5a",
+        "eye": "#a6ff4a",
+        "screen": "#b0ff5a",
+        "accent": "#ffd04a",
+        "visor": "#060709",
+        "fabric": "#557c05",
+        "armor2": "#6f8f2a"
+      },
+      "zones2": ["Ears", "Feet"],
+      "finish": "Standard",
+      "material": {"id": "Wood", "color": "#6b4a24"},
+      "layers": [{"id": "Moss", "amount": 0.25, "color": "#557c05"}]
+    },
+    {
+      "id": "Temple",
+      "theme": "Tempel / Stein",
+      "since": "1.11.0",
+      "stage": "1.11",
+      "startSet": false,
+      "palette": {
+        "armor": "#b8ad96",
+        "mech": "#4a4236",
+        "metal": "#8a7a5a",
+        "eye": "#4fd2ff",
+        "screen": "#4fd2ff",
+        "accent": "#4fd2ff",
+        "visor": "#060709",
+        "fabric": "#8a3a22"
+      },
+      "finish": "Standard",
+      "material": {"id": "Stone", "color": "#5f584a"},
+      "layers": [{"id": "Moss", "amount": 0.15, "color": "#5c740b"}],
+      "wear": 0.7
+    },
+    {
+      "id": "Paper",
+      "theme": "Papier / Handgefertigt",
+      "since": "1.11.0",
+      "stage": "1.11",
+      "startSet": false,
+      "concept": "C14 Paper",
+      "palette": {
+        "armor": "#d9b886",
+        "mech": "#6b4b2e",
+        "metal": "#a88a62",
+        "eye": "#ffb03a",
+        "screen": "#ffb03a",
+        "accent": "#fab840",
+        "visor": "#060709",
+        "fabric": "#a16e49"
+      },
+      "finish": "Standard",
+      "material": {"id": "Paper", "color": "#a67c4e"},
+      "wear": 0.3
+    },
+    {
+      "id": "Concrete",
+      "theme": "Beton / Urban",
+      "since": "1.11.0",
+      "stage": "1.11",
+      "startSet": false,
+      "concept": "C15 Concrete",
+      "palette": {
+        "armor": "#9a948c",
+        "mech": "#3a3836",
+        "metal": "#6e6862",
+        "eye": "#ffb13a",
+        "screen": "#ffb13a",
+        "accent": "#ff8a2a",
+        "visor": "#060709",
+        "fabric": "#786d63"
+      },
+      "finish": "Standard",
+      "material": {"id": "Concrete", "color": "#5d5b57"},
+      "wear": 0.7
     }
   ]
 }

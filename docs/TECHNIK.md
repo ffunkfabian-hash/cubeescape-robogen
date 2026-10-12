@@ -115,6 +115,8 @@ als Maskenkanäle liefern; Zonen über benannte Teile und Flächenattribute; Dec
   „automatische Feinsuche“ nach gleichmäßigen Flächen landete in Lücken zwischen den Punkten – feste, am Prüfbild
   vermessene Positionen waren zuverlässiger.
 - Neural Engine nicht nötig (Zeitregel des Fahrplans eingehalten).
+- Das Abzeichen „Schriftzeichen“ (侍) braucht die macOS-Schrift Hiragino; wie Metal und der Viewer bindet das den
+  Generator an macOS. Für Cubegen (plattformunabhängig) Schriften mitliefern oder Zeichen als Pfade zeichnen.
 
 ## 7. UI-Icons und Lesbarkeit
 

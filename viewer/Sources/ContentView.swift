@@ -107,6 +107,9 @@ final class ViewerModel: ObservableObject {
     func applySkin(_ name: String) {
         guard let s = config.skins.first(where: { $0.name == name }) else { return }
         var l = look
+        for slot in (currentSkin?.parts ?? [:]).keys {       // parts of the previous skin go back to the default
+            l.variants[slot] = config.slots.first { $0.id == slot }?.variants.first ?? "None"
+        }
         l.apply(skin: s, parts: true)
         look = l
         selectedSkin = name

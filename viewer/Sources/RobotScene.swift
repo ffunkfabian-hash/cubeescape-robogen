@@ -40,6 +40,10 @@ final class RobotScene: NSObject, SCNSceneRendererDelegate {
     private var nextBlink: TimeInterval = 0
     private var blinkClock: TimeInterval = 0
     private var eyeGlowStyle = 1.0
+    private var lastPower = 1.0
+    private var lastGlow = 1.0
+    /// Packed mask textures per ViewerData folder: every RobotScene (A/B, exports) reuses them.
+    private static var packCache: [String: Any] = [:]
     private var staticDisplayAtlas: NSImage?
     private var flipbookAtlas: NSImage?
     private var heldItemNodes: [SCNNode] = []
@@ -259,7 +263,8 @@ final class RobotScene: NSObject, SCNSceneRendererDelegate {
             return (l[i].texture, l[i].channel)
         }
         let lines = cfg.linePatterns ?? []
-        let props: [(String, Any?)] = [
+        let cacheKey = data.root.path
+        let props: [(String, Any?)] = RobotScene.packCache[cacheKey] as? [(String, Any?)] ?? [
             ("maskTexture", packed([("T_Robot_ColorMask.png", 0), ("T_Robot_ColorMask.png", 1),
                                     ("T_Robot_ColorMask.png", 2), ("T_Robot_LightMask.png", 0)])),
             ("msTexture", packed([("T_Robot_MetallicSmoothness.png", 0), nil, nil,
@@ -271,10 +276,12 @@ final class RobotScene: NSObject, SCNSceneRendererDelegate {
             ("auxTexture", packed([chan(lines, 4), nil, nil, nil],
                                   zoneIDs: (cfg.zones ?? []).map { "\($0.texture)#\($0.channel)" }, zoneChannel: 1)),
         ]
+        RobotScene.packCache[cacheKey] = props
         let black = NSImage(size: NSSize(width: 4, height: 4), flipped: false) { r in
             NSColor.black.setFill(); r.fill(); return true
         }
         for (key, tex) in props { m.setValue(SCNMaterialProperty(contents: tex ?? black), forKey: key) }
+
         // SceneKit silently draws a shader modifier magenta beyond about 23 custom arguments: keep them packed
         let lum = { (c: [Double]) in RGB(c).luminance }
         m.setValue(vec4([lum(classic.armor), lum(classic.mech), lum(classic.metal), lum(classic.accent)]), forKey: "refA")
@@ -556,7 +563,8 @@ final class RobotScene: NSObject, SCNSceneRendererDelegate {
         lock.unlock()
         eyeMat.setValue(vec(style?.tint.map { RGB($0) } ?? eyes), forKey: "eyeColor")
         eyeGlowStyle = style?.glow ?? 1.0
-        shownPower = -1             // re-applies the glow with the style factor
+        shownPower = -1             // re-applies the glow with the style factor (also without a playing clip)
+        setPower(lastPower, glow: lastGlow)
     }
 
     /// Idle blinking (robot_config.json > blink): random interval, short duration; GUI only (snapshots never blink).
@@ -608,6 +616,8 @@ final class RobotScene: NSObject, SCNSceneRendererDelegate {
 
     /// "Power" of all emissive parts: eyes, chest display and lights (Death switches off, Respawn on).
     func setPower(_ p: Double, glow: Double) {
+        lastPower = p
+        lastGlow = glow
         let key = p * 1000 + glow
         guard abs(key - shownPower) > 1e-4 else { return }
         shownPower = key
@@ -726,7 +736,10 @@ final class RobotScene: NSObject, SCNSceneRendererDelegate {
         for n in spinNodes { n.simdLocalRotate(by: simd_quatf(angle: Float(dt * 14), axis: [0, 0, 1])) }
         evaluate()
         updateDisplayAnimation(time)
-        if look.autoExpression { updateBlink(time) }
+        lock.lock()
+        let auto = look.autoExpression
+        lock.unlock()
+        if auto { updateBlink(time) }
     }
 
     /// Sets bone transforms for the current clip time (also used for offscreen snapshots).

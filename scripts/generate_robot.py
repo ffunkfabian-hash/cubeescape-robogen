@@ -1802,7 +1802,7 @@ def tri_count(me):
 # ----------------------------------------------------------------------------------------------
 
 
-def write_png(path, pixels, width, height, channels):
+def write_png(path, pixels, width, height, channels, level=9):
     """Writes an 8-bit PNG. pixels: float array (h, w, c) in 0..1, row 0 = bottom (Blender order)."""
     arr = np.clip(np.round(pixels[::-1] * 255.0), 0, 255).astype(np.uint8)
     color_type = {1: 0, 3: 2, 4: 6}[channels]
@@ -1813,7 +1813,7 @@ def write_png(path, pixels, width, height, channels):
         return c + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF)
 
     png = b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, color_type, 0, 0, 0))
-    png += chunk(b"IDAT", zlib.compress(raw, 9)) + chunk(b"IEND", b"")
+    png += chunk(b"IDAT", zlib.compress(raw, level)) + chunk(b"IEND", b"")
     with open(path, "wb") as fh:
         fh.write(png)
 
@@ -1899,7 +1899,7 @@ def bake_textures(objs, mats, size, ao_samples, tex_dir, cache_dir=None, check_c
         for name, arr in (("T_Robot_BaseColor%s.png" % suffix, base * layers["ao_soft"][..., None]),
                           ("T_Robot_Emission%s.png" % suffix, emit)):
             out[name] = os.path.join(tex_dir, name)
-            write_png(out[name], linear_to_srgb(arr), size, size, 3)
+            write_png(out[name], linear_to_srgb(arr), size, size, 3, level=6)   # 38 skins: level 9 cost seconds
         return out
 
     t0 = time.time()
@@ -5084,6 +5084,22 @@ def render_cards(cam, part_objs, robot_mesh, out_dir, tex_dir, items):
         floor.hide_render = True
     robot_mesh.hide_render = True
     out = {}
+    try:
+        _render_card_items(cam, part_objs, robot_mesh, out_dir, tex_dir, items, out, rim, bg, old_bg, old_rim)
+    finally:            # back to the preview scene even if a render fails (later packages, the saved .blend)
+        card_compositor(False)
+        scene.render.film_transparent = False
+        if rim:
+            rim.data.color = old_rim
+        bg.inputs[0].default_value = old_bg
+        robot_mesh.hide_render = False
+        if floor:
+            floor.hide_render = False
+    return out
+
+
+def _render_card_items(cam, part_objs, robot_mesh, out_dir, tex_dir, items, out, rim, bg, old_bg, old_rim):
+    scene = bpy.context.scene
     for kind, name in items:
         objs, skin, expr, disp = card_objects(part_objs, robot_mesh, kind, name)
         for o in objs:
@@ -5119,10 +5135,6 @@ def render_cards(cam, part_objs, robot_mesh, out_dir, tex_dir, items):
         for o in objs:
             o.hide_render = True
             set_look(o, tex_dir)
-    robot_mesh.hide_render = False
-    if floor:
-        floor.hide_render = False
-    return out
 
 
 def render_accessory_icons(cam, part_objs, out_dir, tex_dir):

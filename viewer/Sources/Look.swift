@@ -205,7 +205,9 @@ struct Look: Codable, Equatable {
         l.armor2 = armor2.clamped
         let known = Set((config.badges ?? []).map(\.id))
         for b in badges where !known.contains(b.id) { warnings.append("Abzeichen „\(b.id)“ unbekannt") }
-        l.badges = Array(badges.filter { known.contains($0.id) }.prefix(Look.maxBadges))
+        let valid = badges.filter { known.contains($0.id) }
+        if valid.count > Look.maxBadges { warnings.append("mehr als \(Look.maxBadges) Abzeichen – überzählige entfernt") }
+        l.badges = Array(valid.prefix(Look.maxBadges))
         if lines.pattern != "None" && !(config.linePatterns ?? []).contains(where: { $0.id == lines.pattern }) {
             warnings.append("Leuchtlinien „\(lines.pattern)“ unbekannt")
             l.lines.pattern = "None"

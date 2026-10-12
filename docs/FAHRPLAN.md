@@ -2,7 +2,7 @@
 https://claude.ai/code/artifact/ed285e14-821e-4986-8b02-3a281874174a – Änderungen dort vornehmen und hier nachziehen. -->
 
 > **Führende Fassung:** [Claude Doc „Fahrplan Roboter-Generator“](https://claude.ai/code/artifact/ed285e14-821e-4986-8b02-3a281874174a).
-> Diese Datei ist ein Abbild (Stand 12.10.2026, Generator 1.10.0).
+> Diese Datei ist ein Abbild (Stand 13.10.2026, Generator 1.10.1).
 
 # Fahrplan Roboter-Generator
 
@@ -109,7 +109,7 @@ Neunzehn weitere Punkte (zwei Vorschläge vom 12. Oktober 2026 wurden in Generat
 - [ ] **Nachschwingen** für Umhang und Antenne – Generator 1.12
 - [ ] **Servo-Geräusch-Ereignisse** aus der Gelenkgeschwindigkeit berechnet (in die Clip-Daten wie die Fußschritte) – vor Spiel 0.44
 - [x] **Viewer:** GIF- oder Video-Export und A/B-Vergleich zweier Looks – umgesetzt in Generator 1.10 (GIF und MP4, auch per Kommandozeile)
-- [ ] **Unity-Testpaket** in einem separaten, leeren Unity-Projekt; das Spiel bleibt unberührt – direkt nach den Testzeiten, damit jede Generator-Stufe dort sofort geprüft werden kann
+- [x] **Unity-Testpaket** in einem separaten, leeren Unity-Projekt; das Spiel bleibt unberührt – umgesetzt in Generator 1.10.1 (`unity/run_testbed.sh`: 20 Prüfungen, 8 EditMode-Tests, Screenshots aller Skins und Typen); fand gleich einen Fehler: der Roboter schaute in Unity nach −Z
 - [ ] **Vorschlag: Visuelle Prüfung aller Kombinationen auf der Neural Engine:** Typ × Skin × Ausdruck per `RobotViewer --snapshot` rendern und mit Apples Bilderkennung (Vision, Merkmalsvergleich) gegen Referenzbilder prüfen; verzeiht kleine Pixelabweichungen aus nicht reproduzierbarem UV-Packing, findet echte Ausreißer in Millisekunden je Bild – ab der Stufe Paintjob, zusammen mit dem Skin-Bogen-Render. Geprüft in 1.9.2: kein Mehrwert – die Renders sind über Prozesse hinweg bitnah gleich (Pixel-RMSE 1e-5), ein exakter Pixelvergleich genügt; Feature Prints trennen eine fehlende Hand (0,106) kaum von 12 statt 24 Samples (0,061) und liefern je Gerät andere Abstände (Neural Engine 0,0026, CPU 0,0003), taugen also nicht als Prüfschranke
 - [ ] **Vorschlag: Weathering- und Paintjob-Vorlagen per Bildgenerator** (Core ML auf der Neural Engine) nur als einmaliges Vorlagenwerkzeug, Ergebnisse eingecheckt – nie im Generatorlauf, weil gleiche Eingabe nicht dasselbe Bild garantiert und Cache-Schlüssel reproduzierbar bleiben müssen; Stil-Abnahme vorher; passt zur Stufe Weathering. Geprüft in 1.9.2: kein Einsatz – die Vorlagen entstehen reproduzierbar per ImageMagick im Low-Poly-Stil und hängen im Cache-Schlüssel; ein Bildgenerator (mehrere GB Modell, Lizenz- und Stilprüfung) liefert das nicht
 - [x] **Konzeptbögen auswerten:** umgesetzt in Generator 1.10 ohne Neural Engine – `scripts/concept_palettes.py` liest die vier Farbpunkte aller 42 Karten der Bögen A und C an vermessenen Positionen aus (`data/concept_palettes.json`), Namen abgetippt; innerhalb der Zeitregel (eine Sitzung)

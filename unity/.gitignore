@@ -1,0 +1,12 @@
+# Unity creates these; the importer copies the generator output into Assets/RobotImport and builds Generated/.
+RobotTestbed/Library/
+RobotTestbed/Temp/
+RobotTestbed/Logs/
+RobotTestbed/UserSettings/
+RobotTestbed/obj/
+RobotTestbed/*.csproj
+RobotTestbed/*.sln
+RobotTestbed/Assets/RobotImport/
+RobotTestbed/Assets/RobotImport.meta
+RobotTestbed/Assets/RobotTestbed/Generated/
+RobotTestbed/Assets/RobotTestbed/Generated.meta

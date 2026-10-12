@@ -50,6 +50,9 @@ Unity- oder Blender-Läufe anderer Agenten verfälschen sie um ein Vielfaches).
 4. `quick` zweimal: Beim zweiten Lauf müssen UV-Cache und Bake-Cache treffen (Log: „UV cache hit“, „bake cache hit“).
 5. Sichtbare Änderungen ansehen: `Previews/skins.png`, `Previews/hero.png`, bei Animationen die Kontaktbögen.
 6. Bei Viewer-Änderungen `viewer/build.sh` und `viewer/test_viewer.sh`.
+7. Bei Änderungen an Export, Clips, Texturen, Masken oder Looks: `unity/run_testbed.sh` (eigenes Unity-Projekt, nie das
+   Spiel; Bericht `output/UnityTestbed/report.json`). Shader-Formeln in `decorate_skin()`, Viewer und
+   `unity/RobotTestbed/Assets/RobotTestbed/Shaders/RobotBody.shader` gleich halten.
 
 ## Plugins und Hooks (Claude Code)
 

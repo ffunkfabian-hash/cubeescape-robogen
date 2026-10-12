@@ -3,6 +3,21 @@
 Versionen des Roboter-Generators (zählen getrennt von Cube Escape und Cubegen). Jede Version hat einen Tag
 `v<Version>` und einen Release-Branch `release/<Version>`.
 
+## 1.10.1 „Paintjob“ – 2026-10-13
+
+**Unity-Testpaket** (`unity/RobotTestbed`, `unity/run_testbed.sh`): eigenes URP-Projekt, das die Ausgabe importiert,
+20 Prüfungen und 8 EditMode-Tests ausführt und alle Skins, Typen, Ausdrücke und einige Animationsframes rendert.
+QA, Clip-Daten und Typ-Maße unverändert.
+
+* **Behoben: Der Roboter schaute in Unity nach −Z** (das README versprach +Z; im Spiel wäre er rückwärts gelaufen).
+  Unity übernimmt Blenders Vorderseite immer als −Z – eine andere Vorwärtsachse im FBX-Kopf oder „Transform
+  anwenden“ änderte daran nichts. Der Export dreht jetzt das Armatur-Objekt um 180° um Z (nur für den Export);
+  `verify_robot.py` rechnet die Drehung beim Reimport heraus. Das Testpaket prüft Blickrichtung und ClimbUp-Root-Motion.
+* Vorlagen für den Einbau ins Spiel: URP-Shader `CubeEscape/RobotBody` und `CubeEscape/RobotScreen`, `RobotLook`
+  (Format 3 mit Migration), `RobotAppearance`, `RobotFace`.
+* README: Augen-Atlas 4 × 10, Achsen, Abschnitt „Unity-Testpaket“; AGENTS: Testpaket im Prüfablauf; TECHNIK.md:
+  Unity-Lehren; Fahrplan: Unity-Testpaket erledigt.
+
 ## 1.10.0 „Paintjob“ – 2026-10-12
 
 Skins werden Daten: 38 Skins (20 bestehende, Gold/Neon/Toxic/Ocean aufgewertet, 18 neue: Shadow, Hazard, Medic, Volt,

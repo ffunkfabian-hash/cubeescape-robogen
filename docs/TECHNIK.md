@@ -1,6 +1,6 @@
 # Techniken des Roboter-Generators – Übertrag auf Cubegen
 
-Stand: Generator 1.10.0 „Paintjob“. Diese Datei sammelt, **wie** der Generator arbeitet und was sich dabei bewährt
+Stand: Generator 1.10.1 „Paintjob“. Diese Datei sammelt, **wie** der Generator arbeitet und was sich dabei bewährt
 oder als Falle erwiesen hat. Ziel: Der Modell-Editor von Cubegen soll genauso leistungsfähig werden. Jede Technik
 nennt die Fundstelle im Generator und was Cubegen davon übernehmen sollte. Pflegen bei jeder Generator-Version
 (neue Technik → neuer Abschnitt, geänderte Messwerte → hier ändern).
@@ -145,7 +145,27 @@ als Maskenkanäle liefern; Zonen über benannte Teile und Flächenattribute; Dec
 
 **Für Cubegen:** Gilt für jede macOS-Vorschau (App 0.16) mit Masken oder vielen Parametern.
 
-## 9. Prüfen
+## 9. Unity-Testpaket – Lehren
+
+- **Ein eigenes Testprojekt** statt des Spiels: `unity/RobotTestbed` (URP, linear, Forward) importiert die Ausgabe
+  per Batch-Modus, baut Materialien/Prefabs/Animator per Code und prüft. Fand im ersten Lauf einen Fehler, den keine
+  Blender-Prüfung sehen konnte: Der Roboter schaute nach −Z.
+- **Blickrichtung:** Unity übernimmt Blenders −Y immer als −Z; Vorwärtsachse im FBX-Kopf und „Transform anwenden“
+  ändern daran nichts (Unity rechnet die Kopfangaben konsistent um). Abhilfe: das Armatur-Objekt nur für den Export
+  um 180° drehen; die Reimport-Prüfung muss die Drehung herausrechnen (auch in den Takes, die sie als Schlüssel
+  tragen). Immer per Fußspitzen-Messung und Root-Motion-Endpunkt in Unity prüfen.
+- Die FBX behält die Pose der zuletzt exportierten Animation – Höhen in der Pose von Idle-Frame 0 messen.
+- **Import:** Daten-Texturen (Masken, Metall/Glätte) `sRGB aus`, `Alpha is Transparency aus`, unkomprimiert;
+  Atlanten ohne NPOT-Skalierung (2048 × 2560) und ohne Mipmaps; Loop-Flags und Bake-Into-Pose per AssetPostprocessor
+  aus den Clip-Daten; der Root-Motion-Knoten ist ein Pfad (`Armature/Root`).
+- **Laufzeit:** Farben linear per `MaterialPropertyBlock.SetVector` (SetColor rechnet im linearen Farbraum noch einmal
+  um); Konfigurationen als `TextAsset` im Prefab speichern, nicht als geparstes Objekt (überlebt das Speichern nicht).
+- **Batch-Screenshots** in eine eigene RenderTexture (Batch-Bildschirm 640 × 480), zweimal rendern.
+
+**Für Cubegen:** dasselbe Muster für Modellsets – ein kleines Unity-Testprojekt je Generator, das Import, Kollision,
+Materialien und Screenshots automatisch prüft.
+
+## 10. Prüfen
 
 - Teststufen `quick` / `standard` / `full` mit Zeitbudget; Worker-Pakete für QA und Renders.
 - **Bericht als Gate:** `qa`, `clips`, `type_bounds`, Dreiecke, Bones vor und nach der Änderung vergleichen – ohne
@@ -154,7 +174,7 @@ als Maskenkanäle liefern; Zonen über benannte Teile und Flächenattribute; Dec
   überlappungsfrei, Gesichter, Flipbook, Icons, Bögen); `viewer/test_viewer.sh` prüft Migrationen, unbekannte IDs,
   Round Trip und Export.
 
-## 10. Checkliste für den Cubegen-Modell-Editor
+## 11. Checkliste für den Cubegen-Modell-Editor
 
 - [ ] Looks/Paletten als versionierte Datendatei mit Loader-Prüfung und Migration
 - [ ] Farbvarianten aus einmal gebackenen Gewichtskarten zusammensetzen, Gegenprobe im Volllauf
@@ -166,3 +186,4 @@ als Maskenkanäle liefern; Zonen über benannte Teile und Flächenattribute; Dec
 - [ ] Icons je Modell/Variante mit Lesbarkeitsprüfung
 - [ ] Vorschau-App: Daten-Texturen roh laden, Uniforms packen, A/B-Vergleich, GIF/MP4-Export
 - [ ] Bericht-Gate: Geometrie-/QA-Kennzahlen vor und nach jeder Änderung vergleichen
+- [ ] Unity-Testprojekt je Generator: Import, Blickrichtung, Materialien, Screenshots automatisch (Muster: `unity/`)

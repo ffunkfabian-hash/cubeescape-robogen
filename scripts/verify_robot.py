@@ -41,6 +41,18 @@ MASK_TEXTURES = ["T_Robot_BadgeMask.png", "T_Robot_BadgeMask2.png", "T_Robot_Lin
                  "T_Robot_ZoneMask.png", "T_Robot_ZoneMask2.png"]       # 1.10: RGBA masks (alpha = a mask channel)
 START_SET_1_10 = {"Classic", "Shadow", "Hazard", "Medic", "Volt", "Gold", "Candy"}
 MAIN_MATERIALS = {"M_Robot", "M_RobotEyes", "M_RobotDisplay"}
+import math  # noqa: E402
+
+from mathutils import Matrix  # noqa: E402
+
+
+def unturn(objs):
+    """generate_robot.py turns the armature 180 degrees about Z for the FBX (Unity: the robot looks +Z); turn the
+    imported top-level objects back so they compare with the .blend."""
+    for o in objs:
+        if o.parent is None:
+            o.matrix_world = Matrix.Rotation(-math.pi, 4, "Z") @ o.matrix_world
+    bpy.context.view_layer.update()
 
 results = []
 
@@ -158,6 +170,7 @@ def verify_fbx(reference):
     before_actions = set(bpy.data.actions)
     bpy.ops.import_scene.fbx(filepath=path, use_anim=True, ignore_leaf_bones=False, automatic_bone_orientation=False)
     new = [o for o in bpy.data.objects if o not in before]
+    unturn(new)
     meshes = [o for o in new if o.type == "MESH"]
     arms = [o for o in new if o.type == "ARMATURE"]
     check("fbx: one mesh and one armature imported", len(meshes) == 1 and len(arms) == 1,
@@ -195,6 +208,8 @@ def verify_fbx(reference):
         for f, ref in zip(frames, boxes):
             scene.frame_set(f - frames[0] + fs)
             got = np.concatenate(bbox_of(ob))
+            # the takes key the armature object's export turn (180 degrees about Z): x and y swap sign
+            ref = np.array([-ref[3], -ref[4], ref[2], -ref[0], -ref[1], ref[5]])
             err = max(err, float(np.abs(got - ref).max()))
         worst = max(worst, err)
         check("fbx: take %s matches original (bbox)" % a, err < 0.004, "max dev %.4f m" % err)
@@ -210,6 +225,7 @@ def verify_modular():
     before = set(bpy.data.objects)
     bpy.ops.import_scene.fbx(filepath=path, use_anim=False, ignore_leaf_bones=False)
     new = [o for o in bpy.data.objects if o not in before]
+    unturn(new)
     meshes = [o for o in new if o.type == "MESH"]
     arms = [o for o in new if o.type == "ARMATURE"]
     check("fbx modular: all part meshes + rig", len(meshes) == expected and len(arms) == 1, (len(meshes), expected))
@@ -258,6 +274,7 @@ def verify_types():
         before = set(bpy.data.objects)
         bpy.ops.import_scene.fbx(filepath=path, use_anim=False, ignore_leaf_bones=False)
         new = [o for o in bpy.data.objects if o not in before]
+        unturn(new)
         meshes = [o for o in new if o.type == "MESH"]
         arms = [o for o in new if o.type == "ARMATURE"]
         ok = len(meshes) == 1 and len(arms) == 1

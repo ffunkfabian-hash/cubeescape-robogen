@@ -51,7 +51,7 @@ import make_textures  # noqa: E402 - ImageMagick source textures
 import export_viewer  # noqa: E402 - data for the RobotViewer app
 
 LOG = logging.getLogger("robot")
-VERSION = "1.10.0"
+VERSION = "1.10.1"
 
 # ----------------------------------------------------------------------------------------------
 # Arguments and logging
@@ -5377,6 +5377,12 @@ def render_gif(cam, arm_ob, actions, out_dir, name, step):
 # ----------------------------------------------------------------------------------------------
 
 
+# Unity converts the declared FBX axes consistently: Blender's -Y (the robot's front) always ends up as Unity -Z, whatever
+# axis_forward says (measured in the Unity testbed, 1.10.1). For the README promise "the robot looks +Z" the armature
+# object is turned 180 degrees about Z for the export only; bones, animation and clip data stay as they are.
+FBX_EXPORT_TURN = math.pi
+
+
 def export_fbx(path, objs, arm_ob, animations=True):
     hidden = [o for o in objs if o.hide_get()]
     for o in hidden:
@@ -5393,6 +5399,10 @@ def export_fbx(path, objs, arm_ob, animations=True):
         pb.location = (0, 0, 0)
         pb.rotation_quaternion = (1, 0, 0, 0)
         pb.scale = (1, 1, 1)
+    saved_rotation = (arm_ob.rotation_mode, tuple(arm_ob.rotation_euler))
+    arm_ob.rotation_mode = "XYZ"
+    arm_ob.rotation_euler = (0.0, 0.0, FBX_EXPORT_TURN)      # the parented meshes turn with it
+    bpy.context.view_layer.update()
     bpy.ops.export_scene.fbx(
         filepath=path, use_selection=True, object_types={"ARMATURE", "MESH"},
         apply_unit_scale=True, apply_scale_options="FBX_SCALE_ALL", global_scale=1.0,
@@ -5404,6 +5414,8 @@ def export_fbx(path, objs, arm_ob, animations=True):
         bake_anim_use_all_actions=False, bake_anim_force_startend_keying=True, bake_anim_step=1.0,
         bake_anim_simplify_factor=0.0, path_mode="STRIP", embed_textures=False, use_custom_props=False,
     )
+    arm_ob.rotation_mode, arm_ob.rotation_euler = saved_rotation[0], saved_rotation[1]
+    bpy.context.view_layer.update()
     for track in ad.nla_tracks:
         track.mute = True
     for o in hidden:

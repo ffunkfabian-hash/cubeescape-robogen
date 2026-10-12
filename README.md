@@ -1,4 +1,4 @@
-# Cube Escape – Roboter-Charakter (Generator 1.10.0)
+# Cube Escape – Roboter-Charakter (Generator 1.10.1)
 
 Der spielbare Roboter aus dem Cube-Escape-Keyart, vollständig per Skript erzeugt: Geometrie mit Bauteil-Varianten
 und Accessoires, Materialien, gebackene Texturen (Detail- und Ausdrucks-Texturen per ImageMagick), Rig mit Bein- und
@@ -40,6 +40,8 @@ Konzeptbilder und UI-Icons.
 | `scripts/debug_*.py`, `scripts/diag_parts.py` | Hilfen zur Fehlersuche |
 | `viewer/` | Quellcode des Viewers (SwiftUI + SceneKit), `build.sh`, `test_viewer.sh` und Test-Looks in `tests/` |
 | `docs/TECHNIK.md` | **Techniken und Lehren** des Generators – Übertrag auf den Cubegen-Modell-Editor |
+| `unity/RobotTestbed/`, `unity/run_testbed.sh` | **Unity-Testpaket:** eigenes URP-Projekt (nie das Spiel), importiert die Ausgabe, prüft und rendert sie |
+| `output/UnityTestbed/` | Bericht des Testpakets: `report.json`, `tests.xml`, Logs, Screenshots und Bögen `unity_*.png` |
 
 ## Neu erzeugen
 
@@ -226,7 +228,7 @@ Clip). `viewer/test_viewer.sh` nutzt das für Migrations-, Round-Trip- und Expor
 | Modular | 35 Teil-Objekte: `Robot_Body` + je Slot/Variante, gemeinsamer Textur-Atlas |
 | Je Robotertyp | 1 Mesh, 3–4 Materialien (Fabric nur bei Stoff-Accessoires), Maße in `robot_config.json` › `typeBounds` |
 | Bones | 28: Root, Pelvis, Spine, Head, Eyes, Shoulder/UpperArm/LowerArm/Hand/Fingers/Thumb/Prop _L/_R, UpperLeg/LowerLeg/Foot _L/_R, Socket_Head/Neck/Back |
-| Achsen | Blender: Blick −Y, links = +X. FBX: Forward −Z, Up Y → Unity Blick +Z |
+| Achsen | Blender: Blick −Y, links = +X. FBX: Forward Z, Up Y → Unity Blick +Z (seit 1.10.1, im Unity-Testbett gemessen) |
 
 ## Anpassbarkeit – wie es technisch funktioniert
 
@@ -289,10 +291,39 @@ Charakterraum `[rechts, oben, vorn]` in Metern (= Unity-Local-Space), Winkel in 
 | `emission` | „Strom“-Faktor für Augen, Display und Lichter (Death → 0, Respawn fährt hoch, Electrocuted flackert) |
 | `hideHeldItem` | Hand-Gegenstand ausblenden (Klettern, Hängen, Think, Wave, Clap, PickUp, TerminalTyping, Vault, EdgeBalance) |
 
+## Unity-Testpaket
+
+```bash
+unity/run_testbed.sh
+```
+
+Ein eigenes, sonst leeres Unity-Projekt (`unity/RobotTestbed`, Unity-Version wie Cube Escape, URP 17, linearer
+Farbraum, Forward-Renderer) prüft jede Generator-Stufe in Unity, ohne das Spiel anzufassen. Der Lauf kopiert die
+Ausgabe nach `Assets/RobotImport` (nur geänderte Dateien), importiert sie mit den Einstellungen unten, baut
+Materialien, Prefabs (Standard, modular, je Typ) und einen Animator mit allen Clips, prüft und rendert:
+
+- **Prüfungen** (`output/UnityTestbed/report.json`): Shader kompilieren, Root-Bone und Avatar, Pflicht-Bones, alle
+  Clips mit Länge = Frames / fps, Loop-Flags aus `robot_config.json`, Root Motion nur für Drehungen und ClimbUp,
+  ClimbUp endet 1,20 m höher und 0,36 m vorn (+Z), der Roboter schaut nach +Z, Idle-Frame 0 steht auf y = 0 mit
+  1,2–1,5 m Höhe, kein Clip unter dem Boden (jeder 4. Frame), Texturen (Farbe sRGB, Daten linear, Alpha keine
+  Transparenz, Augen-Atlas ohne Skalierung), ein Prefab je Typ, alle Typ-Looks ohne Warnung, alle Skins anwendbar.
+- **Screenshots** mit URP und Bloom: alle Skins, alle Typen, alle Ausdrücke, Frames aus Walk, ClimbUp, DanceRobot
+  und Death → `output/UnityTestbed/unity_skins.png` usw.
+- **EditMode-Tests** (Unity Test Framework): Look-Format mit denselben Fixtures wie der Viewer (v1, v2, unbekannte
+  IDs, neuere Version), Kanalwahl der Masken, JSON-Leser, erzeugte Prefabs.
+
+Das Projekt enthält Vorlagen für den späteren Einbau ins Spiel: `CubeEscape/RobotBody` (URP-Shader mit Zweitfarbe,
+Abzeichen, Leuchtlinien – dieselben Formeln wie Generator und Viewer), `CubeEscape/RobotScreen` (Augen/Display),
+`RobotLook` (Format 3 mit Migration), `RobotAppearance` (MaterialPropertyBlocks, Farben linear per `SetVector`),
+`RobotFace` (Atlas-Zellen, Ausdrucks-Stile, Flipbook, Blinzeln). Mit Cache dauert ein Lauf unter einer Minute; der
+erste Lauf lädt die Pakete und importiert alles (einige Minuten). Andere Ausgabe: `unity/run_testbed.sh output/_quick`.
+
 ## Unity-Integration (Empfehlung für später)
 
 **Import (alle FBX):** Scale Factor 1, *Convert Units* an, **Bake Axis Conversion an**, Normals *Import*, Tangents
-*Calculate Mikktspace*. Rig: **Generic**, Root node = `Root`. Modular-FBX und die FBX je Robotertyp nutzen dasselbe
+*Calculate Mikktspace*. Rig: **Generic**, Root node = `Root` (Pfad unter dem Armatur-Knoten). Der Armatur-Knoten trägt
+eine Drehung von 180° um die Hochachse: Unity übernimmt Blenders Vorderseite (−Y) sonst als −Z, egal welche
+Vorwärtsachse im FBX steht (gemessen im Testpaket); so schaut der Roboter nach +Z. Modular-FBX und die FBX je Robotertyp nutzen dasselbe
 Rig; die Clips aus der Haupt-FBX laufen darauf (gleiche Bone-Pfade, *Copy From Other Avatar*).
 
 **Clips:** 30 fps; *Loop Time* laut `ANIMATIONS.md`; *Root Transform Rotation/Position: Bake Into Pose* – außer bei
@@ -306,7 +337,7 @@ teilen. Animation-Events lassen sich direkt aus `clips.*.footsteps` und `clips.*
 |---|---|---|
 | `M_Robot` | URP/Lit (oder Shader Graph mit Farbmaske) | BaseColor, MetallicSmoothness (Metallic Alpha), Normal, Occlusion, Emission × 2–3 |
 | `M_RobotFabric` | URP/Lit | wie `M_Robot`, Base Color = Stofffarbe |
-| `M_RobotEyes` | URP/Particles/Unlit, Blending Additive | `T_Robot_EyeAtlas.png` (4×8 Zellen), Tiling 0.25/0.125, Offset = Atlas-Zelle des Ausdrucks, Farbe = Augenfarbe (HDR) |
+| `M_RobotEyes` | URP/Particles/Unlit, Blending Additive | `T_Robot_EyeAtlas.png` (4×10 Zellen), Tiling 0.25/0.1, Offset = Atlas-Zelle des Ausdrucks, Farbe = Augenfarbe (HDR) |
 | `M_RobotDisplay` | URP/Unlit | `T_Robot_DisplayAtlas.png` (4×4 Zellen), Tiling 0.25/0.2002, Offset = Motiv-Zelle, Farbe = Displayfarbe; animierte Motive aus `T_Robot_DisplayFlipbook.png` (8 Bilder je Zeile, `displayAnimations`: Zeile, Bilder, fps) |
 
 Die Masken (`T_Robot_BadgeMask*`, `T_Robot_LineMask*`, `T_Robot_ZoneMask*`) sind Daten: in Unity **sRGB aus**,

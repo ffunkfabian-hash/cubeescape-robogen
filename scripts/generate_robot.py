@@ -12,6 +12,9 @@ Test tiers (see TIERS): quick = small textures, QA of the standard robot only, n
 standard = medium textures, full QA, still renders (output/_standard); full = deliverables (output). Every run
 reports its step times in logs/robot_report.json and warns when the tier's time budget is exceeded.
 
+QA and preview renders are work packages run by worker processes (--workers, --render-workers) and then by the
+main process itself; see make_jobs() and JobQueue.
+
 Conventions (shared with the Cube Escape Blender pipeline):
     * 1 Blender unit = 1 m, robot stands on z = 0, origin between the feet.
     * The robot looks along -Y (Blender "Front" view). The FBX is exported with
@@ -48,7 +51,7 @@ import make_textures  # noqa: E402 - ImageMagick source textures
 import export_viewer  # noqa: E402 - data for the RobotViewer app
 
 LOG = logging.getLogger("robot")
-VERSION = "1.8.0"
+VERSION = "1.9.0"
 
 # ----------------------------------------------------------------------------------------------
 # Arguments and logging
@@ -58,9 +61,9 @@ VERSION = "1.8.0"
 # Test tiers: what a run checks and produces, and how long it may take (warning only).
 TIERS = {
     "quick": {"tex_size": 512, "preview_samples": 0.25, "ao_samples": 16, "qa_types": "Classic", "no_render": True, "no_anim_sheets": True,
-              "budget": 30},
+              "budget": 20},
     "standard": {"tex_size": 1024, "preview_samples": 0.25, "ao_samples": 32, "qa_types": "", "no_render": False, "no_anim_sheets": True,
-                 "budget": 120},
+                 "budget": 90},
     "full": {"tex_size": 2048, "preview_samples": 1.0, "ao_samples": 64, "qa_types": "", "no_render": False, "no_anim_sheets": False,
              "budget": 300},
 }
@@ -86,10 +89,22 @@ def parse_args():
                         help="also bake the default skin directly and compare it with the composed one")
     parser.add_argument("--bake-device", choices=["auto", "cpu", "gpu"], default="auto",
                         help="Cycles device for baking (auto = GPU if there is one)")
-    parser.add_argument("--qa-workers", type=int, default=max(1, min(8, (os.cpu_count() or 4) - 2)),
-                        help="parallel Blender processes for the type QA (default: cores - 2, at most 8)")
-    parser.add_argument("--qa-worker-out", default="", help=argparse.SUPPRESS)   # internal: QA worker mode
-    parser.add_argument("--src-dir", default="", help=argparse.SUPPRESS)         # internal: shared source textures
+    parser.add_argument("--workers", "--qa-workers", type=int, default=max(0, min(12, (os.cpu_count() or 4) - 1)),
+                        help="worker processes for QA and preview renders besides the main process (default: cores - 1, "
+                             "at most 12; 0 = everything in the main process)")
+    parser.add_argument("--render-workers", type=int, default=3,
+                        help="how many of the workers render (EEVEE on the one GPU; more than 3-4 hardly helps)")
+    parser.add_argument("--worker-threads", type=int, default=int(os.environ.get("ROBOT_QA_THREADS", "1")),
+                        help=argparse.SUPPRESS)
+    parser.add_argument("--render-threads", type=int, default=int(os.environ.get("ROBOT_RENDER_THREADS", "2")),
+                        help=argparse.SUPPRESS)
+    # internal: worker mode
+    parser.add_argument("--worker-queue", default="", help=argparse.SUPPRESS)
+    parser.add_argument("--worker-lanes", default="qa", help=argparse.SUPPRESS)
+    parser.add_argument("--worker-id", default="", help=argparse.SUPPRESS)
+    parser.add_argument("--use-textures", default="", help=argparse.SUPPRESS)  # baked textures of the main process
+    parser.add_argument("--uv-cache", default="", help=argparse.SUPPRESS)      # its UV cache
+    parser.add_argument("--src-dir", default="", help=argparse.SUPPRESS)       # its source textures and Previews
     args = parser.parse_args(argv)
     tier = TIERS[args.tier]
     if args.out is None:
@@ -507,6 +522,9 @@ def surface(k, scale):
     return vec, x, y, z, g, br, sc
 
 
+VISOR_ROUGHNESS, VISOR_METALLIC = 0.07, 0.15
+
+
 def build_materials():
     mats = {}
     atlas = make_textures.ATLAS
@@ -557,7 +575,7 @@ def build_materials():
 
     # Glossy black face visor.
     mat, k, b = new_material("Visor")
-    finish_material("Visor", mat, k, b, k.rgb((0.006, 0.007, 0.010)), k.value(0.07), k.value(0.15),
+    finish_material("Visor", mat, k, b, k.rgb((0.006, 0.007, 0.010)), k.value(VISOR_ROUGHNESS), k.value(VISOR_METALLIC),
                     k.rgb((0, 0, 0)), viewport=(0.01, 0.01, 0.012))
     mats["Visor"] = mat
 
@@ -1572,13 +1590,14 @@ def geometry_key(objs):
     return h.hexdigest()
 
 
-def unwrap(objs, cache_dir=None):
+def unwrap(objs, cache_dir=None, read=True, require=False):
     """One shared atlas for every part object (body materials only); eye screen and display keep fixed UVs.
     Blender's island packing is not deterministic, so with cache_dir the UVs of unchanged geometry are reused:
-    stable textures between runs, and the bake cache can hit."""
+    stable textures between runs, and the bake cache can hit. The cache is always written (read=False only skips
+    reading it): render workers take the main process's UVs from there (require: never unwrap). Returns True on a hit."""
     key = geometry_key(objs)
     cache_path = os.path.join(cache_dir, "uv_%s.npz" % key[:20]) if cache_dir else None
-    if cache_path and os.path.exists(cache_path):
+    if cache_path and (read or require) and os.path.exists(cache_path):
         with np.load(cache_path) as data:
             if all(o.name in data.files and len(data[o.name]) == len(o.data.loops) * 2 for o in objs):
                 for o in objs:
@@ -1590,7 +1609,9 @@ def unwrap(objs, cache_dir=None):
                     uv[perm] = data[o.name].reshape(-1, 2)
                     o.data.uv_layers[0].data.foreach_set("uv", uv.ravel())
                 LOG.info("  UV cache hit (%s)", key[:12])
-                return
+                return True
+    if require:
+        return False
     unwrap_fresh(objs)
     if cache_path:
         os.makedirs(cache_dir, exist_ok=True)
@@ -1606,6 +1627,7 @@ def unwrap(objs, cache_dir=None):
         tmp = cache_path + ".tmp.npz"
         np.savez_compressed(tmp, **arrays)
         os.replace(tmp, cache_path)
+    return False
 
 
 def unwrap_fresh(objs):
@@ -4071,13 +4093,13 @@ def write_animation_table(out, data=None):
         fh.write("\n".join(lines))
 
 
-def build_animations(arm_ob):
+def build_animations(arm_ob, quiet=False):
     solver = Solver(arm_ob)
     actions = {}
     for a in ANIMS:
         act, slot = write_action(arm_ob, solver, a.name, a.frames, a.fn, a.loop)
         actions[a.name] = act
-        LOG.info("  action %-15s %3d frames  loop=%-5s %s  (%s)", a.name, a.frames, a.loop, a.group, a.desc)
+        LOG.log(logging.DEBUG if quiet else logging.INFO, "  action %-15s %3d frames  loop=%-5s %s  (%s)", a.name, a.frames, a.loop, a.group, a.desc)
     # Unity-friendly default: rest pose action assigned last is Idle
     assign_action(arm_ob, actions["Idle"])
     # NLA tracks keep every action visible and editable in the .blend
@@ -4114,22 +4136,31 @@ def evaluated_coords(ob):
     dg = bpy.context.evaluated_depsgraph_get()
     ev = ob.evaluated_get(dg)
     me = ev.to_mesh()
-    co = np.empty(len(me.vertices) * 3, dtype=np.float64)
+    co = np.empty(len(me.vertices) * 3, dtype=np.float32)     # the native type: a plain copy, no conversion
     me.vertices.foreach_get("co", co)
     ev.to_mesh_clear()
     mw = np.array(ob.matrix_world)
-    co = co.reshape(-1, 3) @ mw[:3, :3].T + mw[:3, 3]
+    co = co.astype(np.float64).reshape(-1, 3) @ mw[:3, :3].T + mw[:3, 3]
     return co
 
 
-def group_topology(groups):
-    """Per vertex group: its vertex indices and its polygons in local indices - computed once per mesh."""
-    topo = {}
-    for g, polys in groups.items():
-        idx = sorted({i for p in polys for i in p})
-        remap = {o: n for n, o in enumerate(idx)}
-        topo[g] = (np.array(idx, dtype=np.int64), [[remap[i] for i in p] for p in polys])
-    return topo
+class Topology:
+    """Per vertex group: its vertex indices and its polygons in local indices - computed once per mesh. order/starts
+    list all groups' vertices back to back, so the bounding boxes of all groups are two numpy calls per frame."""
+
+    def __init__(self, groups):
+        self.groups = {}
+        for g, polys in groups.items():
+            idx = sorted({i for p in polys for i in p})
+            remap = {o: n for n, o in enumerate(idx)}
+            self.groups[g] = (np.array(idx, dtype=np.int64), [[remap[i] for i in p] for p in polys])
+        self.index = {g: i for i, g in enumerate(self.groups)}
+        self.order = np.concatenate([idx for idx, _ in self.groups.values()])
+        self.starts = np.cumsum([0] + [len(idx) for idx, _ in self.groups.values()])[:-1]
+
+    def pair_index(self, pairs):
+        return (np.array([self.index[a] for a, _ in pairs], dtype=np.int64),
+                np.array([self.index[b] for _, b in pairs], dtype=np.int64))
 
 
 class GroupTrees:
@@ -4141,22 +4172,26 @@ class GroupTrees:
 
     def __init__(self, co, topo):
         self.co, self.topo, self.trees = co, topo, {}
-        self.lo, self.hi = {}, {}
-        for g, (idx, _) in topo.items():
-            pts = co[idx]
-            self.lo[g] = pts.min(axis=0) - self.MARGIN
-            self.hi[g] = pts.max(axis=0) + self.MARGIN
+        pts = co[topo.order]
+        self.lo = np.minimum.reduceat(pts, topo.starts, axis=0) - self.MARGIN
+        self.hi = np.maximum.reduceat(pts, topo.starts, axis=0) + self.MARGIN
 
     def tree(self, g):
         t = self.trees.get(g)
         if t is None:
-            idx, polys = self.topo[g]
+            idx, polys = self.topo.groups[g]
             t = self.trees[g] = BVHTree.FromPolygons(self.co[idx].tolist(), polys)
         return t
 
-    def overlap(self, a, b):
-        if (self.lo[a] > self.hi[b]).any() or (self.lo[b] > self.hi[a]).any():
-            return False
+    def boxes_touch(self, ia, ib):
+        """Box test for many pairs at once (index arrays): False where the pair cannot overlap."""
+        return ~((self.lo[ia] > self.hi[ib]).any(axis=1) | (self.lo[ib] > self.hi[ia]).any(axis=1))
+
+    def overlap(self, a, b, boxes_checked=False):
+        if not boxes_checked:
+            ia, ib = self.topo.index[a], self.topo.index[b]
+            if (self.lo[ia] > self.hi[ib]).any() or (self.lo[ib] > self.hi[ia]).any():
+                return False
         return bool(self.tree(a).overlap(self.tree(b)))
 
 
@@ -4172,7 +4207,9 @@ HIDE_HELD_ITEM = {"Think", "LedgeGrab", "HangIdle", "ShimmyLeft", "ShimmyRight",
                   "LadderDown", "Vault", "PickUp", "TerminalTyping", "Clap", "Wave", "EdgeBalance"}
 
 
-def run_qa(ob, arm_ob, actions, report, label="Classic", quiet=False):
+def run_qa(ob, arm_ob, actions, label="Classic", quiet=False, clips=None):
+    """QA of one mesh over the given clips (default: all, in ANIMS order): rest-pose baseline once, then every
+    frame of every clip. Returns {"rest_min_z", "rest_height", "actions": {clip: entry}}."""
     scene = bpy.context.scene
     groups = group_faces(ob)
     bones = arm_ob.data.bones
@@ -4195,7 +4232,7 @@ def run_qa(ob, arm_ob, actions, report, label="Classic", quiet=False):
         pb.scale = (1, 1, 1)
     bpy.context.view_layer.update()
     rest_co = evaluated_coords(ob)
-    topo = group_topology(groups)
+    topo = Topology(groups)
     rest_trees = GroupTrees(rest_co, topo)
     baseline = set()
     for i, a in enumerate(names):
@@ -4206,15 +4243,18 @@ def run_qa(ob, arm_ob, actions, report, label="Classic", quiet=False):
     joints = [(a, b) for a in names for b in names if parent.get(a) == b and a != "Eyes"]
     qa = {"rest_min_z": float(rest_co[:, 2].min()), "rest_height": float(rest_co[:, 2].max() - rest_co[:, 2].min()),
           "actions": {}}
-    LOG.info("  [%s] rest pose: height %.3f m, min z %.4f m, baseline joint overlaps %d", label, qa["rest_height"],
-             qa["rest_min_z"], len(baseline))
+    LOG.log(logging.DEBUG if quiet else logging.INFO, "  [%s] rest pose: height %.3f m, min z %.4f m, baseline "
+            "joint overlaps %d", label, qa["rest_height"], qa["rest_min_z"], len(baseline))
     vgroup = np.empty(len(ob.data.vertices), dtype=object)
     for g, polys in groups.items():
         for poly in polys:
             vgroup[poly] = g
     foot_groups = {"L": "Foot_L", "R": "Foot_R"}
     foot_idx = {s: sorted({i for p in groups[foot_groups[s]] for i in p}) for s in foot_groups}
+    wanted = None if clips is None else set(clips)
     for name, frames, loop, fn, desc, *_ in ANIMS:
+        if wanted is not None and name not in wanted:
+            continue
         act = actions[name]
         assign_action(arm_ob, act)
         min_z = 1e9
@@ -4231,6 +4271,8 @@ def run_qa(ob, arm_ob, actions, report, label="Classic", quiet=False):
         joint_pairs = [(child, par) for child, par in joints
                        if (min(child, par), max(child, par)) in baseline or (child, par) in baseline or
                        (par, child) in baseline]
+        pa, pb = topo.pair_index(pairs)
+        ja, jb = topo.pair_index(joint_pairs)
         for f in range(0, frames + 1):
             scene.frame_set(f)
             co = evaluated_coords(ob)
@@ -4243,11 +4285,13 @@ def run_qa(ob, arm_ob, actions, report, label="Classic", quiet=False):
                 min_z = float(co[iz, 2])
                 min_z_where = "%s@%d" % (vgroup[iz], f)
             trees = GroupTrees(co, topo)
-            for a, b in pairs:
-                if trees.overlap(a, b):
+            for k in np.flatnonzero(trees.boxes_touch(pa, pb)):
+                a, b = pairs[k]
+                if trees.overlap(a, b, boxes_checked=True):
                     new_overlaps.setdefault("%s/%s" % (a, b), []).append(f)
-            for child, par in joint_pairs:
-                if not trees.overlap(child, par):
+            touch = trees.boxes_touch(ja, jb)
+            for k, (child, par) in enumerate(joint_pairs):
+                if not (touch[k] and trees.overlap(child, par, boxes_checked=True)):
                     detached.setdefault("%s/%s" % (child, par), []).append(f)
             feet_z = {s: float(co[foot_idx[s], 2].min()) for s in foot_idx}
             if all(z > 0.004 for z in feet_z.values()):
@@ -4271,15 +4315,23 @@ def run_qa(ob, arm_ob, actions, report, label="Classic", quiet=False):
             "stance_speed_mps": round(float(np.median(stance_speed)), 3) if stance_speed else None,
         }
         qa["actions"][name] = entry
-        lvl = logging.DEBUG if quiet else logging.INFO
-        if min_z < -0.006 or new_overlaps or detached or (loop and loop_err > 1e-4):
-            lvl = logging.WARNING
-        LOG.log(lvl, "  QA[%s] %-9s min_z=%+.4f (%s) overlaps=%s detached=%s flight=%d loop_err=%s speed=%s", label, name, min_z, min_z_where,
-                entry["new_overlaps"] or "-", entry["detached_joints"] or "-", flight_frames,
-                "-" if loop_err is None else "%.1e" % loop_err, entry["stance_speed_mps"])
+        log_qa_entry(label, name, entry, quiet)
     ad.action = saved
-    report.setdefault("qa", {})[label] = qa
     return qa
+
+
+def qa_problem(entry):
+    return entry["min_z"] < -0.006 or bool(entry["new_overlaps"]) or bool(entry["detached_joints"])
+
+
+def log_qa_entry(label, name, entry, quiet=False):
+    loop_err = entry["loop_error"]
+    lvl = logging.DEBUG if quiet else logging.INFO
+    if qa_problem(entry) or (entry["loop"] and loop_err > 1e-4):
+        lvl = logging.WARNING
+    LOG.log(lvl, "  QA[%s] %-9s min_z=%+.4f (%s) overlaps=%s detached=%s flight=%d loop_err=%s speed=%s", label, name,
+            entry["min_z"], entry["min_z_at"], entry["new_overlaps"] or "-", entry["detached_joints"] or "-",
+            entry["flight_frames"], "-" if loop_err is None else "%.1e" % loop_err, entry["stance_speed_mps"])
 
 
 def char_space(v):
@@ -4466,8 +4518,87 @@ def setup_render_scene(coll):
     return cam
 
 
+def preview_quality(exact):
+    """exact: the look of the deliverables (additive eyes, screen-space ray tracing). Otherwise the fast preview
+    look for the many small renders (skins, types, animation sheets, GIFs): opaque eyes, no ray tracing."""
+    set_fast_eyes(not exact)
+    bpy.context.scene.eevee.use_raytracing = exact
+
+
+FAST_EYE_NODES = ("FastEyes", "FastEyesBSDF", "FastVisor", "FastEyesMask", "FastEyesTransparent")
+
+
+def set_fast_eyes(on):
+    """The additive eye screen (Transparent + Emission, blended) is the only forward-rendered surface. EEVEE then
+    runs a second shadow update per sample and waits for a GPU read-back each time (ShadowModule::
+    shadow_update_finished) - measured: most of a preview render. Fast eyes are an opaque surface with the visor's
+    shading plus the same emission, cut out (dithered, binary) where the atlas is black: deferred only, about half
+    the render time and the same picture at preview size. The nodes are removed again before anything is saved."""
+    for mat in bpy.data.materials:
+        if not mat.name.startswith("M_RobotEyes") or mat.node_tree is None:
+            continue
+        nt = mat.node_tree
+        out = nt.nodes["Output"]
+        fast = nt.nodes.get("FastEyes")
+        if on and fast is None:
+            em = next(n for n in nt.nodes if n.type == "EMISSION")
+            tex = next(n for n in nt.nodes if n.type == "TEX_IMAGE")
+            visor = nt.nodes.new("ShaderNodeRGB")
+            visor.name = "FastVisor"
+            visor.outputs[0].default_value = (*PALETTE_DEFAULTS["visor"], 1.0)
+            bsdf = nt.nodes.new("ShaderNodeBsdfPrincipled")
+            bsdf.name = "FastEyesBSDF"
+            nt.links.new(visor.outputs[0], bsdf.inputs["Base Color"])
+            bsdf.inputs["Roughness"].default_value = VISOR_ROUGHNESS
+            bsdf.inputs["Metallic"].default_value = VISOR_METALLIC
+            nt.links.new(em.inputs["Color"].links[0].from_socket, bsdf.inputs["Emission Color"])
+            bsdf.inputs["Emission Strength"].default_value = em.inputs["Strength"].default_value
+            mask = nt.nodes.new("ShaderNodeMath")
+            mask.name = "FastEyesMask"
+            mask.operation = "GREATER_THAN"
+            mask.inputs[1].default_value = 0.002
+            nt.links.new(tex.outputs["Color"], mask.inputs[0])
+            tr = nt.nodes.new("ShaderNodeBsdfTransparent")
+            tr.name = "FastEyesTransparent"
+            fast = nt.nodes.new("ShaderNodeMixShader")
+            fast.name = "FastEyes"
+            nt.links.new(mask.outputs[0], fast.inputs[0])
+            nt.links.new(tr.outputs[0], fast.inputs[1])
+            nt.links.new(bsdf.outputs[0], fast.inputs[2])
+            nt.links.new(fast.outputs[0], out.inputs["Surface"])
+            mat.surface_render_method = "DITHERED"
+        elif not on and fast is not None:
+            add = next(n for n in nt.nodes if n.type == "ADD_SHADER")
+            nt.links.new(add.outputs[0], out.inputs["Surface"])
+            for name in FAST_EYE_NODES:
+                nt.nodes.remove(nt.nodes[name])
+            mat.surface_render_method = "BLENDED"
+
+
+def show_tool(visible):
+    tool = bpy.data.objects.get("Preview_Tool")
+    if tool is not None:
+        tool.hide_render = not visible
+
+
+def rest_pose(arm_ob):
+    arm_ob.animation_data.action = None
+    for pb in arm_ob.pose.bones:
+        pb.rotation_quaternion = (1, 0, 0, 0)
+        pb.location = (0, 0, 0)
+        pb.scale = (1, 1, 1)
+
+
+def render_still(path):
+    scene = bpy.context.scene
+    scene.render.filepath = path
+    bpy.ops.render.render(write_still=True)
+    return path
+
+
 def render_views(cam, out_dir, prefix="", res=1100):
     scene = bpy.context.scene
+    scene.eevee.taa_render_samples = preview_samples(64)
     scene.render.resolution_x = res
     scene.render.resolution_y = res
     scene.render.image_settings.file_format = "PNG"
@@ -4488,83 +4619,93 @@ def render_views(cam, out_dir, prefix="", res=1100):
             cam.data.lens = val
         cam.location = loc
         look_at(cam, target)
-        path = os.path.join(out_dir, "%s%s.png" % (prefix, name))
-        scene.render.filepath = path
-        bpy.ops.render.render(write_still=True)
-        paths[name] = path
-        LOG.info("  rendered %s", path)
+        paths[name] = render_still(os.path.join(out_dir, "%s%s.png" % (prefix, name)))
+        LOG.info("  rendered %s", paths[name])
     # small iso shot to judge readability at game distance
     scene.render.resolution_x = scene.render.resolution_y = 360
     cam.data.type = "ORTHO"
     cam.data.ortho_scale = 4.5
     cam.location = (-4.5, -4.5, 4.1)
     look_at(cam, (0, 0, 0.62))
-    path = os.path.join(out_dir, "%sdistance.png" % prefix)
-    scene.render.filepath = path
-    bpy.ops.render.render(write_still=True)
-    paths["distance"] = path
+    paths["distance"] = render_still(os.path.join(out_dir, "%sdistance.png" % prefix))
     return paths
 
 
-def render_anim_sheets(cam, arm_ob, actions, out_dir):
+SHEET_VIEWS = (("side", (5.0, -1.2, 0.9)), ("iso", (-4.0, -4.0, 3.6)))
+
+
+def sheet_picks(frames, loop):
+    return [round(i * frames / (6 if loop else 5)) for i in range(6)]
+
+
+def render_anim_rows(cam, arm_ob, actions, out_dir, name):
+    """Six frames of one clip from the side and from iso, each view as one labelled contact-sheet row (ImageMagick).
+    Returns {view: row file}; the frames themselves are deleted."""
     scene = bpy.context.scene
-    scene.eevee.taa_render_samples = preview_samples(24)
+    scene.eevee.taa_render_samples = preview_samples(12)     # 828 small frames: 12 samples look the same as 24
     scene.render.resolution_x = scene.render.resolution_y = 300
-    sheet_dir = os.path.join(out_dir, "anim_frames")
-    os.makedirs(sheet_dir, exist_ok=True)
+    frame_dir = os.path.join(out_dir, "anim_frames")
+    os.makedirs(frame_dir, exist_ok=True)
     cam.data.type = "ORTHO"
     cam.data.ortho_scale = 1.75
-    rows = []
-    for name, frames, loop, fn, desc, *_ in ANIMS:
-        assign_action(arm_ob, actions[name])
-        tool = bpy.data.objects.get("Preview_Tool")
-        if tool is not None:
-            tool.hide_render = name not in TOOL_CLIPS
-        picks = [round(i * frames / (6 if loop else 5)) for i in range(6)]
+    a = next(a for a in ANIMS if a.name == name)
+    assign_action(arm_ob, actions[name])
+    picks = sheet_picks(a.frames, a.loop)
+    rows = {}
+    for view, loc in SHEET_VIEWS:
+        cam.location = loc
+        look_at(cam, (0, -0.05, 0.6))
         files = []
-        for view, loc in (("side", (5.0, -1.2, 0.9)), ("iso", (-4.0, -4.0, 3.6))):
-            cam.location = loc
-            look_at(cam, (0, -0.05, 0.6))
-            for f in picks:
-                scene.frame_set(f)
-                p = os.path.join(sheet_dir, "%s_%s_%03d.png" % (name, view, f))
-                scene.render.filepath = p
-                bpy.ops.render.render(write_still=True)
-                files.append(p)
-        rows.append((name, files, picks))
-        LOG.info("  anim frames %s", name)
+        for f in picks:
+            scene.frame_set(f)
+            files.append(render_still(os.path.join(frame_dir, "%s_%s_%03d.png" % (name, view, f))))
+        rows[view] = os.path.join(frame_dir, "row_%s_%s.png" % (view, name))
+        args = ["montage"]
+        for p, fr in zip(files, picks):
+            args += ["-label", "%s  f%d" % (name, fr), p]
+        magick(*(args + ["-tile", "%dx1" % len(files), "-geometry", "+3+3", "-background", "#10161d", "-fill",
+                         "#d8e6f0", "-pointsize", "15", rows[view]]))
+        for p in files:
+            os.remove(p)
+    LOG.info("  anim frames %s", name)
     return rows
 
 
 def magick(*args):
-    exe = make_textures.find_magick()
-    subprocess.run([exe] + [str(a) for a in args], check=True, capture_output=True)
+    make_textures.run(make_textures.find_magick(), args)
 
 
 def build_contact_sheets(rows, out_dir):
-    """ImageMagick: one labelled row per animation, side and iso view."""
-    group_of = {a.name: a.group for a in ANIMS}
+    """ImageMagick: per group and view, the clip rows stacked (rows: clip -> {view: row file}), in parallel."""
+    tasks = []
     for group, view in [(g, v) for g in GROUPS for v in ("side", "iso")]:
-        row_files = []
-        for name, files, picks in rows:
-            if group_of[name] != group:
-                continue
-            sel = [f for f in files if "_%s_" % view in os.path.basename(f)]
-            row = os.path.join(out_dir, "anim_frames", "row_%s_%s.png" % (view, name))
-            args = ["montage"]
-            for f, fr in zip(sel, picks):
-                args += ["-label", "%s  f%d" % (name, fr), f]
-            args += ["-tile", "%dx1" % len(sel), "-geometry", "+3+3", "-background", "#10161d", "-fill", "#d8e6f0",
-                     "-pointsize", "15", row]
-            magick(*args)
-            row_files.append(row)
-        if not row_files:
-            continue
-        sheet = os.path.join(out_dir, "animations_%s_%s.png" % (group, view))
-        magick(*(row_files + ["-background", "#10161d", "-append", sheet]))
-        for r in row_files:
-            os.remove(r)
-        LOG.info("  contact sheet %s", sheet)
+        files = [rows[a.name][view] for a in ANIMS if a.group == group and a.name in rows]
+        if files:
+            tasks.append((files, os.path.join(out_dir, "animations_%s_%s.png" % (group, view))))
+
+    def append(task):
+        files, sheet = task
+        magick(*(files + ["-background", "#10161d", "-append", sheet]))
+        return sheet
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, min(8, os.cpu_count() or 4))) as pool:
+        for sheet in pool.map(append, tasks):
+            LOG.info("  contact sheet %s", sheet)
+    for views in rows.values():
+        for p in views.values():
+            os.remove(p)
+
+
+def montage_sheet(tiles, sheet, pointsize):
+    """tiles: [(label, file)] in sheet order; the tile files are deleted afterwards."""
+    args = ["montage"]
+    for label, p in tiles:
+        args += ["-label", label, p]
+    magick(*(args + ["-tile", "4x", "-geometry", "+3+3", "-background", "#10161d", "-fill", "#d8e6f0",
+                     "-pointsize", str(pointsize), sheet]))
+    for _, p in tiles:
+        os.remove(p)
+    LOG.info("  sheet %s", sheet)
 
 
 def set_look(ob, tex_dir, skin=DEFAULT_SKIN, expression="Normal", display="Status"):
@@ -4574,6 +4715,8 @@ def set_look(ob, tex_dir, skin=DEFAULT_SKIN, expression="Normal", display="Statu
         nt = mat.node_tree
         if mat.name.startswith("M_RobotEyes"):
             nt.nodes["EyeColor"].outputs[0].default_value = (*pal_["eye"], 1.0)
+            if "FastVisor" in nt.nodes:
+                nt.nodes["FastVisor"].outputs[0].default_value = (*pal_["visor"], 1.0)
             set_atlas_cell(mat, "eyes", EXPRESSION_INDEX[expression])
         elif mat.name.startswith("M_RobotDisplay"):
             nt.nodes["DisplayColor"].outputs[0].default_value = (*pal_["screen"], 1.0)
@@ -4591,7 +4734,8 @@ def set_look(ob, tex_dir, skin=DEFAULT_SKIN, expression="Normal", display="Statu
                                                     check_existing=True)
 
 
-def render_expressions(cam, ob, out_dir, tex_dir):
+def render_expressions(cam, ob, out_dir, tex_dir, names):
+    """Close-up of the face per expression; returns [(name, file)]."""
     scene = bpy.context.scene
     scene.eevee.taa_render_samples = preview_samples(32)
     scene.render.resolution_x = scene.render.resolution_y = 300
@@ -4600,29 +4744,26 @@ def render_expressions(cam, ob, out_dir, tex_dir):
     cam.location = (0.0, -1.6, 1.12)
     look_at(cam, (0, 0, 1.11))
     tiles = []
-    for name in make_textures.EXPRESSIONS:
+    for name in names:
         set_look(ob, tex_dir, expression=name)
-        p = os.path.join(out_dir, "expr_%s.png" % name)
-        scene.render.filepath = p
-        bpy.ops.render.render(write_still=True)
-        tiles += ["-label", name, p]
+        tiles.append((name, render_still(os.path.join(out_dir, "expr_%s.png" % name))))
     set_look(ob, tex_dir)
-    sheet = os.path.join(out_dir, "expressions.png")
-    magick("montage", *tiles, "-tile", "4x", "-geometry", "+3+3", "-background", "#10161d", "-fill", "#d8e6f0",
-           "-pointsize", "18", sheet)
-    for i in range(2, len(tiles), 3):
-        os.remove(tiles[i])
-    LOG.info("  expressions sheet %s", sheet)
+    return tiles
 
 
-def render_types(cam, part_objs, robot_mesh, coll, out_dir, tex_dir):
-    """Every robot type (variants + skin + eyes + display + accessories), front and iso."""
+SHEET_CAMERAS = {"front": ((0, -6, 0.66), 1.5), "iso": ((-4.5, -4.5, 4.1), 1.7)}
+TYPE_CAMERAS = {"front": ((0, -6, 0.70), 1.62), "iso": ((-4.5, -4.5, 4.2), 1.85)}
+
+
+def render_types(cam, part_objs, robot_mesh, out_dir, tex_dir, names):
+    """Every robot type (variants + skin + eyes + display + accessories), front and iso; returns {view: [(name, file)]}."""
     scene = bpy.context.scene
     scene.eevee.taa_render_samples = preview_samples(48)
     scene.render.resolution_x = scene.render.resolution_y = 520
     robot_mesh.hide_render = True
     tiles = {"front": [], "iso": []}
-    for tname, spec in ROBOT_TYPES.items():
+    for tname in names:
+        spec = ROBOT_TYPES[tname]
         cfg = default_config()
         cfg.update(spec["variants"])
         objs = [part_objs[g] for g in config_groups(cfg)]
@@ -4630,86 +4771,61 @@ def render_types(cam, part_objs, robot_mesh, coll, out_dir, tex_dir):
             o.hide_render = False
         for o in objs:
             set_look(o, tex_dir, spec["skin"], spec["expression"], spec["display"])
-        for view, loc, val in (("front", (0, -6, 0.70), 1.62), ("iso", (-4.5, -4.5, 4.2), 1.85)):
+        for view, (loc, val) in TYPE_CAMERAS.items():
             cam.data.type = "ORTHO"
             cam.data.ortho_scale = val
             cam.location = loc
             look_at(cam, (0, 0, 0.70))
-            p = os.path.join(out_dir, "type_%s_%s.png" % (tname, view))
-            scene.render.filepath = p
-            bpy.ops.render.render(write_still=True)
-            tiles[view] += ["-label", tname, p]
+            tiles[view].append((tname, render_still(os.path.join(out_dir, "type_%s_%s.png" % (tname, view)))))
         for o in objs:
             o.hide_render = True
             set_look(o, tex_dir)
     robot_mesh.hide_render = False
-    for view, files in tiles.items():
-        sheet = os.path.join(out_dir, "types.png" if view == "front" else "types_iso.png")
-        magick("montage", *files, "-tile", "4x", "-geometry", "+3+3", "-background", "#10161d", "-fill", "#d8e6f0",
-               "-pointsize", "22", sheet)
-        for i in range(2, len(files), 3):
-            os.remove(files[i])
-        LOG.info("  robot types sheet %s", sheet)
+    return tiles
 
 
-def render_skins(cam, ob, out_dir, tex_dir):
-    """Front + iso render per skin (texture swap on M_Robot), combined with ImageMagick."""
+def render_skins(cam, ob, out_dir, tex_dir, names):
+    """Front + iso render per skin (texture swap on M_Robot); returns {view: [(skin, file)]}."""
     scene = bpy.context.scene
     scene.eevee.taa_render_samples = preview_samples(48)
     scene.render.resolution_x = scene.render.resolution_y = 520
-    nodes = ob.data.materials[0].node_tree.nodes
-    base = next(n for n in nodes if n.type == "TEX_IMAGE" and n.image.name.startswith("T_Robot_BaseColor"))
-    emit = next(n for n in nodes if n.type == "TEX_IMAGE" and n.image.name.startswith("T_Robot_Emission"))
-    orig = (base.image, emit.image)
     tiles = {"front": [], "iso": []}
-    for skin in SKINS:
+    for skin in names:
         set_look(ob, tex_dir, skin)
-        for view, kind, loc, val in (("front", "ORTHO", (0, -6, 0.66), 1.5), ("iso", "ORTHO", (-4.5, -4.5, 4.1), 1.7)):
-            cam.data.type = kind
+        for view, (loc, val) in SHEET_CAMERAS.items():
+            cam.data.type = "ORTHO"
             cam.data.ortho_scale = val
             cam.location = loc
             look_at(cam, (0, 0, 0.64))
-            p = os.path.join(out_dir, "skin_%s_%s.png" % (skin, view))
-            scene.render.filepath = p
-            bpy.ops.render.render(write_still=True)
-            tiles[view] += ["-label", skin, p]
+            tiles[view].append((skin, render_still(os.path.join(out_dir, "skin_%s_%s.png" % (skin, view)))))
     set_look(ob, tex_dir)
-    for view, files in tiles.items():
-        sheet = os.path.join(out_dir, "skins.png" if view == "front" else "skins_iso.png")
-        magick("montage", *files, "-tile", "4x", "-geometry", "+3+3", "-background", "#10161d", "-fill", "#d8e6f0",
-               "-pointsize", "22", sheet)
-        for i in range(2, len(files), 3):
-            os.remove(files[i])
-        LOG.info("  skins sheet %s", sheet)
+    return tiles
 
 
-def render_gifs(cam, arm_ob, actions, out_dir):
+GIF_CLIPS = (("Idle", 2), ("Walk", 1), ("Run", 1), ("DanceRobot", 2), ("Celebrate", 1))
+
+
+def render_gif(cam, arm_ob, actions, out_dir, name, step):
     scene = bpy.context.scene
-    scene.eevee.taa_render_samples = preview_samples(16)
+    scene.eevee.taa_render_samples = preview_samples(12)
     scene.render.resolution_x = scene.render.resolution_y = 320
     cam.data.type = "ORTHO"
     cam.data.ortho_scale = 1.75
     cam.location = (-4.0, -4.0, 3.6)
     look_at(cam, (0, -0.05, 0.6))
-    tmp = os.path.join(out_dir, "anim_frames", "gif")
+    tmp = os.path.join(out_dir, "anim_frames", "gif_" + name)
     os.makedirs(tmp, exist_ok=True)
-    for name, step in (("Idle", 2), ("Walk", 1), ("Run", 1), ("DanceRobot", 2), ("Celebrate", 1)):
-        act = actions[name]
-        assign_action(arm_ob, act)
-        n = int(act.frame_range[1])
-        files = []
-        for f in range(0, n, step):
-            scene.frame_set(f)
-            p = os.path.join(tmp, "%s_%03d.png" % (name, f))
-            scene.render.filepath = p
-            bpy.ops.render.render(write_still=True)
-            files.append(p)
-        gif = os.path.join(out_dir, "anim_%s.gif" % name)
-        magick("-delay", "%dx%d" % (step, FPS), "-loop", "0", *files, "-layers", "Optimize", gif)
-        for p in files:
-            os.remove(p)
-        LOG.info("  gif %s", gif)
-    os.rmdir(tmp)
+    act = actions[name]
+    assign_action(arm_ob, act)
+    files = []
+    for f in range(0, int(act.frame_range[1]), step):
+        scene.frame_set(f)
+        files.append(render_still(os.path.join(tmp, "%s_%03d.png" % (name, f))))
+    gif = os.path.join(out_dir, "anim_%s.gif" % name)
+    magick("-delay", "%dx%d" % (step, FPS), "-loop", "0", *files, "-layers", "Optimize", gif)
+    shutil.rmtree(tmp)
+    LOG.info("  gif %s", gif)
+    return gif
 
 
 # ----------------------------------------------------------------------------------------------
@@ -4757,47 +4873,269 @@ def export_fbx(path, objs, arm_ob, animations=True):
 # ----------------------------------------------------------------------------------------------
 
 
-def qa_robot_type(tname, part_objs, coll, arm_ob, actions, report):
-    cfg = default_config()
-    cfg.update(ROBOT_TYPES[tname]["variants"])
-    tmp = combine_objects([part_objs[g] for g in config_groups(cfg)], "QA_" + tname, coll)
-    bind_mesh(tmp, arm_ob)
-    run_qa(tmp, arm_ob, actions, report, tname, quiet=True)
-    bpy.data.objects.remove(tmp, do_unlink=True)
+# ---------------------------------- work packages and worker processes ----------------------------------
+# After the model is built, the QA and all preview renders are work packages in a queue. Worker processes
+# (Blender, each rebuilding the model from the same code) and, once its own steps are done, the main process take
+# them first come, first served. QA workers start before the bake (they only need geometry and animation), render
+# workers right after it (they take the UVs from the cache and load the baked textures). Results are merged in a
+# fixed order, so the report does not depend on who ran what.
+
+STILL_JOBS = ("views", "skins", "expressions", "types")
+EXACT_JOBS = ("views", "expressions")       # the deliverable look; everything else uses the fast preview look
 
 
-def start_qa_workers(type_names, args, out):
-    """The type QA in parallel: each worker is a Blender process that rebuilds the model (no bake, no render -
-    the QA only looks at geometry and animation) and checks a share of the robot types."""
-    n = min(args.qa_workers, len(type_names))
-    workers = []
-    for i in range(n):
-        chunk = type_names[i::n]
-        wdir = os.path.join(out, "logs", "qa_worker_%d" % i)
-        os.makedirs(wdir, exist_ok=True)
-        res = os.path.join(wdir, "qa.json")
-        if os.path.exists(res):
-            os.remove(res)
-        cmd = [bpy.app.binary_path, "-b", "--factory-startup", "-noaudio", "--python-exit-code", "1",
-               "--python", os.path.abspath(__file__), "--", "--out", wdir, "--src-dir", out, "--skip-bake",
-               "--no-render", "--qa-types", ",".join(chunk), "--qa-worker-out", res, "--qa-workers", "1"]
+def chunks(items, n):
+    return [items[i:i + n] for i in range(0, len(items), n)]
+
+
+def make_jobs(type_names, actions_available, args, n_proc):
+    """QA: one package per robot type and clip group (big groups split so that every process gets work even if only
+    the Classic robot is checked). Renders: views, skins, expressions and types in chunks, one package per clip for
+    the animation sheets and per GIF. Each lane is sorted by estimated cost, biggest first."""
+    jobs = []
+    all_types = ["Classic"] + type_names
+    total = sum(a.frames + 1 for a in ANIMS) * len(all_types)
+    limit = max(120, -(-total // (2 * n_proc)))
+    for t in all_types:
+        for g in GROUPS:
+            part, size, k = [], 0, 0
+            for a in [a for a in ANIMS if a.group == g] + [None]:
+                if part and (a is None or size + a.frames + 1 > limit):
+                    jobs.append({"id": "qa:%s:%s:%d" % (t, g, k), "lane": "qa", "kind": "qa", "type": t,
+                                 "clips": [c.name for c in part], "cost": size})
+                    part, size, k = [], 0, k + 1
+                if a is not None:
+                    part.append(a)
+                    size += a.frames + 1
+    if not args.no_render:
+        def render(kind, key, cost, **kw):
+            jobs.append(dict(id="%s:%s" % (kind, key), lane="render", kind=kind, cost=cost, **kw))
+        render("views", "all", 7 * 64 * 3)
+        for i, names in enumerate(chunks(list(SKINS), 5)):
+            render("skins", i, len(names) * 2 * 48, names=names)
+        for i, names in enumerate(chunks(list(make_textures.EXPRESSIONS), 14)):
+            render("expressions", i, len(names) * 32 * 3, names=names)
+        for i, names in enumerate(chunks(list(ROBOT_TYPES), 4)):
+            render("types", i, len(names) * 2 * 48, names=names)
+        if not args.no_anim_sheets:
+            for a in ANIMS:
+                render("sheet", a.name, 2 * 6 * 12, clip=a.name)
+            for name, step in GIF_CLIPS:
+                if name in actions_available:
+                    frames = next(a.frames for a in ANIMS if a.name == name)
+                    render("gif", name, -(-frames // step) * 12, clip=name, step=step)
+    jobs.sort(key=lambda j: -j["cost"])
+    return jobs
+
+
+class JobQueue:
+    """A folder: jobs.json lists the packages; a process claims package n by creating claim_<n> exclusively and
+    writes res_<n>.json when it is done."""
+
+    def __init__(self, path):
+        self.path = path
+        with open(os.path.join(path, "jobs.json"), encoding="utf-8") as fh:
+            self.jobs = json.load(fh)
+
+    @staticmethod
+    def create(path, jobs):
+        shutil.rmtree(path, ignore_errors=True)
+        os.makedirs(path)
+        with open(os.path.join(path, "jobs.json"), "w", encoding="utf-8") as fh:
+            json.dump(jobs, fh)
+        return JobQueue(path)
+
+    def claim(self, i):
+        try:
+            fd = os.open(os.path.join(self.path, "claim_%d" % i), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        except FileExistsError:
+            return False
+        os.write(fd, str(os.getpid()).encode())
+        os.close(fd)
+        return True
+
+    def work(self, ctx, lanes, who):
+        """Runs unclaimed packages of the given lanes (in lane order) until none is left; returns (count, seconds)."""
+        count, busy = 0, 0.0
+        for lane in lanes:
+            for i, job in enumerate(self.jobs):
+                if job["lane"] != lane or not self.claim(i):
+                    continue
+                t0 = time.time()
+                result = run_job(ctx, job)
+                dt = time.time() - t0
+                count, busy = count + 1, busy + dt
+                LOG.debug("  [%s] %s %.1fs", who, job["id"], dt)
+                tmp = os.path.join(self.path, "res_%d.tmp" % i)
+                with open(tmp, "w", encoding="utf-8") as fh:
+                    json.dump({"result": result, "seconds": round(dt, 2), "by": who}, fh)
+                os.replace(tmp, os.path.join(self.path, "res_%d.json" % i))
+        return count, busy
+
+    def results(self):
+        out = []
+        for i, job in enumerate(self.jobs):
+            path = os.path.join(self.path, "res_%d.json" % i)
+            if not os.path.exists(path):
+                raise RuntimeError("work package %s has no result" % job["id"])
+            with open(path, encoding="utf-8") as fh:
+                out.append((job, json.load(fh)))
+        return out
+
+
+class JobContext:
+    """What a package needs from the built model; QA meshes and the preview scene are made on first use."""
+
+    def __init__(self, part_objs, coll, preview_coll, arm_ob, actions, robot_mesh, preview_dir, tex_dir):
+        self.part_objs, self.coll, self.preview_coll = part_objs, coll, preview_coll
+        self.arm_ob, self.actions, self.robot_mesh = arm_ob, actions, robot_mesh
+        self.preview_dir, self.tex_dir = preview_dir, tex_dir
+        self.qa_meshes = {}
+
+    def camera(self):
+        cam = bpy.data.objects.get("Preview_Camera") or setup_render_scene(self.preview_coll)
+        bpy.context.scene.camera = cam
+        return cam
+
+    def qa_mesh(self, tname):
+        """One QA mesh at a time: every mesh in the view layer is evaluated on each frame change."""
+        ob = self.qa_meshes.get(tname)
+        if ob is None:
+            for other in self.qa_meshes.values():
+                bpy.data.objects.remove(other, do_unlink=True)
+            self.qa_meshes.clear()
+            cfg = default_config()
+            cfg.update(ROBOT_TYPES[tname]["variants"])
+            ob = combine_objects([self.part_objs[g] for g in config_groups(cfg)], "QA_" + tname, self.coll)
+            bind_mesh(ob, self.arm_ob)
+            self.qa_meshes[tname] = ob
+        return ob
+
+    def cleanup(self):
+        """Back to the state the .blend is saved in."""
+        for ob in self.qa_meshes.values():
+            bpy.data.objects.remove(ob, do_unlink=True)
+        self.qa_meshes.clear()
+        set_fast_eyes(False)
+        bpy.context.scene.eevee.use_raytracing = True
+        show_tool(False)
+
+
+def run_job(ctx, job):
+    kind = job["kind"]
+    if kind == "qa":
+        return run_qa(ctx.qa_mesh(job["type"]), ctx.arm_ob, ctx.actions, job["type"], quiet=True, clips=job["clips"])
+    cam = ctx.camera()
+    preview_quality(kind in EXACT_JOBS)
+    show_tool(kind == "sheet" and job["clip"] in TOOL_CLIPS)
+    if kind in STILL_JOBS:
+        rest_pose(ctx.arm_ob)
+    if kind == "views":
+        return render_views(cam, ctx.preview_dir)
+    if kind == "skins":
+        return render_skins(cam, ctx.robot_mesh, ctx.preview_dir, ctx.tex_dir, job["names"])
+    if kind == "expressions":
+        return render_expressions(cam, ctx.robot_mesh, ctx.preview_dir, ctx.tex_dir, job["names"])
+    if kind == "types":
+        return render_types(cam, ctx.part_objs, ctx.robot_mesh, ctx.preview_dir, ctx.tex_dir, job["names"])
+    if kind == "sheet":
+        return render_anim_rows(cam, ctx.arm_ob, ctx.actions, ctx.preview_dir, job["clip"])
+    if kind == "gif":
+        return render_gif(cam, ctx.arm_ob, ctx.actions, ctx.preview_dir, job["clip"], job["step"])
+    raise ValueError("unknown work package %s" % job["id"])
+
+
+def start_workers(first, n, lanes, args, out, queue, textures=None):
+    """n Blender processes that rebuild the model (no bake: QA workers skip textures, render workers load the baked
+    ones and the cached UVs) and then work on the queue."""
+    procs = []
+    for i in range(first, first + n):
+        wdir = os.path.join(out, "logs", "worker_%d" % i)
+        shutil.rmtree(wdir, ignore_errors=True)
+        os.makedirs(wdir)
+        threads = args.worker_threads if lanes[0] == "qa" else args.render_threads
+        cmd = [bpy.app.binary_path, "-b", "--factory-startup", "-noaudio", "-t", str(threads), "--python-exit-code", "1",
+               "--python", os.path.abspath(__file__), "--", "--tier", args.tier, "--out", wdir, "--src-dir", out,
+               "--worker-queue", queue.path, "--worker-lanes", ",".join(lanes), "--worker-id", str(i)]
+        cmd += ["--use-textures", textures, "--uv-cache", os.path.join(out, "cache")] if textures else ["--skip-bake"]
         if args.groups:
             cmd += ["--groups", args.groups]
-        proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        workers.append((chunk, wdir, res, proc))
-    LOG.info("  %d QA workers for %d robot types", n, len(type_names))
-    return workers
+        # niced: the main process's own steps (clip data, export) are the critical path while the workers run
+        procs.append((i, wdir, subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                                preexec_fn=(lambda: os.nice(10)) if hasattr(os, "nice") else None)))
+    if n:
+        LOG.info("  started %d %s worker(s)", n, "/".join(lanes))
+    return procs
 
 
-def collect_qa_workers(workers, report):
-    for chunk, wdir, res, proc in workers:
+def wait_workers(procs):
+    stats = {}
+    for i, wdir, proc in procs:
         code = proc.wait()
-        if code != 0 or not os.path.exists(res):
-            raise RuntimeError("QA worker for %s failed (exit %s), log: %s" % (
-                ", ".join(chunk), code, os.path.join(wdir, "logs", "generate_robot.log")))
-        with open(res, encoding="utf-8") as fh:
-            report.setdefault("qa", {}).update(json.load(fh))
+        log = os.path.join(wdir, "logs", "generate_robot.log")
+        if code != 0:
+            raise RuntimeError("worker %d failed (exit %s), log: %s" % (i, code, log))
+        with open(os.path.join(wdir, "worker.json"), encoding="utf-8") as fh:
+            stats["worker_%d" % i] = json.load(fh)
         shutil.rmtree(wdir, ignore_errors=True)
+    return stats
+
+
+def merge_qa(results, type_names):
+    """QA package results -> {type: {rest_min_z, rest_height, actions in clip order}} for Classic + type_names."""
+    parts = collections.defaultdict(list)
+    for job, res in results:
+        if job["kind"] == "qa":
+            parts[job["type"]].append(res["result"])
+    qa = {}
+    for t in ["Classic"] + type_names:
+        rest = {(r["rest_min_z"], r["rest_height"]) for r in parts[t]}
+        if len(rest) != 1:
+            raise RuntimeError("QA packages of %s disagree on the rest pose: %s" % (t, rest))
+        actions = {}
+        for r in parts[t]:
+            actions.update(r["actions"])
+        missing = [a.name for a in ANIMS if a.name not in actions]
+        if missing:
+            raise RuntimeError("QA of %s is missing clips %s" % (t, missing))
+        min_z, height = rest.pop()
+        qa[t] = {"rest_min_z": min_z, "rest_height": height, "actions": {a.name: actions[a.name] for a in ANIMS}}
+    return qa
+
+
+def finish_previews(results, preview_dir, report):
+    """Sheets from the render packages, always in the same order (skins, expressions, types, contact sheets)."""
+    by_kind = collections.defaultdict(list)
+    for job, res in results:
+        by_kind[job["kind"]].append((job, res["result"]))
+    if by_kind["views"]:
+        report["previews"] = by_kind["views"][0][1]
+    tiles = collections.defaultdict(dict)
+    for kind in ("skins", "types"):
+        for _, res in by_kind[kind]:
+            for view, items in res.items():
+                tiles[(kind, view)].update(dict(items))
+    for _, res in by_kind["expressions"]:
+        tiles[("expressions", "front")].update(dict(res))
+    sheets = []
+    for (kind, view), names in ((("skins", "front"), list(SKINS)), (("skins", "iso"), list(SKINS)),
+                                (("expressions", "front"), list(make_textures.EXPRESSIONS)),
+                                (("types", "front"), list(ROBOT_TYPES)), (("types", "iso"), list(ROBOT_TYPES))):
+        if tiles[(kind, view)]:
+            name = {"skins": "skins", "types": "types", "expressions": "expressions"}[kind]
+            sheet = os.path.join(preview_dir, "%s%s.png" % (name, "" if view == "front" else "_iso"))
+            sheets.append(([(n, tiles[(kind, view)][n]) for n in names], sheet, 18 if kind == "expressions" else 22))
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(sheets) or 1) as pool:
+        list(pool.map(lambda t: montage_sheet(*t), sheets))
+    if by_kind["sheet"]:
+        build_contact_sheets({job["clip"]: rows for job, rows in by_kind["sheet"]}, preview_dir)
+    frames_dir = os.path.join(preview_dir, "anim_frames")
+    if os.path.isdir(frames_dir):
+        shutil.rmtree(frames_dir)
+
+
+def textures_in(tex_dir):
+    return {fn: os.path.join(tex_dir, fn) for fn in os.listdir(tex_dir) if fn.endswith(".png")}
 
 
 def main():
@@ -4808,12 +5146,14 @@ def main():
     t_start = time.time()
     global PREVIEW_SAMPLE_SCALE
     PREVIEW_SAMPLE_SCALE = args.preview_samples
-    worker = bool(args.qa_worker_out)
+    worker = bool(args.worker_queue)
     LOG.info("Cube Escape robot generator %s | Blender %s | stage=%s | tier=%s%s", VERSION, bpy.app.version_string,
-             args.stage, args.tier, " (QA worker)" if worker else "")
+             args.stage, args.tier, " (worker %s: %s)" % (args.worker_id, args.worker_lanes) if worker else "")
     report = {"generator": VERSION, "blender": bpy.app.version_string, "stage": args.stage, "tier": args.tier}
-    preview_dir = os.path.join(out, "Previews")
-    tex_dir = os.path.join(out, "Textures")
+    load_start = os.getloadavg()[0]     # times are only comparable on an otherwise idle machine
+    preview_dir = os.path.join(out, "Previews") if not worker else os.path.join(args.src_dir, "Previews")
+    tex_dir = args.use_textures or os.path.join(out, "Textures")
+    cache_dir = os.path.join(out, "cache")
     os.makedirs(preview_dir, exist_ok=True)
 
     with Step("scene"):
@@ -4822,7 +5162,7 @@ def main():
         preview_coll = get_collection("Preview")
     with Step("ImageMagick source textures"):
         src_paths = make_textures.make_all(os.path.join(args.src_dir or out, "SourceTextures"), log=LOG.info,
-                                           cache=not args.no_cache)
+                                           cache=not args.no_cache or worker)
         load_source_textures(src_paths)
         report["source_textures"] = sorted(os.path.basename(p) for p in src_paths.values())
     with Step("materials"):
@@ -4839,30 +5179,62 @@ def main():
         report["part_objects"] = {k: tri_count(o.data) for k, o in part_objs.items()}
         LOG.info("  %d parts in %d objects; slots: %s", report["parts"], len(part_objs),
                  ", ".join("%s=%s" % (k, "/".join(v)) for k, v in SLOTS.items()))
-    with Step("uv"):
-        unwrap(list(part_objs.values()), None if args.no_cache else os.path.join(out, "cache"))
+    if args.groups:
+        keep = set(args.groups.split(",")) | {"Basis"}
+        ANIMS[:] = [a for a in ANIMS if a.group in keep]
+        LOG.warning("animation filter: %s (%d clips)", sorted(keep), len(ANIMS))
+    with Step("uv") if not (worker and args.skip_bake) else _Skip():
+        if worker and args.skip_bake:
+            raise _SkipBlock()          # the QA does not look at UVs
+        if worker:
+            if not unwrap(list(part_objs.values()), args.uv_cache, require=True):
+                raise RuntimeError("render worker: no cached UVs in %s" % args.uv_cache)
+        else:
+            unwrap(list(part_objs.values()), cache_dir, read=not args.no_cache)
 
-    if args.skip_bake:
+    queue, procs = None, []
+    if not worker and args.stage == "full":
+        only = set(filter(None, args.qa_types.split(",")))
+        type_names = [t for t in ROBOT_TYPES if t != "Classic" and (not only or t in only)]
+        jobs = make_jobs(type_names, {a.name for a in ANIMS}, args, args.workers + 1)
+        queue = JobQueue.create(os.path.join(out, "logs", "jobs"), jobs)
+        n_qa_jobs = sum(j["lane"] == "qa" for j in jobs)
+        has_render = any(j["lane"] == "render" for j in jobs)
+        n_render = min(args.render_workers, args.workers if args.workers < 2 else args.workers - 1) if has_render else 0
+        # about 600 QA frames (2-3 s) per worker at least: a worker costs 2 s to start and slows the main process
+        qa_frames = sum(j["cost"] for j in jobs if j["lane"] == "qa")
+        n_qa = min(args.workers - n_render, n_qa_jobs, max(1, qa_frames // 600))
+        report["workers"] = {"qa": n_qa, "render": n_render, "packages": len(jobs)}
+        with Step("start QA workers"):
+            procs += start_workers(0, n_qa, ["qa"], args, out, queue)
+
+    if args.skip_bake and not args.use_textures and not worker:
         LOG.warning("skip-bake: procedural materials only (debug run)")
     with Step("bake textures") if not args.skip_bake else _Skip():
         if args.skip_bake:
             raise _SkipBlock()
-        tex_paths = bake_textures(list(part_objs.values()), mats, args.tex_size, args.ao_samples, tex_dir,
-                                  None if args.no_cache else os.path.join(out, "cache"), args.check_compose,
-                                  args.bake_device)
+        if args.use_textures:
+            tex_paths = textures_in(args.use_textures)
+        else:
+            tex_paths = bake_textures(list(part_objs.values()), mats, args.tex_size, args.ao_samples, tex_dir,
+                                      None if args.no_cache else cache_dir, args.check_compose, args.bake_device)
         final = [build_baked_material(tex_paths), build_baked_material(tex_paths, "M_RobotFabric",
                                                                         SKINS[DEFAULT_SKIN]["fabric"]),
                  mats["EyeScreen"], mats["Display"]]
         for o in part_objs.values():
             remap_materials(o, final)
         report["textures"] = sorted(os.path.basename(p) for p in tex_paths.values())
+    if queue is not None and report["workers"]["render"]:
+        with Step("start render workers"):
+            procs += start_workers(len(procs), report["workers"]["render"], ["render", "qa"], args, out, queue,
+                                   textures=tex_dir)
     with Step("default mesh"):
         robot_mesh = combine_objects([part_objs[g] for g in config_groups(default_config())], "Robot_Mesh", coll)
         report["triangles"] = tri_count(robot_mesh.data)
         report["vertices"] = len(robot_mesh.data.vertices)
         report["materials"] = [m.name for m in robot_mesh.data.materials]
-        LOG.info("  Robot_Mesh (default look): %d triangles, %d vertices, materials %s", report["triangles"],
-                 report["vertices"], report["materials"])
+        LOG.log(logging.DEBUG if worker else logging.INFO, "  Robot_Mesh (default look): %d triangles, %d vertices, "
+                "materials %s", report["triangles"], report["vertices"], report["materials"])
         for o in part_objs.values():
             o.hide_render = True
             o.hide_set(True)
@@ -4881,37 +5253,20 @@ def main():
         add_preview_tool(arm_ob, preview_coll)
         report["bones"] = [b.name for b in arm_ob.data.bones]
     with Step("animations"):
-        if args.groups:
-            keep = set(args.groups.split(",")) | {"Basis"}
-            ANIMS[:] = [a for a in ANIMS if a.group in keep]
-            LOG.warning("animation filter: %s (%d clips)", sorted(keep), len(ANIMS))
-        actions = build_animations(arm_ob)
-        write_animation_table(out)
+        actions = build_animations(arm_ob, quiet=worker)
         report["animations"] = {a.name: {"frames": a.frames, "loop": a.loop, "description": a.desc, "group": a.group,
                                          "unity": a.unity} for a in ANIMS}
-    with Step("qa"):
-        only = set(filter(None, args.qa_types.split(",")))
-        type_names = [t for t in ROBOT_TYPES if t != "Classic" and (not only or t in only)]
-        if worker:
-            for tname in type_names:
-                qa_robot_type(tname, part_objs, coll, arm_ob, actions, report)
-            with open(args.qa_worker_out, "w", encoding="utf-8") as fh:
-                json.dump({t: report["qa"][t] for t in type_names}, fh)
-            return 0
-        workers = start_qa_workers(type_names, args, out) if args.qa_workers > 1 and len(type_names) > 1 else []
-        run_qa(robot_mesh, arm_ob, actions, report, "Classic")
-        if workers:
-            collect_qa_workers(workers, report)
-        else:
-            for tname in type_names:
-                qa_robot_type(tname, part_objs, coll, arm_ob, actions, report)
-        report["qa"] = {t: report["qa"][t] for t in ["Classic"] + type_names}
-        for tname in type_names:
-            qa_t = report["qa"][tname]
-            bad = [n for n, e in qa_t["actions"].items() if e["min_z"] < -0.006 or e["new_overlaps"] or
-                   e["detached_joints"]]
-            LOG.log(logging.WARNING if bad else logging.INFO, "  QA[%s] %d clips, problems: %s", tname,
-                    len(qa_t["actions"]), bad or "-")
+    ctx = JobContext(part_objs, coll, preview_coll, arm_ob, actions, robot_mesh, preview_dir, tex_dir)
+    if worker:
+        ready = time.time() - t_start
+        LOG.info("worker ready after %.1f s", ready)
+        count, busy = JobQueue(args.worker_queue).work(ctx, args.worker_lanes.split(","), "w%s" % args.worker_id)
+        with open(os.path.join(out, "worker.json"), "w", encoding="utf-8") as fh:
+            json.dump({"lanes": args.worker_lanes, "ready": round(ready, 1), "packages": count, "busy": round(busy, 1),
+                       "total": round(time.time() - t_start, 1)}, fh)
+        LOG.info("worker done: %d packages in %.1f s", count, busy)
+        return 0
+    write_animation_table(out)
     with Step("clip data"):
         clips = measure_clips(robot_mesh, arm_ob, actions)
         for a in ANIMS:
@@ -4957,48 +5312,55 @@ def main():
         vcfg["typeBounds"] = bounds
         export_viewer.export(os.path.join(out, "ViewerData"), list(part_objs.values()), arm_ob, ANIMS, actions,
                              tex_dir, vcfg, LOG)
+    with Step("work packages (main process)"):
+        ctx.camera()                # the .blend keeps its preview scene
+        count, busy = queue.work(ctx, ["render", "qa"], "main")
+        LOG.info("  main process: %d packages in %.1f s", count, busy)
+    with Step("wait for workers"):
+        worker_stats = wait_workers(procs)
+        worker_stats["main"] = {"packages": count, "busy": round(busy, 1)}
+        results = queue.results()
+    with Step("qa results"):
+        report["qa"] = merge_qa(results, type_names)
+        for name, entry in report["qa"]["Classic"]["actions"].items():
+            log_qa_entry("Classic", name, entry)
+        for tname in type_names:
+            qa_t = report["qa"][tname]
+            bad = [n for n, e in qa_t["actions"].items() if qa_problem(e)]
+            LOG.log(logging.WARNING if bad else logging.INFO, "  QA[%s] %d clips, problems: %s", tname,
+                    len(qa_t["actions"]), bad or "-")
     if not args.no_render:
-        with Step("preview renders"):
-            assign_action(arm_ob, actions["Idle"])
-            arm_ob.animation_data.action = None
-            for pb in arm_ob.pose.bones:
-                pb.rotation_quaternion = (1, 0, 0, 0)
-                pb.location = (0, 0, 0)
-                pb.scale = (1, 1, 1)
-            cam = setup_render_scene(preview_coll)
-            with Step("render views"):
-                report["previews"] = render_views(cam, preview_dir)
-            with Step("render skins"):
-                render_skins(cam, robot_mesh, preview_dir, tex_dir)
-            with Step("render expressions"):
-                render_expressions(cam, robot_mesh, preview_dir, tex_dir)
-            with Step("render types"):
-                render_types(cam, part_objs, robot_mesh, coll, preview_dir, tex_dir)
-            if not args.no_anim_sheets:
-                rows = render_anim_sheets(cam, arm_ob, actions, preview_dir)
-                build_contact_sheets(rows, preview_dir)
-                render_gifs(cam, arm_ob, actions, preview_dir)
-                frames_dir = os.path.join(preview_dir, "anim_frames")
-                for fn in os.listdir(frames_dir):
-                    os.remove(os.path.join(frames_dir, fn))
-                os.rmdir(frames_dir)
-            assign_action(arm_ob, actions["Idle"])
-            bpy.context.scene.frame_set(0)
+        with Step("preview sheets"):
+            finish_previews(results, preview_dir, report)
+    ctx.cleanup()
+    shutil.rmtree(queue.path, ignore_errors=True)
     with Step("save blend"):
+        assign_action(arm_ob, actions["Idle"])
+        bpy.context.scene.frame_set(0)
         preview_coll.hide_render = False
         bpy.context.scene.frame_end = 120
         bpy.ops.wm.save_as_mainfile(filepath=os.path.join(out, "CubeEscape_Robot.blend"))
     total = time.time() - t_start
-    report["timings"] = {"steps": dict(STEP_TIMES), "total": round(total, 1), "budget": args.budget}
+    kinds = collections.defaultdict(float)
+    for job, res in results:
+        kinds[job["kind"]] += res["seconds"]
+    load = (round(load_start, 1), round(os.getloadavg()[0], 1))
+    report["timings"] = {"steps": dict(STEP_TIMES), "total": round(total, 1), "budget": args.budget,
+                         "load": {"start": load[0], "end": load[1], "cores": os.cpu_count()},
+                         "packages": {k: round(v, 1) for k, v in kinds.items()}, "workers": worker_stats}
     write_report(out, report)
     slow = sorted(STEP_TIMES.items(), key=lambda kv: -kv[1])[:4]
     LOG.log(logging.WARNING if total > args.budget else logging.INFO, "time: %.0f s (tier %s, budget %d s)%s - "
             "slowest: %s", total, args.tier, args.budget, " OVER BUDGET" if total > args.budget else "",
             ", ".join("%s %.0f s" % kv for kv in slow))
+    busy = load[0] > os.cpu_count() / 2       # at the start: other processes (the end includes our own workers)
+    LOG.log(logging.WARNING if busy else logging.INFO, "  system load %.1f at the start (%.1f at the end) on %d cores%s",
+            load[0], load[1], os.cpu_count(), " - other processes were running, times are not comparable" if busy else "")
+    LOG.info("  work packages (process seconds): %s", ", ".join("%s %.0f" % kv for kv in sorted(kinds.items())))
     problems = bool(floating)
     for label, qa in report.get("qa", {}).items():
         for name, entry in qa["actions"].items():
-            if entry["min_z"] < -0.006 or entry["new_overlaps"] or entry["detached_joints"]:
+            if qa_problem(entry):
                 problems = True
     LOG.info("finished %s", "WITH QA WARNINGS" if problems else "OK")
     return 0

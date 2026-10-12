@@ -39,9 +39,14 @@ def find_magick(explicit=None):
     raise RuntimeError("ImageMagick 'magick' not found - install it (brew install imagemagick)")
 
 
+# One thread per ImageMagick process: the calls already run in parallel, and OpenMP threads of parallel processes
+# spin against each other (a 28-tile montage: 1.6 s single-threaded, 3.8 s with threads on a busy machine).
+MAGICK_ENV = dict(os.environ, MAGICK_THREAD_LIMIT="1")
+
+
 def run(magick, args, log=print):
     cmd = [magick] + [str(a) for a in args]
-    res = subprocess.run(cmd, capture_output=True, text=True)
+    res = subprocess.run(cmd, capture_output=True, text=True, env=MAGICK_ENV)
     if res.returncode != 0:
         raise RuntimeError("magick failed (%d): %s\n%s" % (res.returncode, " ".join(cmd), res.stderr))
     return res

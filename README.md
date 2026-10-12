@@ -1,4 +1,4 @@
-# Cube Escape – Roboter-Charakter (Generator 1.8.0)
+# Cube Escape – Roboter-Charakter (Generator 1.9.0)
 
 Der spielbare Roboter aus dem Cube-Escape-Keyart, vollständig per Skript erzeugt: Geometrie mit Bauteil-Varianten
 und Accessoires, Materialien, gebackene Texturen (Detail- und Ausdrucks-Texturen per ImageMagick), Rig mit Bein- und
@@ -29,6 +29,7 @@ Animationen in 8 Gruppen, 20 Skins, 28 Augen-Ausdrücke, 16 Display-Motive, 20 A
 | `scripts/generate_robot.py` | Generator (Blender 5.2 LTS) |
 | `scripts/make_textures.py` | ImageMagick: Gebrauchsspuren, Metall, Kratzer, Decals, 16 Augen-Ausdrücke, 8 Display-Motive |
 | `scripts/export_viewer.py`, `scripts/reexport_viewer.py` | Datenexport für den Viewer (im Generator bzw. separat aus der `.blend`) |
+| `scripts/profile_run.py` | Lauf unter cProfile (Profil nach `<out>/logs/profile.prof`) |
 | `scripts/verify_robot.py` | unabhängige Prüfung von `.blend`, allen FBX, Konfiguration, Clip-Daten, Looks und Viewer-Daten |
 | `scripts/debug_*.py`, `scripts/diag_parts.py` | Hilfen zur Fehlersuche |
 | `viewer/` | Quellcode des Viewers (SwiftUI + SceneKit), `build.sh`, `test_viewer.sh` und Test-Looks in `tests/` |
@@ -36,19 +37,46 @@ Animationen in 8 Gruppen, 20 Skins, 28 Augen-Ausdrücke, 16 Display-Motive, 20 A
 ## Neu erzeugen
 
 ```bash
-# Teststufe: quick (≈ 25 s) beim Arbeiten, standard (≈ 2 min) vor dem Commit, full (≈ 11 min) für den Lieferstand
+# Teststufe: quick (≈ 10 s) beim Arbeiten, standard (≈ 1 min) vor dem Commit, full (≈ 3,5 min) für den Lieferstand
 /Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup --python-exit-code 1 --python scripts/generate_robot.py -- --tier quick
 ```
 
-| Stufe | Texturen | QA | Renders | Ausgabe | gemessen (M5) |
-|---|---|---|---|---|---|
-| `quick` | 512, AO 16 Samples | Standard-Roboter, alle Clips | keine | `output/_quick` | 25 s (mit Cache) |
-| `standard` | 1024, AO 32 Samples | alle 14 Typen, alle Clips, parallel | Ansichten, Skins, Ausdrücke, Typen (¼ Samples) | `output/_standard` | 133 s |
-| `full` | 2048, AO 64 Samples | alle 14 Typen, alle Clips, parallel | alles inkl. Animationsbögen und GIFs | `output` | 655 s (davon 7 min Animationsbögen/GIFs) |
+| Stufe | Texturen | QA | Renders | Ausgabe | 1.8.0 | 1.9.0 |
+|---|---|---|---|---|---|---|
+| `quick` | 512, AO 16 Samples | Standard-Roboter, alle Clips, parallel | keine | `output/_quick` | 25 s | **10–11 s** (15 s neben laufendem Unity-Editor) |
+| `standard` | 1024, AO 32 Samples | alle 14 Typen, alle Clips, parallel | Ansichten, Skins, Ausdrücke, Typen (¼ Samples) | `output/_standard` | 133 s | **54–68 s** |
+| `full` | 2048, AO 64 Samples | alle 14 Typen, alle Clips, parallel | alles inkl. Animationsbögen und GIFs | `output` | 655 s | **211 s** |
 
-Zum Vergleich 1.7.0: 31 min ohne Renders (Backen 24 min, QA 7 min), mit Renders ≈ 40 min. Jeder Lauf schreibt seine
-Schrittzeiten nach `logs/robot_report.json` (`timings`) und warnt, wenn das Zeitbudget der Stufe (`TIERS`)
-überschritten ist. Was die Zeit spart:
+Gemessen am 12.10.2026 auf dem Apple M5 (4 Performance- + 6 Effizienzkerne, 8 GPU-Kerne), ruhige Maschine, warmer
+Cache; 1.7.0 brauchte rund 40 min. Jeder Lauf schreibt Schrittzeiten, Systemlast zu Beginn und Ende, Prozess-Sekunden
+je Paketart und eine Statistik je Worker nach `logs/robot_report.json` (`timings`) und warnt, wenn das Budget der
+Stufe (`TIERS`: 20 / 90 / 300 s) überschritten ist oder schon beim Start andere Prozesse rechneten. **Zeiten nur auf
+ruhiger Maschine vergleichen:** Ein paralleler Unity- oder Blender-Lauf (z. B. eines anderen Agenten) macht jeden
+Schritt zwei- bis fünfmal langsamer.
+
+### Ablauf und Worker
+
+1. Hauptprozess: ImageMagick-Quelltexturen, Materialien, Geometrie, UVs (Cache).
+2. **QA-Worker starten** – sie brauchen nur Geometrie und Animation und rechnen, während der Hauptprozess backt.
+3. Hauptprozess backt (GPU), danach **Render-Worker starten**: Sie bauen das Modell ohne Backen neu, nehmen die UVs
+   aus dem Cache des Hauptlaufs und laden dessen gebackene Texturen (`--use-textures`).
+4. Hauptprozess: Rig, Animationen, Clip-Daten, FBX-Export, Viewer-Daten – der kritische Pfad; die Worker laufen
+   deshalb mit `nice 10`.
+5. Danach arbeitet der Hauptprozess selbst Pakete ab, sammelt die Ergebnisse in fester Reihenfolge, montiert die
+   Bögen (parallel) und speichert die `.blend`.
+
+**Arbeitspakete** (`make_jobs`, Warteschlange `logs/jobs`): QA je Robotertyp und Clip-Gruppe (große Gruppen geteilt,
+damit auch die Schnellstufe mit nur Classic parallel läuft); Ansichten, Skins, Ausdrücke und Typen in Blöcken;
+Animationsbögen je Clip (der Worker schreibt die zwei Bogenzeilen und meldet sie als JSON zurück), GIFs je Clip.
+Wer frei ist, beansprucht das nächste Paket (größte zuerst) über eine exklusiv angelegte Datei; Render-Worker
+helfen danach bei der QA. Die Ergebnisse hängen nicht davon ab, wer was gerechnet hat (QA-Bericht identisch mit 1.8.0).
+
+**Prozesse:** `--workers` (Standard Kerne − 1 = 9), davon `--render-workers` (Standard 3) für Renders; die
+Schnellstufe startet nur so viele QA-Worker, wie sich lohnen (≥ 600 QA-Frames je Worker, sonst kostet der Start
+von 2 s mehr, als er spart). QA-Worker laufen mit `-t 1`, Render-Worker mit `-t 2`. `--workers 0` rechnet alles im
+Hauptprozess (gleiches Ergebnis).
+
+### Was die Zeit spart
 
 - **Skins werden nicht einzeln gebacken.** Jede Körperfarbe hängt linear von der Palette ab: eine Konstante plus
   eine Graustufen-Gewichtskarte je Palettenfarbe. Sechs Backs liefern diese Ebenen, jeder Skin entsteht daraus per
@@ -60,10 +88,31 @@ Schrittzeiten nach `logs/robot_report.json` (`timings`) und warnt, wenn das Zeit
 - **Cache** in `<out>/cache`: UVs (Blenders Insel-Packen ist nicht deterministisch; gespeichert in einer Ecken-
   Reihenfolge, die nicht von der wechselnden Flächenreihenfolge abhängt), AO (hängt nur von Geometrie, UVs und dem
   Bake-Code ab) und alle Bake-Ebenen (zusätzlich Materialien und Quelltexturen). ImageMagick-Texturen entstehen
-  parallel und werden bei unverändertem Skript wiederverwendet. `--no-cache` baut alles neu.
-- **QA parallel** in mehreren Blender-Prozessen (`--qa-workers`, Standard Kerne − 2, höchstens 8). Kollisionsbäume
-  entstehen nur für Teilepaare, deren Hüllquader sich berühren. Die Ergebnisse sind identisch mit 1.7.0 (alle Typen
-  und Clips verglichen).
+  parallel und werden bei unverändertem Skript wiederverwendet. `--no-cache` liest keinen Cache (die UVs werden
+  trotzdem geschrieben, die Render-Worker brauchen sie).
+- **Vorschau-Schnellmodus.** Gemessen mit macOS `sample`: Ein EEVEE-Render wartete zu ~95 % in
+  `ShadowModule::shadow_update_finished`, zweimal je Sample – einmal davon nur, weil das additiv-transparente
+  Augenmaterial (`BLENDED`) die Forward-Pipeline erzwingt. Skins, Typen, Animationsbögen und GIFs rendern deshalb
+  mit deckenden Augen (Visier-Shading plus dasselbe Leuchten, freigestellt wo der Atlas schwarz ist) und ohne
+  Raytracing: 0,46 → 0,16 s je Bild bei gleichem Bild in Vorschaugröße. Die Auflösung kostet dagegen kaum etwas
+  (150 px 0,34 s, 600 px 0,44 s). Ansichten (inkl. Hero) und Ausdrücke bleiben exakt; die `.blend` behält das
+  Original-Material. Animationsbögen und GIFs mit 12 Samples.
+- **GPU und Neural Engine:** Ein einzelner EEVEE-Prozess hält die GPU schon zu ~85 % beschäftigt (`ioreg`,
+  `Device Utilization %`), 4 Prozesse zu 90–99 % – mehr als 3 Render-Worker lohnen nicht. Metal verteilt die Arbeit
+  selbst auf alle GPU-Kerne. Die Neural Engine nutzt Blender nicht.
+- **QA:** Kollisionsbäume nur für Teilepaare, deren Hüllquader sich berühren – der Test läuft für alle Paare eines
+  Frames in einem numpy-Aufruf; Koordinaten werden als `float32` gelesen (natives Format, 3× schneller). Eine QA
+  aller 14 Typen kostet in einem Prozess 245 s, mit 9 Workern rund 72 s: Mehr als Faktor 3,4 geben 4 Performance-
+  und 6 Effizienzkerne unter Volllast nicht her.
+- **ImageMagick mit `MAGICK_THREAD_LIMIT=1`:** parallele Aufrufe bremsten sich über ihre OpenMP-Threads gegenseitig
+  aus (Montage aus 28 Kacheln 3,8 → 1,6 s); die Texturen bleiben bitgleich.
+
+Messen statt raten: `scripts/profile_run.py` startet einen Lauf unter cProfile (mit `--workers 0` sind auch die
+Pakete im Profil):
+
+```bash
+/Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup --python-exit-code 1 --python scripts/profile_run.py -- --tier quick --workers 0
+```
 
 ```bash
 /Applications/Blender.app/Contents/MacOS/Blender -b output/CubeEscape_Robot.blend --python-exit-code 1 --python scripts/verify_robot.py -- --out output
@@ -80,7 +129,9 @@ viewer/test_viewer.sh
 Weitere Optionen (überschreiben die Stufe): `--out`, `--tex-size 1024`, `--ao-samples 32`, `--no-render`,
 `--no-anim-sheets`, `--groups Phase1,Phase4` (nur diese Clips), `--qa-types Runner,King` (QA nur für diese Typen,
 Classic immer), `--skip-bake` (ohne Texturen), `--no-cache`, `--check-compose`, `--bake-device cpu|gpu`,
-`--qa-workers 4`. Benötigt ImageMagick 7 und für den Viewer die Xcode-Kommandozeilenwerkzeuge.
+`--workers 4`, `--render-workers 2`. Benötigt ImageMagick 7 und für den Viewer die Xcode-Kommandozeilenwerkzeuge.
+Regeln für Agenten (Prüfablauf, Cache, Worker): [AGENTS.md](AGENTS.md); Versionen: [CHANGELOG.md](CHANGELOG.md);
+Fahrplan: [docs/FAHRPLAN.md](docs/FAHRPLAN.md).
 
 ## Robot Viewer
 

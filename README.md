@@ -244,10 +244,11 @@ Clip). `viewer/test_viewer.sh` nutzt das für Migrations-, Round-Trip- und Expor
 - **Schichten, Werkstoffe, Abnutzung (1.11):** gebackene Felder in `T_Robot_LayerMask*` (Rost, Moos, Frost,
   Glutrisse / Tarnung, Kratzer, Schmutz) und `T_Robot_MaterialMask*` (sieben Werkstoff-Muster), Zuordnung in
   `robot_config.json` › `layers`, `materials`, `weathering`. Die Schichtfelder sind auf die Lackfläche normiert
-  (Rangfolge): Stärke a bedeckt den Anteil a, `cover = clamp((Feld − (1 − a)) / 0,1, 0, 1)`. Rost sitzt in Ecken und
+  (Rangfolge über ein Histogramm): Stärke a bedeckt den Anteil a, `cover = clamp((Feld − (1 − a)) / 0,1, 0, 1)`. Rost sitzt in Ecken und
   Fugen, Moos oben und in Fugen, Frost oben und an Kanten, Glutrisse folgen einem Rissnetz (verkohlt, Adern leuchten),
   Tarnung sind zwei Schwellen eines Fleckenfelds. Werkstoff: `mix(Musterfarbe · r, Farbe, Muster)` auf der Panzerung.
-  Reihenfolge: Zweitfarbe → Werkstoff → Abzeichen → Rost/Moos/Frost → Tarnung → Abnutzung → Glutrisse → Leuchtlinien.
+  Reihenfolge: Zweitfarbe → Abnutzung → Werkstoff → Abzeichen → Rost/Moos/Frost → Tarnung → Glutrisse → Leuchtlinien
+  (die Abnutzung zuerst, damit „sauber“ keine Werkstoff- oder Schichtmuster übermalt).
 - **Skins = Daten (1.10):** Zweitfarbe, Abzeichen und Leuchtlinien kommen aus Masken (je Kanal eine ID, Zuordnung in
   `robot_config.json` › `badges`, `linePatterns`, `zones`). Reihenfolge im Shader: Grundfarben → Zweitfarbe
   (`mix(c, armor2 · r, Zone)`) → Abzeichen (`mix(c, Abzeichenfarbe · r, Maske)`) → Leuchtlinien (Albedo

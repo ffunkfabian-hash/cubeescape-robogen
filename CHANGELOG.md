@@ -23,6 +23,9 @@ und Typ-Maße unverändert.
   (SceneKit verträgt nur wenige Shader-Argumente); Kratzer/Schmutz, Tarnung und das Werkstoff-Muster in freien Kanälen.
 * **Unity-Testpaket:** Shader und Look-Format 4; `run_testbed.sh` scheitert jetzt bei Compiler-Fehlern (Unity hatte
   stillschweigend die alten Assemblies weiterbenutzt).
+* Code-Review: Abnutzung vor Werkstoff und Schichten (sauber übermalte deren Muster), Normierung per Histogramm (kaltes
+  Backen 206 → 84 s), Viewer filtert Werkstoff-Muster und Tarnfelder linear, hält nur eine Hilfstextur und stellt
+  beim Abwählen eines Werkstoffs die vorherige Panzerfarbe wieder her.
 * Doku: README, AGENTS, TECHNIK.md (Rangfolge-Normierung, Parameter-Textur, Compiler-Falle), Fahrplan.
 
 ## 1.10.1 „Paintjob“ – 2026-10-13

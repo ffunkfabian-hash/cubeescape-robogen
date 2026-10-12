@@ -181,27 +181,8 @@ Shader "CubeEscape/RobotBody"
                     float mz = saturate(dot(SAMPLE(_ZoneMask, uv), _ZoneSel0) + dot(SAMPLE(_ZoneMask2, uv), _ZoneSel1));
                     c = lerp(c, _Armor2.rgb * ratio, mz);
                     float3 region = lerp(mk.r * _Armor.rgb + mk.g * _Mech.rgb + mk.b * _Metal.rgb, _Armor2.rgb, mz);
-                    if (_MaterialColor.w > 0.5)
-                    {
-                        float pm = saturate(dot(SAMPLE(_MaterialMask, uv), _MaterialSel0) + dot(SAMPLE(_MaterialMask2, uv), _MaterialSel1));
-                        c = lerp(c, lerp(_MaterialColor.rgb * ratio, c, pm), mk.r);
-                    }
-                    float4 b0 = SAMPLE(_BadgeMask, uv), b1 = SAMPLE(_BadgeMask2, uv);
-                    c = lerp(c, _BadgeAColor.rgb * ratio, saturate(dot(b0, _BadgeA0) + dot(b1, _BadgeA1)));
-                    c = lerp(c, _BadgeBColor.rgb * ratio, saturate(dot(b0, _BadgeB0) + dot(b1, _BadgeB1)));
                     float4 lay = SAMPLE(_LayerMask, uv), lay2 = SAMPLE(_LayerMask2, uv);
-                    float wearF = lay2.g, grime = lay2.b, patchy = 0.6 + 0.6 * grime;
-                    float cv = COVER(lay.r, _LayerAmount.x);
-                    c = lerp(c, _RustColor.rgb * patchy * ratioAll, cv);
-                    rough = lerp(rough, saturate(rough * _LayerRough.x), cv); metal = lerp(metal, saturate(metal + _LayerMetal.x), cv);
-                    cv = COVER(lay.g, _LayerAmount.y);
-                    c = lerp(c, _MossColor.rgb * patchy * ratioAll, cv);
-                    rough = lerp(rough, saturate(rough * _LayerRough.y), cv); metal = lerp(metal, saturate(metal + _LayerMetal.y), cv);
-                    cv = COVER(lay.b, _LayerAmount.z);
-                    c = lerp(c, _FrostColor.rgb * patchy * ratioAll, cv);
-                    rough = lerp(rough, saturate(rough * _LayerRough.z), cv); metal = lerp(metal, saturate(metal + _LayerMetal.z), cv);
-                    c = lerp(c, _CamoColor.rgb * ratioAll, COVER(lay2.r, _LayerAmount2.x));
-                    c = lerp(c, _CamoColor.rgb * 0.45 * ratioAll, COVER(lay2.r, _LayerAmount2.x * 0.45));
+                    float wearF = lay2.g, grime = lay2.b;
                     if (_Wear < 0.5)
                     {
                         float clean = (0.5 - _Wear) * 2.0;
@@ -214,6 +195,26 @@ Shader "CubeEscape/RobotBody"
                         c = lerp(c, _BareMetal.rgb, saturate(wearF * 4.0 * more) * 0.85);
                         c *= 1.0 - 0.6 * more * grime;
                     }
+                    if (_MaterialColor.w > 0.5)
+                    {
+                        float pm = saturate(dot(SAMPLE(_MaterialMask, uv), _MaterialSel0) + dot(SAMPLE(_MaterialMask2, uv), _MaterialSel1));
+                        c = lerp(c, lerp(_MaterialColor.rgb * ratio, c, pm), mk.r);
+                    }
+                    float4 b0 = SAMPLE(_BadgeMask, uv), b1 = SAMPLE(_BadgeMask2, uv);
+                    c = lerp(c, _BadgeAColor.rgb * ratio, saturate(dot(b0, _BadgeA0) + dot(b1, _BadgeA1)));
+                    c = lerp(c, _BadgeBColor.rgb * ratio, saturate(dot(b0, _BadgeB0) + dot(b1, _BadgeB1)));
+                    float patchy = 0.6 + 0.6 * grime;
+                    float cv = COVER(lay.r, _LayerAmount.x);
+                    c = lerp(c, _RustColor.rgb * patchy * ratioAll, cv);
+                    rough = lerp(rough, saturate(rough * _LayerRough.x), cv); metal = lerp(metal, saturate(metal + _LayerMetal.x), cv);
+                    cv = COVER(lay.g, _LayerAmount.y);
+                    c = lerp(c, _MossColor.rgb * patchy * ratioAll, cv);
+                    rough = lerp(rough, saturate(rough * _LayerRough.y), cv); metal = lerp(metal, saturate(metal + _LayerMetal.y), cv);
+                    cv = COVER(lay.b, _LayerAmount.z);
+                    c = lerp(c, _FrostColor.rgb * patchy * ratioAll, cv);
+                    rough = lerp(rough, saturate(rough * _LayerRough.z), cv); metal = lerp(metal, saturate(metal + _LayerMetal.z), cv);
+                    c = lerp(c, _CamoColor.rgb * ratioAll, COVER(lay2.r, _LayerAmount2.x));
+                    c = lerp(c, _CamoColor.rgb * 0.45 * ratioAll, COVER(lay2.r, _LayerAmount2.x * 0.45));
                     float charred = saturate((lay.a - (1.0 - min(1.0, _LayerAmount.w * 2.5))) / _LayerAmount2.y);
                     ember = saturate((lay.a - (1.0 - _LayerAmount.w * 0.3)) / 0.04);
                     c *= 1.0 - 0.88 * charred;

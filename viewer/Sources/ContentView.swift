@@ -117,14 +117,21 @@ final class ViewerModel: ObservableObject {
 
     var currentSkin: Skin? { config.skins.first { $0.name == selectedSkin } }
 
-    /// A material also offers its fitting armour colour (wood looks like wood on brown, not on white).
+    /// A material also sets its fitting armour colour (wood looks like wood on brown, not on white); "Keiner" restores
+    /// the colour from before.
+    /// The armour colour before a material replaced it; choosing "Keiner" brings it back.
+    private var armorBeforeMaterial: RGB?
+
     func setMaterial(_ id: String) {
         var l = look
         if let m = (config.materials ?? []).first(where: { $0.id == id }) {
+            if l.material.id == "None" { armorBeforeMaterial = l.armor }
             l.material = MaterialLook(id: id, color: RGB(m.color ?? [0.3, 0.2, 0.1]))
             if let base = m.base { l.armor = RGB(base) }
         } else {
             l.material = MaterialLook()
+            if let before = armorBeforeMaterial { l.armor = before }
+            armorBeforeMaterial = nil
         }
         l.skin = "Custom"
         look = l

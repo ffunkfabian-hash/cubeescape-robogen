@@ -94,6 +94,12 @@ final class RobotScene: NSObject, SCNSceneRendererDelegate {
     /// (nil = 0). SceneKit draws a shader modifier with more than six custom textures magenta, so the viewer
     /// packs the generator's masks into fewer textures. Zone masks become one zone number (index / 8).
     private func packed(_ channels: [(String, Int)?], zoneIDs: [String]? = nil, zoneChannel: Int = -1) -> Any? {
+        guard let (w, h, bytes) = packBytes(channels, zoneIDs: zoneIDs, zoneChannel: zoneChannel) else { return nil }
+        return RobotScene.texture(w, h, bytes)
+    }
+
+    private func packBytes(_ channels: [(String, Int)?], zoneIDs: [String]? = nil,
+                           zoneChannel: Int = -1) -> (Int, Int, [UInt8])? {
         var cache: [String: (Int, Int, [UInt8])] = [:]
         func px(_ f: String) -> (Int, Int, [UInt8])? {
             if let c = cache[f] { return c }
@@ -102,7 +108,7 @@ final class RobotScene: NSObject, SCNSceneRendererDelegate {
             return p
         }
         let files = channels.compactMap { $0?.0 } + (zoneIDs ?? [])
-        guard let size = files.lazy.compactMap({ px($0) }).first, let dev = RobotScene.device else { return nil }
+        guard let size = files.lazy.compactMap({ px($0) }).first else { return nil }
         let (w, h) = (size.0, size.1)
         var out = [UInt8](repeating: 0, count: w * h * 4)
         for (o, ch) in channels.enumerated() {
@@ -117,11 +123,15 @@ final class RobotScene: NSObject, SCNSceneRendererDelegate {
                 for i in 0..<(w * h) where p.2[i * 4 + c] > 127 { out[i * 4 + zoneChannel] = v }
             }
         }
+        return (w, h, out)
+    }
+
+    static func texture(_ w: Int, _ h: Int, _ bytes: [UInt8]) -> MTLTexture? {
         let desc = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .rgba8Unorm, width: w, height: h,
                                                             mipmapped: false)
         desc.usage = .shaderRead
-        guard let tex = dev.makeTexture(descriptor: desc) else { return nil }
-        tex.replace(region: MTLRegionMake2D(0, 0, w, h), mipmapLevel: 0, withBytes: out, bytesPerRow: w * 4)
+        guard let tex = device?.makeTexture(descriptor: desc) else { return nil }
+        tex.replace(region: MTLRegionMake2D(0, 0, w, h), mipmapLevel: 0, withBytes: bytes, bytesPerRow: w * 4)
         return tex
     }
 
@@ -203,13 +213,23 @@ final class RobotScene: NSObject, SCNSceneRendererDelegate {
         c = mix(c, P(6).rgb * ratio, mz);
         float3 region = mix(mk.r * P(0).rgb + mk.g * P(1).rgb + mk.b * P(2).rgb, P(6).rgb, mz);
         float4 misc = P(18);                      // line paint, glow, wear, material on
+        float4 lay = layerTex.sample(s, uv);
+        float wearF = ms.g, grime = ms.b;
+        float4 amt = P(21), amt2 = P(22);         // rust, moss, frost, embers / camo, soft
+        float w = misc.z;                         // wear before material and layers (cleaning keeps their patterns)
+        if (w < 0.5) {
+            float clean = (0.5 - w) * 2.0;
+            c = mix(c, region, saturate(wearF * 1.6) * clean);
+            c = mix(c, region, grime * clean * 0.4);
+        } else {
+            float more = (w - 0.5) * 2.0;
+            c = mix(c, P(31).rgb, saturate(wearF * 4.0 * more) * 0.85);
+            c *= 1.0 - 0.6 * more * grime;
+        }
         if (misc.w > 0.5) c = mix(c, mix(P(19).rgb * ratio, c, aux.b), mk.r);
         float4 b0 = badgeTex0.sample(s, uv), b1 = badgeTex1.sample(s, uv);
         c = mix(c, P(14).rgb * ratio, saturate(dot(b0, P(10)) + dot(b1, P(11))));
         c = mix(c, P(15).rgb * ratio, saturate(dot(b0, P(12)) + dot(b1, P(13))));
-        float4 amt = P(21), amt2 = P(22);         // rust, moss, frost, embers / camo, soft
-        float4 lay = layerTex.sample(s, uv);
-        float wearF = ms.g, grime = ms.b;
         float patchy = 0.6 + 0.6 * grime;
         float4 lr = P(28), lm = P(29);
         float cv;
@@ -222,16 +242,6 @@ final class RobotScene: NSObject, SCNSceneRendererDelegate {
         float c1 = COVER(aux.a, amt2.x), c2 = COVER(aux.a, amt2.x * 0.45);
         c = mix(c, P(27).rgb * ratioAll, c1);
         c = mix(c, P(27).rgb * 0.45 * ratioAll, c2);
-        float w = misc.z;
-        if (w < 0.5) {
-            float clean = (0.5 - w) * 2.0;
-            c = mix(c, region, saturate(wearF * 1.6) * clean);
-            c = mix(c, region, grime * clean * 0.4);
-        } else {
-            float more = (w - 0.5) * 2.0;
-            c = mix(c, P(31).rgb, saturate(wearF * 4.0 * more) * 0.85);
-            c *= 1.0 - 0.6 * more * grime;
-        }
         float charred = saturate((lay.a - (1.0 - min(1.0, amt.w * 2.5))) / amt2.y);
         float ember = saturate((lay.a - (1.0 - amt.w * 0.3)) / 0.04);
         c *= 1.0 - 0.88 * charred;
@@ -263,7 +273,8 @@ final class RobotScene: NSObject, SCNSceneRendererDelegate {
         constexpr sampler sn(filter::nearest, address::repeat);
         float2 uv = _surface.diffuseTexcoord;
         float4 mk = maskTexture.sample(s, uv);
-        float4 aux = auxTexture.sample(sn, uv);
+        float4 aux = auxTexture.sample(s, uv);    // material pattern and camo field filtered
+        aux.g = auxTexture.sample(sn, uv).g;      // the zone number must not be interpolated
         float4 ms = msTexture.sample(s, uv);
         float4 refA = P(7), refB = P(8);
         float3 c = _surface.diffuse.rgb;
@@ -312,23 +323,30 @@ final class RobotScene: NSObject, SCNSceneRendererDelegate {
     }
 
     /// aux: R = fifth glow pattern (Joints), G = paint zone number, B = pattern of the chosen material, A = camo field.
+    /// The R/G/A bytes are packed once per ViewerData; a material change only fills channel B (one texture alive).
     private func auxTexture(material: String) -> Any {
         let cfg = data.config
-        let key = data.root.path + "#aux#" + material
-        if let cached = RobotScene.packCache[key] { return cached }
-        let lines = cfg.linePatterns ?? []
-        let layers = cfg.layers ?? []
-        let mat = (cfg.materials ?? []).first { $0.id == material }
-        let camo = layers.first { $0.id == "Camo" }
-        let tex = packed([lines.count > 4 ? (lines[4].texture, lines[4].channel) : nil, nil,
-                          mat.map { ($0.texture, $0.channel) }, camo.map { ($0.texture, $0.channel) }],
-                         zoneIDs: (cfg.zones ?? []).map { "\($0.texture)#\($0.channel)" }, zoneChannel: 1) as Any
-        RobotScene.packCache[key] = tex
-        return tex
+        let key = data.root.path + "#auxBase"
+        if RobotScene.packCache[key] == nil {
+            let lines = cfg.linePatterns ?? []
+            let camo = (cfg.layers ?? []).first { $0.id == "Camo" }
+            RobotScene.packCache[key] = packBytes([lines.count > 4 ? (lines[4].texture, lines[4].channel) : nil, nil, nil,
+                                                   camo.map { ($0.texture, $0.channel) }],
+                                                  zoneIDs: (cfg.zones ?? []).map { "\($0.texture)#\($0.channel)" },
+                                                  zoneChannel: 1) as Any
+        }
+        guard let (w, h, base) = RobotScene.packCache[key] as? (Int, Int, [UInt8]) else { return NSNull() }
+        var bytes = base
+        if let mat = (cfg.materials ?? []).first(where: { $0.id == material }),
+           let (mw, mh, mp) = pixels(mat.texture), mw == w, mh == h {
+            for i in 0..<(w * h) { bytes[i * 4 + 2] = mp[i * 4 + mat.channel] }
+        }
+        return RobotScene.texture(w, h, bytes) as Any
     }
 
     /// The look as 32 float4 texels (layout: the P(i) indices in the shader).
     private var params = [SIMD4<Float>](repeating: .zero, count: 32)
+    private var shownMaterial = "?"
     private lazy var paramTexture: MTLTexture? = {
         let desc = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .rgba32Float, width: 32, height: 1,
                                                             mipmapped: false)
@@ -610,8 +628,12 @@ final class RobotScene: NSObject, SCNSceneRendererDelegate {
         p[31] = RobotScene.f4(weathering?.bareMetal ?? [0.62, 0.63, 0.65])
         params = p
         writeParams()
-        let aux = auxTexture(material: material?.id ?? "None")
-        for m in [bodyMat, fabricMat] { m.setValue(SCNMaterialProperty(contents: aux), forKey: "auxTexture") }
+        let matID = material?.id ?? "None"
+        if matID != shownMaterial {
+            shownMaterial = matID
+            let aux = auxTexture(material: matID)
+            for m in [bodyMat, fabricMat] { m.setValue(SCNMaterialProperty(contents: aux), forKey: "auxTexture") }
+        }
         shownExpression = ""            // eye colour or style may have changed
         displayMat.setValue(vec(look.screen), forKey: "screenColor")
         shownPower = -1

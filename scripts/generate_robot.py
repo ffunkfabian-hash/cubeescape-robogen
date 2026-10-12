@@ -1978,7 +1978,7 @@ def linear_to_srgb(c):
     return np.where(c <= 0.0031308, c * 12.92, 1.055 * np.power(c, 1 / 2.4) - 0.055)
 
 
-BAKE_SCHEMA = "1.11-a"  # bump when the baking code changes in a way the cache key cannot see
+BAKE_SCHEMA = "1.11-b"  # bump when the baking code changes in a way the cache key cannot see
 STATIC_TEXTURES = ("T_Robot_MetallicSmoothness.png", "T_Robot_Occlusion.png", "T_Robot_ColorMask.png",
                    "T_Robot_LightMask.png", "T_Robot_Normal.png") + tuple(BADGE_TEXTURES + LINE_TEXTURES + ZONE_TEXTURES +
                                                                          LAYER_TEXTURES + MATERIAL_TEXTURES)
@@ -2281,15 +2281,15 @@ def compose_skin(layers, palette):
 
 
 def equalise(field, inside):
-    """Rank transform inside the painted surface: afterwards the share of pixels above 1 - a is a, so a layer amount
-    reads as the covered share. Ties keep their order (stable), pixels outside stay as they are."""
+    """Rank transform inside the painted surface (via a 65536-bin histogram, no full sort): afterwards the share of
+    pixels above 1 - a is a, so a layer amount reads as the covered share. Pixels outside stay as they are."""
     out = field.copy()
     vals = field[inside]
     if vals.size:
-        order = np.argsort(vals, kind="stable")
-        ranks = np.empty(vals.size, dtype=np.float32)
-        ranks[order] = np.arange(vals.size, dtype=np.float32) / max(vals.size - 1, 1)
-        out[inside] = ranks
+        bins = np.minimum((np.clip(vals, 0, 1) * 65535.0).astype(np.int64), 65535)
+        counts = np.bincount(bins, minlength=65536)
+        cdf = (np.cumsum(counts) - counts * 0.5) / vals.size       # mid-rank of each bin
+        out[inside] = cdf[bins].astype(np.float32)
     return out
 
 
@@ -2307,8 +2307,8 @@ def cover(field, amount, soft=COVER_SOFT):
 
 def decorate_skin(layers, skin, base, emit):
     """Everything of a skin on top of the composed palette colours, in this order (same formulas as the viewer and the
-    Unity shader): second colour in its zones -> material pattern of the armour -> badges -> surface layers (rust,
-    moss, frost, camo, embers) -> wear (0 clean, 0.5 as baked, 1 battered) -> glow lines. Colour replacements keep the
+    Unity shader): second colour in its zones -> wear (0 clean, 0.5 as baked, 1 battered) -> material pattern of the
+    armour -> badges -> surface layers (rust, moss, frost, camo, embers) -> glow lines. Colour replacements keep the
     shading (luminance ratio to the region's palette colour)."""
     if not (skin["badges"] or skin["lines"] or skin["zones2"] or skin["material"] or skin["layers"] or
             abs(skin["wear"] - WEAR_DEFAULT) > 1e-6):
@@ -2326,6 +2326,18 @@ def decorate_skin(layers, skin, base, emit):
         m = np.clip(sum(layers["zone_masks"][..., list(PAINT_ZONES).index(z)] for z in skin["zones2"]), 0, 1)[..., None]
         base = base * (1.0 - m) + m * np.asarray(pal_["armor2"], dtype=np.float32) * ratio
         region = region * (1.0 - m) + m * np.asarray(pal_["armor2"], dtype=np.float32)
+    w = skin["wear"]          # before material and layers: cleaning must not erase their patterns
+    if w < WEAR_DEFAULT:                         # cleaner: scratches and grime back to the paint
+        clean = (WEAR_DEFAULT - w) * 2.0
+        sc = np.clip(layers["layer_masks"][..., LAYERS.index("Wear")][..., None] * 1.6, 0, 1) * clean
+        base = base * (1.0 - sc) + sc * region
+        gr = layers["layer_masks"][..., LAYERS.index("Grime")][..., None] * clean * 0.4
+        base = base * (1.0 - gr) + gr * region
+    elif w > WEAR_DEFAULT:                       # battered: more bare metal, dirt in the dents
+        more = (w - WEAR_DEFAULT) * 2.0
+        sc = np.clip(layers["layer_masks"][..., LAYERS.index("Wear")][..., None] * 4.0 * more, 0, 1) * 0.85
+        base = base * (1.0 - sc) + sc * BARE_METAL
+        base = base * (1.0 - 0.6 * more * layers["layer_masks"][..., LAYERS.index("Grime")][..., None])
     if skin["material"]:
         mat = skin["material"]
         p = layers["material_masks"][..., MATERIALS.index(mat["id"])][..., None]
@@ -2346,18 +2358,6 @@ def decorate_skin(layers, skin, base, emit):
         c1, c2 = cover(fields["Camo"], a), cover(fields["Camo"], a * 0.45)
         base = base * (1.0 - c1) + c1 * col * ratio_all
         base = base * (1.0 - c2) + c2 * col * 0.45 * ratio_all
-    w = skin["wear"]
-    if w < WEAR_DEFAULT:                         # cleaner: scratches and grime back to the paint
-        clean = (WEAR_DEFAULT - w) * 2.0
-        sc = np.clip(fields["Wear"] * 1.6, 0, 1) * clean
-        base = base * (1.0 - sc) + sc * region
-        gr = fields["Grime"] * clean * 0.4
-        base = base * (1.0 - gr) + gr * region
-    elif w > WEAR_DEFAULT:                       # battered: more bare metal, dirt in the dents
-        more = (w - WEAR_DEFAULT) * 2.0
-        sc = np.clip(fields["Wear"] * 4.0 * more, 0, 1) * 0.85
-        base = base * (1.0 - sc) + sc * BARE_METAL
-        base = base * (1.0 - 0.6 * more * fields["Grime"])
     if "Embers" in by_id:
         a, col = by_id["Embers"]["amount"], np.asarray(by_id["Embers"]["color"], np.float32)
         char = cover(fields["Embers"], min(1.0, a * 2.5))

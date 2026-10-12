@@ -97,7 +97,11 @@ als Maskenkanäle liefern; Zonen über benannte Teile und Flächenattribute; Dec
   Voronoi für Stein/Beton, Rauschen für Sand/Papier, ImageMagick-Kacheln für Messing/Platine) plus eine passende
   Grundfarbe – auf weißer Panzerung sieht sonst kein Werkstoff wie sich selbst aus.
 - **Abnutzung** als Interpolation um den gebackenen Stand: Kratzer- und Schmutzfeld getrennt backen, dann zur
-  Lackfarbe zurück (sauber) oder zu blankem Metall und Dreck hin (verbeult).
+  Lackfarbe zurück (sauber) oder zu blankem Metall und Dreck hin (verbeult). Sie kommt **vor** Werkstoff und Schichten
+  – sonst übermalt „sauber“ deren Muster mit flacher Lackfarbe (Befund im Code-Review).
+- Die Normierung braucht keine volle Sortierung: Histogramm mit 65 536 Klassen, Mittelrang je Klasse.
+- Im Viewer liegt die Zonen-Nummer mit stetigen Feldern in einer Textur: die Nummer mit `nearest`, die Felder mit
+  linearer Filterung lesen (zweimal sampeln), sonst werden Holzmaserung und Tarnflecken pixelig.
 
 **Für Cubegen:** Patina, Rost und Schmutz der Modellsets als normierte Felder mit Regler statt fester Stufen.
 

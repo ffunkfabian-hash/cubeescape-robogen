@@ -18,7 +18,8 @@ MIN_MACOS=13.0
 echo "> compiling (universal: arm64 + x86_64, macOS $MIN_MACOS+)"
 for arch in arm64 x86_64; do
   swiftc -O -parse-as-library -swift-version 5 -target "$arch-apple-macos$MIN_MACOS" \
-    -framework SwiftUI -framework SceneKit -framework AppKit \
+    -framework SwiftUI -framework SceneKit -framework AppKit -framework AVFoundation -framework ImageIO \
+    -framework CoreMedia -framework CoreVideo -framework UniformTypeIdentifiers \
     "$HERE"/Sources/*.swift -o "$BUILD/RobotViewer-$arch"
 done
 lipo -create "$BUILD/RobotViewer-arm64" "$BUILD/RobotViewer-x86_64" -output "$BUILD/RobotViewer"

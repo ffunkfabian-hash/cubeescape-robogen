@@ -1,7 +1,16 @@
 # Roboter-Generator – Regeln für KI-Agenten
 
 Gilt für alle Agenten (Claude Code, Codex, …). Langform: `README.md` (Teststufen, Messwerte, Aufbau),
-`CHANGELOG.md` (Versionen), `docs/FAHRPLAN.md` (Fahrplan; führend ist das Claude Doc, Link dort).
+`CHANGELOG.md` (Versionen), `docs/FAHRPLAN.md` (Fahrplan; führend ist das Claude Doc, Link dort), `docs/TECHNIK.md`
+(Techniken und Lehren; Übertrag auf den Cubegen-Modell-Editor – bei jeder neuen Technik mitpflegen).
+
+## Skins und Masken
+
+- Skins sind Daten (`data/skins.json`), nie Code. IDs von Skins, Abzeichen (`BADGES`), Leuchtmustern
+  (`LINE_PATTERNS`), Lackzonen (`PAINT_ZONES`) und Oberflächen sind ewig; Listen nur am Ende erweitern (Kanal = Position).
+- Neue Abzeichen/Muster/Zonen: Maske im Generator, Formel in `decorate_skin()` **und** im Viewer-Shader gleich halten,
+  Eintrag in `robot_config.json`, Prüfung in `verify_robot.py`.
+- Viewer-Shader: höchstens etwa 23 eigene Argumente, sonst zeichnet SceneKit kommentarlos pink (`docs/TECHNIK.md` › 8).
 
 ## Sprache
 

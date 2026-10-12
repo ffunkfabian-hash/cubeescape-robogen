@@ -5,6 +5,7 @@ import SwiftUI
 ///   RobotViewer --snapshot out.png [--type Party] [--look file.json] [--skin Neon] [--expression Love]
 ///               [--display Heart] [--variant Head=TV ...] [--anim DanceRobot --frame 30] [--view Iso|Front|Side|Back|Face]
 ///               [--size 1000x1000] [--no-floor] [--no-props] [--save-look out.json] [--data <ViewerData dir>]
+///               [--gif clip.gif | --video clip.mp4]   (with --anim: the whole clip instead of one frame)
 @main
 enum Main {
     static func main() {
@@ -70,7 +71,9 @@ enum Snapshot {
                 enc.outputFormatting = [.prettyPrinted, .sortedKeys]
                 try enc.encode(look).write(to: URL(fileURLWithPath: out))
             }
-            if let s = value(args, "--skin"), let skin = data.config.skins.first(where: { $0.name == s }) { look.apply(skin: skin) }
+            if let s = value(args, "--skin"), let skin = data.config.skins.first(where: { $0.name == s }) {
+                look.apply(skin: skin, parts: args.contains("--skin-parts"))
+            }
             if let e = value(args, "--expression") { look.expression = e }
             if let d = value(args, "--display") { look.display = d }
             if let f = value(args, "--finish"), let fin = Finish(rawValue: f) { look.finish = fin }
@@ -80,6 +83,20 @@ enum Snapshot {
             }
             look.autoExpression = args.contains("--auto-expression")
             robot.apply(look: look)
+            let dims = (value(args, "--size") ?? "1000x1000").split(separator: "x").compactMap { Double($0) }
+            let size = CGSize(width: dims.first ?? 1000, height: dims.last ?? 1000)
+            if let name = value(args, "--anim"), let anim = data.doc.animations.first(where: { $0.name == name }),
+               let movie = value(args, "--gif") ?? value(args, "--video") {
+                robot.setView(value(args, "--view") ?? "Iso")
+                robot.showFloor = !args.contains("--no-floor")
+                robot.showProps = !args.contains("--no-props")
+                let gif = value(args, "--gif") != nil
+                let frames = ClipExport.frames(robot: robot, anim: anim, size: size, step: gif ? 2 : 1)
+                try ClipExport.write(frames, to: URL(fileURLWithPath: movie), format: gif ? .gif : .mp4,
+                                     fps: gif ? 15 : 30)
+                print("\(gif ? "gif" : "video") \(movie) (\(frames.count) frames)")
+                return 0
+            }
             if let name = value(args, "--anim"), let anim = data.doc.animations.first(where: { $0.name == name }) {
                 robot.play(anim)
                 robot.setPlayback(playing: false, speed: 1, loop: anim.loop, turntable: false)
@@ -89,8 +106,7 @@ enum Snapshot {
             robot.setView(value(args, "--view") ?? "Iso")
             robot.showFloor = !args.contains("--no-floor")
             robot.showProps = !args.contains("--no-props")
-            let dims = (value(args, "--size") ?? "1000x1000").split(separator: "x").compactMap { Double($0) }
-            let img = robot.snapshot(size: CGSize(width: dims.first ?? 1000, height: dims.last ?? 1000))
+            let img = robot.snapshot(size: size)
             try img.pngData()?.write(to: URL(fileURLWithPath: out))
             print("snapshot \(out)")
             return 0

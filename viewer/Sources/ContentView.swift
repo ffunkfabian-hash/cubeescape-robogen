@@ -9,7 +9,11 @@ final class ViewerModel: ObservableObject {
     let robot: RobotScene
     @Published var look = Look() { didSet { robot.apply(look: look) } }
     @Published var selectedSkin = "Classic"
-    @Published var clip: AnimInfo? { didSet { robot.play(clip) } }
+    @Published var clip: AnimInfo? { didSet { robot.play(clip); robotB?.play(clip) } }
+    /// A/B comparison: a second robot with the look remembered as B, same clip and playback.
+    @Published var compare = false { didSet { if compare { ensureB() } } }
+    @Published var lookB: Look? { didSet { if let l = lookB { robotB?.apply(look: l) } } }
+    private(set) var robotB: RobotScene?
     @Published var playing = true { didSet { pushPlayback() } }
     @Published var speed = 1.0 { didSet { pushPlayback() } }
     @Published var loop = true { didSet { pushPlayback() } }
@@ -35,7 +39,63 @@ final class ViewerModel: ObservableObject {
 
     var config: RobotConfig { data.config }
 
-    func pushPlayback() { robot.setPlayback(playing: playing, speed: speed, loop: loop, turntable: turntable) }
+    func pushPlayback() {
+        robot.setPlayback(playing: playing, speed: speed, loop: loop, turntable: turntable)
+        robotB?.setPlayback(playing: playing, speed: speed, loop: loop, turntable: turntable)
+    }
+
+    func ensureB() {
+        if lookB == nil { lookB = look }
+        if robotB == nil {
+            let b = RobotScene(data: data)
+            robotB = b
+            b.apply(look: lookB ?? look)
+            b.play(clip)
+            pushPlayback()
+        }
+    }
+
+    func rememberAsB() {
+        lookB = look
+        compare = true
+        status = "Look als B gemerkt – Vergleich links A (aktuell), rechts B"
+    }
+
+    func swapAB() {
+        guard let b = lookB else { return }
+        lookB = look
+        look = b
+        selectedSkin = look.skin
+    }
+
+    func setView(_ v: String) {
+        robot.setView(v)
+        robotB?.setView(v)
+    }
+
+    func seek(_ f: Double) {
+        robot.seek(fraction: f)
+        robotB?.seek(fraction: f)
+    }
+
+    /// Exports the playing clip as GIF or MP4 (offscreen render of every 2nd frame at 15 fps, or all at 30 fps).
+    func export(_ format: ClipExport.Format) {
+        guard let anim = clip else { status = "Erst eine Animation wählen"; return }
+        let p = NSSavePanel()
+        p.allowedContentTypes = [format == .gif ? .gif : .mpeg4Movie]
+        p.nameFieldStringValue = "Roboter_\(look.name)_\(anim.name).\(format == .gif ? "gif" : "mp4")"
+        guard p.runModal() == .OK, let url = p.url else { return }
+        let off = RobotScene(data: data)
+        off.apply(look: look)
+        off.setView(robot.currentView)
+        let step = format == .gif ? 2 : 1
+        let size = format == .gif ? CGSize(width: 600, height: 600) : CGSize(width: 1080, height: 1080)
+        let frames = ClipExport.frames(robot: off, anim: anim, size: size, step: step)
+        do {
+            try ClipExport.write(frames, to: url, format: format, fps: 30.0 / Double(step))
+            status = "\(frames.count) Bilder exportiert: \(url.lastPathComponent)"
+        } catch { status = "Export fehlgeschlagen: \(error.localizedDescription)" }
+    }
 
     func applyType(_ t: RobotType) {
         var l = look
@@ -47,9 +107,24 @@ final class ViewerModel: ObservableObject {
     func applySkin(_ name: String) {
         guard let s = config.skins.first(where: { $0.name == name }) else { return }
         var l = look
-        l.apply(skin: s)
+        l.apply(skin: s, parts: true)
         look = l
         selectedSkin = name
+    }
+
+    var currentSkin: Skin? { config.skins.first { $0.name == selectedSkin } }
+
+    func setBadge(_ slot: Int, id: String) {
+        var l = look
+        if id == "None" {
+            if slot < l.badges.count { l.badges.remove(at: slot) }
+        } else if slot < l.badges.count {
+            l.badges[slot].id = id
+        } else {
+            l.badges.append(BadgeLook(id: id, color: slot == 0 ? RGB(0.9, 0.05, 0.05) : RGB(1, 1, 1)))
+        }
+        l.skin = "Custom"
+        look = l
     }
 
     func randomize() {
@@ -62,7 +137,7 @@ final class ViewerModel: ObservableObject {
             l.armor = RGB(.random(in: 0.02...0.95), .random(in: 0.02...0.95), .random(in: 0.02...0.95))
         }
         l.expression = config.expressions.filter { $0 != "Off" }.randomElement() ?? "Normal"
-        l.display = config.displays.randomElement() ?? "Status"
+        l.display = config.allDisplays.randomElement() ?? "Status"
         l.finish = Finish.allCases.randomElement() ?? .standard
         l.name = "Zufall"
         look = l
@@ -159,11 +234,19 @@ struct ContentView: View {
     var body: some View {
         HSplitView {
             ZStack(alignment: .bottomLeading) {
-                SceneContainer(robot: model.robot)
+                HStack(spacing: 2) {
+                    SceneContainer(robot: model.robot)
+                    if model.compare, let b = model.robotB {
+                        SceneContainer(robot: b)
+                            .overlay(alignment: .topLeading) {
+                                Text("B").font(.title.bold()).padding(10).foregroundStyle(.secondary)
+                            }
+                    }
+                }
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 6) {
                         ForEach(RobotScene.views, id: \.self) { v in
-                            Button(v) { model.robot.setView(v) }
+                            Button(v) { model.setView(v) }
                         }
                         Toggle("Drehteller", isOn: $model.turntable).toggleStyle(.button)
                         Toggle("Boden", isOn: $model.showFloor).toggleStyle(.button)
@@ -175,7 +258,7 @@ struct ContentView: View {
                             Button(model.playing ? "Pause" : "Play") { model.playing.toggle() }
                                 .keyboardShortcut(.space, modifiers: [])
                             Text(c.name).font(.headline)
-                            Slider(value: Binding(get: { model.progress }, set: { model.robot.seek(fraction: $0) }))
+                            Slider(value: Binding(get: { model.progress }, set: { model.seek($0) }))
                                 .frame(width: 220)
                             Text("Tempo")
                             Slider(value: $model.speed, in: 0.1...2.0).frame(width: 110)
@@ -229,7 +312,13 @@ struct Sidebar: View {
                 }
                 section("Farben") {
                     Picker("Skin", selection: Binding(get: { model.selectedSkin }, set: { model.applySkin($0) })) {
-                        ForEach(model.config.skins) { Text($0.name).tag($0.name) }
+                        ForEach(model.config.skins) { s in
+                            Text((s.startSet ?? false) ? "\(s.name) ★" : s.name).tag(s.name)
+                        }
+                    }
+                    if let s = model.currentSkin, let theme = s.theme, !theme.isEmpty {
+                        Text(theme + (model.look.skin == "Custom" ? " · angepasst" : ""))
+                            .font(.caption).foregroundStyle(.secondary)
                     }
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], alignment: .leading) {
                         ColorPicker("Panzerung", selection: colorBinding(\.armor))
@@ -244,6 +333,39 @@ struct Sidebar: View {
                     Picker("Oberfläche", selection: $model.look.finish) {
                         ForEach(Finish.allCases) { Text($0.rawValue).tag($0) }
                     }.pickerStyle(.segmented)
+                }
+                section("Zweitfarbe") {
+                    ColorPicker("Farbe", selection: colorBinding(\.armor2))
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4), spacing: 4) {
+                        ForEach(model.config.zones ?? []) { z in
+                            Toggle(label(z.id), isOn: Binding(
+                                get: { model.look.zones2.contains(z.id) },
+                                set: { on in
+                                    model.look.zones2.removeAll { $0 == z.id }
+                                    if on { model.look.zones2.append(z.id) }
+                                    model.look.skin = "Custom"
+                                }))
+                            .toggleStyle(.button).controlSize(.small)
+                        }
+                    }
+                }
+                section("Abzeichen") {
+                    ForEach(0..<Look.maxBadges, id: \.self) { i in badgeRow(i) }
+                }
+                section("Leuchtlinien") {
+                    Picker("Muster", selection: Binding(get: { model.look.lines.pattern },
+                                                        set: { model.look.lines.pattern = $0; model.look.skin = "Custom" })) {
+                        Text("Keine").tag("None")
+                        ForEach(model.config.linePatterns ?? []) { Text(label($0.id)).tag($0.id) }
+                    }
+                    if model.look.lines.pattern != "None" {
+                        HStack {
+                            ColorPicker("Farbe", selection: Binding(get: { model.look.lines.color.color },
+                                                                    set: { model.look.lines.color = RGB(color: $0) }))
+                            Text("Stärke")
+                            Slider(value: $model.look.lines.strength, in: 0...2)
+                        }
+                    }
                 }
                 section("Augen") {
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 3), spacing: 4) {
@@ -263,6 +385,9 @@ struct Sidebar: View {
                 section("Brust-Display") {
                     Picker("Motiv", selection: $model.look.display) {
                         ForEach(model.config.displays, id: \.self) { Text($0).tag($0) }
+                        ForEach((model.config.displayAnimations ?? []).map(\.name), id: \.self) {
+                            Text("\($0) (animiert)").tag($0)
+                        }
                     }
                     Toggle("Motiv passend zur Animation", isOn: Binding(
                         get: { model.look.autoDisplay ?? true }, set: { model.look.autoDisplay = $0 }))
@@ -298,10 +423,50 @@ struct Sidebar: View {
                         Button("Speichern …") { model.saveLook() }
                         Button("Screenshot …") { model.screenshot() }
                     }
+                    HStack {
+                        Button("GIF …") { model.export(.gif) }
+                            .help("Die laufende Animation als GIF (15 fps, 600 px)")
+                        Button("Video …") { model.export(.mp4) }
+                            .help("Die laufende Animation als MP4 (30 fps, 1080 px)")
+                    }
+                }
+                section("Vergleich A/B") {
+                    HStack {
+                        Button("Als B merken") { model.rememberAsB() }
+                            .help("Den aktuellen Look rechts daneben stellen; danach links weiter ändern")
+                        Toggle("Nebeneinander", isOn: $model.compare)
+                        Button("Tauschen") { model.swapAB() }.disabled(model.lookB == nil)
+                    }
                 }
             }
             .padding(14)
         }
+    }
+
+    private static let labels = ["HazardStripes": "Warnstreifen", "Cross": "Kreuz", "Cloud": "Wolke",
+                                 "Number": "Nummer", "Biohazard": "Biohazard", "Glyph": "Schriftzeichen",
+                                 "RacingStripes": "Rennstreifen", "Target": "Zielmarke", "Circuit": "Leiterbahnen",
+                                 "Rings": "Ringe", "Seams": "Kanten", "Bolt": "Blitze", "Joints": "Gelenke",
+                                 "Head": "Kopf", "Ears": "Ohren", "Chest": "Brust", "Pads": "Schultern",
+                                 "Arms": "Arme", "Hips": "Hüfte", "Legs": "Beine", "Feet": "Füße"]
+
+    private func label(_ id: String) -> String { Sidebar.labels[id] ?? id }
+
+    private func badgeRow(_ i: Int) -> some View {
+        HStack {
+            Picker(i == 0 ? "Erstes" : "Zweites", selection: Binding(
+                get: { i < model.look.badges.count ? model.look.badges[i].id : "None" },
+                set: { model.setBadge(i, id: $0) })) {
+                Text("Keins").tag("None")
+                ForEach(model.config.badges ?? []) { Text(label($0.id)).tag($0.id) }
+            }
+            if i < model.look.badges.count {
+                ColorPicker("", selection: Binding(
+                    get: { model.look.badges[i].color.color },
+                    set: { model.look.badges[i].color = RGB(color: $0) })).labelsHidden()
+            }
+        }
+        .disabled(i > model.look.badges.count)
     }
 
     private var groups: [String] {

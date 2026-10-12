@@ -35,7 +35,11 @@ if os.path.exists(_report):
     with open(_report, encoding="utf-8") as _fh:
         ANIMS = list(json.load(_fh).get("animations", {})) or ANIMS
 TEXTURES = ["T_Robot_BaseColor.png", "T_Robot_MetallicSmoothness.png", "T_Robot_Normal.png", "T_Robot_Emission.png",
-            "T_Robot_Occlusion.png", "T_Robot_ColorMask.png", "T_Robot_LightMask.png", "T_Robot_EyeAtlas.png", "T_Robot_DisplayAtlas.png"]
+            "T_Robot_Occlusion.png", "T_Robot_ColorMask.png", "T_Robot_LightMask.png", "T_Robot_EyeAtlas.png", "T_Robot_DisplayAtlas.png",
+            "T_Robot_DisplayFlipbook.png"]
+MASK_TEXTURES = ["T_Robot_BadgeMask.png", "T_Robot_BadgeMask2.png", "T_Robot_LineMask.png", "T_Robot_LineMask2.png",
+                 "T_Robot_ZoneMask.png", "T_Robot_ZoneMask2.png"]       # 1.10: RGBA masks (alpha = a mask channel)
+START_SET_1_10 = {"Classic", "Shadow", "Hazard", "Medic", "Volt", "Gold", "Candy"}
 MAIN_MATERIALS = {"M_Robot", "M_RobotEyes", "M_RobotDisplay"}
 
 results = []
@@ -109,7 +113,8 @@ def verify_blend():
         p = os.path.join(tex_dir, t)
         if os.path.exists(p):
             img = bpy.data.images.load(p, check_existing=True)
-            check("files: %s size" % t, tuple(img.size) in ((2048, 2048), (1024, 1024), (2048, 1024)), tuple(img.size))
+            check("files: %s size" % t, tuple(img.size) in ((2048, 2048), (1024, 1024), (2048, 1024), (2048, 2560)),
+                  tuple(img.size))
     acts = [a for a in ANIMS if a in bpy.data.actions]
     check("blend: all %d actions present" % len(ANIMS), len(acts) == len(ANIMS), sorted(set(ANIMS) - set(acts)))
     for a in acts:
@@ -325,14 +330,78 @@ def verify_looks():
             bad.append(t["name"] + " missing")
             continue
         look = json.load(open(path, encoding="utf-8"))
+        displays = cfg["displays"] + [a["name"] for a in cfg.get("displayAnimations", [])]
         ok = (look.get("format") == cfg["lookFormat"]["format"] and look.get("version") == cfg["lookFormat"]["version"]
               and set(look["variants"]) == set(slots) and all(v in slots[k] for k, v in look["variants"].items())
-              and look["expression"] in cfg["expressions"] and look["display"] in cfg["displays"]
+              and look["expression"] in cfg["expressions"] and look["display"] in displays
               and all(0 <= look[k][c] <= 1 for k in ("armor", "mech", "metal", "lights", "screen", "eyes", "visor",
-                                                     "fabric") for c in "rgb"))
+                                                     "fabric", "armor2") for c in "rgb")
+              and look["skin"] == t["skin"] and look["finish"] in [f["id"] for f in cfg["finishes"]]
+              and all(b["id"] in [x["id"] for x in cfg["badges"]] for b in look["badges"])
+              and look["lines"]["pattern"] in ["None"] + [x["id"] for x in cfg["linePatterns"]]
+              and set(look["zones2"]) <= {z["id"] for z in cfg["zones"]})
         if not ok:
             bad.append(t["name"])
     check("looks: example look per robot type valid", not bad, bad or len(cfg["robotTypes"]))
+
+
+def mask_planes(tex_dir, name):
+    """(h, w, 4) float array of a mask texture as stored (straight alpha)."""
+    img = bpy.data.images.load(os.path.join(tex_dir, name), check_existing=True)
+    img.colorspace_settings.name = "Non-Color"
+    img.alpha_mode = "STRAIGHT"
+    px = np.empty(img.size[0] * img.size[1] * 4, dtype=np.float32)
+    img.pixels.foreach_get(px)
+    return px.reshape(img.size[1], img.size[0], 4)
+
+
+def verify_paintjob():
+    """1.10: skin data, mask textures, composed skins, expressions, animated displays, icons and sheets."""
+    cfg = json.load(open(os.path.join(OUT, "robot_config.json"), encoding="utf-8"))
+    tex_dir = os.path.join(OUT, "Textures")
+    skins = {sk["name"]: sk for sk in cfg["skins"]}
+    finishes = {f["id"] for f in cfg["finishes"]}
+    badges = {b["id"] for b in cfg["badges"]}
+    lines = {x["id"] for x in cfg["linePatterns"]}
+    zones = {z["id"] for z in cfg["zones"]}
+    bad = [n for n, sk in skins.items() if sk["finish"] not in finishes or len(sk["badges"]) > 2
+           or any(b["id"] not in badges for b in sk["badges"]) or (sk["lines"] and sk["lines"]["pattern"] not in lines)
+           or not set(sk["zones2"]) <= zones or len(sk["armor2"]) != 3]
+    check("skins: data valid (finish, badges, lines, zones, armor2)", not bad, bad or len(skins))
+    check("skins: at least 38 (20 from 1.7 + 18 new in 1.10)", len(skins) >= 38, len(skins))
+    start = {n for n, sk in skins.items() if sk["startSet"] and sk["stage"] == "1.10"}
+    check("skins: start set of stage 1.10", start == START_SET_1_10, sorted(start ^ START_SET_1_10))
+    missing = [n for n in skins if not os.path.exists(os.path.join(tex_dir, "T_Robot_BaseColor%s.png" %
+                                                                    ("" if n == "Classic" else "_" + n)))]
+    check("skins: composed texture per skin", not missing, missing or len(skins))
+    missing = [t for t in MASK_TEXTURES if not os.path.exists(os.path.join(tex_dir, t))]
+    check("masks: textures present", not missing, missing)
+    if not missing:
+        planes = {t: mask_planes(tex_dir, t) for t in MASK_TEXTURES}
+        empty = []
+        for kind in ("badges", "linePatterns", "zones"):
+            for e in cfg[kind]:
+                cover = float((planes[e["texture"]][..., e["channel"]] > 0.5).mean())
+                if cover < 1e-4:
+                    empty.append("%s %s" % (kind, e["id"]))
+        check("masks: every badge, line pattern and zone has pixels", not empty, empty)
+        zsum = sum(planes[z["texture"]][..., z["channel"]] for z in cfg["zones"])
+        check("masks: paint zones do not overlap", float(zsum.max()) < 1.05, round(float(zsum.max()), 3))
+    styles = cfg.get("expressionStyles", {})
+    check("expressions: 1.10 faces, styles and blink", {"Damage", "LowPower", "Check", "Warning", "Blink"} <=
+          set(cfg["expressions"]) and set(styles) <= set(cfg["expressions"]) and
+          cfg["blink"]["expression"] in cfg["expressions"], len(cfg["expressions"]))
+    gx, gy = cfg["flipbook"]["grid"]
+    anims = cfg.get("displayAnimations", [])
+    check("displays: animated motifs fit the flipbook", anims and all(a["frames"] <= gx and a["row"] < gy for a in anims),
+          [a["name"] for a in anims])
+    previews = os.path.join(OUT, "Previews")
+    if os.path.exists(os.path.join(previews, "skins.png")):          # tiers with renders
+        need = [os.path.join(previews, "skin_sheet.png"), os.path.join(previews, "silhouettes.png")]
+        need += [os.path.join(OUT, "Icons", k, n + ".png") for k, names in
+                 (("Skins", list(skins)), ("Expressions", cfg["expressions"]), ("Displays", cfg["displays"])) for n in names]
+        missing = [os.path.relpath(p, OUT) for p in need if not os.path.exists(p)]
+        check("previews: skin sheet, silhouettes and icons", not missing, missing[:5] or len(need))
 
 
 def main():
@@ -345,6 +414,7 @@ def main():
     verify_types()
     verify_clip_data()
     verify_looks()
+    verify_paintjob()
     ok = all(r["ok"] for r in results)
     os.makedirs(os.path.join(OUT, "logs"), exist_ok=True)
     with open(os.path.join(OUT, "logs", "verify_report.json"), "w", encoding="utf-8") as fh:

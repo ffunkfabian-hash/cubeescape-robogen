@@ -1,0 +1,166 @@
+# Techniken des Roboter-Generators – Übertrag auf Cubegen
+
+Stand: Generator 1.10.0 „Paintjob“. Diese Datei sammelt, **wie** der Generator arbeitet und was sich dabei bewährt
+oder als Falle erwiesen hat. Ziel: Der Modell-Editor von Cubegen soll genauso leistungsfähig werden. Jede Technik
+nennt die Fundstelle im Generator und was Cubegen davon übernehmen sollte. Pflegen bei jeder Generator-Version
+(neue Technik → neuer Abschnitt, geänderte Messwerte → hier ändern).
+
+## Auf einen Blick
+
+| Technik | Fundstelle | Wirkung | Für Cubegen |
+|---|---|---|---|
+| Skin = Daten | `data/skins.json`, `load_skins()` | 38 Skins ohne Code, jeder weitere kostet Minuten | Looks/Paletten der Modelle als Datei statt Code |
+| Einmal backen, linear zusammensetzen | `bake_layers()`, `compose_skin()` | 38 Skins für den Preis von 6 Backs | Farbvarianten nie einzeln backen |
+| Masken statt Textursätze | `pattern_masks()`, Zonen-Attribute | Abzeichen, Leuchtlinien, Zweitfarbe zur Laufzeit | Varianten im Spiel per Shader statt Textur je Variante |
+| Lackzonen aus Bauteil-Namen | `paint_zone()`, `PAINT_ZONES` | Zweitfarbe exakt an Teilgrenzen | Teile benennen, Zonen als Flächenattribut |
+| Abzeichen an Ankerpunkten | `badge_anchors()`, `BADGE_PLACES` | Decals sitzen auf jedem Bauteil-Typ | Decal-Bibliothek mit Ankern je Modellfamilie |
+| Knoten teilen | `pattern_masks()` | Materialaufbau 2,2 → 0,4 s | Gemeinsame Teilgraphen statt Kopien |
+| Vorschau wie Konzeptbilder | `render_cards()`, `card_compositor()` | Karten in Dreiviertel-Ansicht mit Bloom und Randlicht | Präsentationsrender für Sets und Kataloge |
+| Konzeptbogen auswerten | `scripts/concept_palettes.py` | 42 Paletten in einer Sitzung, ohne Neural Engine | Referenzbilder per festem Raster auslesen |
+| UI-Icons + Lesbarkeit | `build_icons()`, `icon_check()` | 113 Icons, Prüfung < 1 s | Icons je Modell/Variante für die Werkbank |
+| Viewer: Daten-Texturen roh laden | `RobotScene.pixels()` | Masken mit Alphakanal bleiben intakt | Jede Laufzeit-Vorschau mit RGBA-Masken |
+| SceneKit: ≤ 23 Shader-Argumente | `makeBodyMaterial()` | sonst stilles Pink | Uniforms packen (Vektoren, Bitmasken) |
+| Berichtsvergleich als Gate | `robot_report.json` (`qa`, `clips`, `type_bounds`) | Modelländerungen fallen sofort auf | Golden-Bericht je Teststufe |
+
+## 1. Skin = Daten
+
+- Ein Skin ist ein Datensatz in `data/skins.json` (Format `CubeEscapeRobotSkins`, Version 1): Palette (`armor`,
+  `armor2`, `mech`, `metal`, `eye`, `screen`, `accent`, `visor`, `fabric`), Oberfläche (`finish`), bis zu zwei
+  Abzeichen, ein Leuchtlinien-Muster, Zweitfarben-Zonen (`zones2`), optional Bauteile, Ausdruck, Display und Metadaten
+  (`theme`, `stage`, `startSet`, `concept`).
+- Farben als lineare Listen (exakte Altwerte) **oder** als sRGB-`#rrggbb` (bequem aus Konzeptbildern); der Loader
+  rechnet um. Jeder Fehler nennt Datei und Skin (`load_skins()`), Bezüge auf Bauteile/Ausdrücke prüft
+  `validate_skins()`, sobald das Modell sie kennt.
+- IDs sind ewig: Skins, Abzeichen, Muster, Zonen und Oberflächen werden nie umbenannt, Listen nur am Ende erweitert
+  (Kanal = Position).
+- Das Spieler-Format (`*.robotlook.json`) ist versioniert; jede Version hat eine Migration (v1 → v2 → v3) und eine
+  Test-Fixture (`viewer/tests/look_v*.json`), alte Fixtures werden nie geändert.
+
+**Für Cubegen:** Modell-Looks (Materialpaletten, Patina, Abzeichen) als versionierte Datendatei mit Loader-Prüfung
+statt als Python-Konstanten; jede Formatänderung mit Migration und Fixture.
+
+## 2. Einmal backen, linear zusammensetzen
+
+- Jede Körperfarbe hängt linear von der Palette ab: `Basis = C + Σ w_k · Palette_k`. Ein Back mit schwarzer Palette
+  liefert `C`, je drei Palettenfarben ein Back (eine pro RGB-Kanal) liefert die Gewichtskarten `w_k`. Danach entsteht
+  jeder Skin per numpy (`compose_skin()`), 38 Skins in etwa 5 s bei 1024².
+- Gegenprobe im Volllauf (`--check-compose`): Der Standard-Skin wird zusätzlich direkt gebacken, Abweichung 4e-7,
+  Abbruch ab 2e-3. Bricht ein Material die Linearität (z. B. Palettenfarbe in einer Potenz), fällt das sofort auf.
+- Ein Back je zusammengefügter Kopie (`joined_copy()`): Cycles öffnet je ausgewähltem Objekt eine eigene Sitzung,
+  auf Metal kostet jede eine Geräte-Synchronisation (35 Teile: 9–20 s je Durchgang statt 0,2–1 s).
+- Cache-Schlüssel am Inhalt: Geometrie in kanonischer Ecken-Reihenfolge (Blenders Insel-Packen und Flächenfolge sind
+  nicht deterministisch), Node-Signatur der Materialien ohne Palettenwerte, Quelltexturen, Einstellungen. Was der
+  Schlüssel nicht sieht, bekommt eine Schemaversion (`BAKE_SCHEMA`, `UV_SCHEMA`).
+
+**Für Cubegen:** Material- und Farbvarianten eines Modells nie einzeln backen; Gewichtskarten einmal backen und
+zusammensetzen. Gilt für Patina-Stufen ebenso, solange sie linear mischen.
+
+## 3. Masken statt Textursätze
+
+Statt eines Textursatzes je Skin liefert der Generator Masken (alle 2048², RGBA, Kanal = ID-Position):
+
+| Textur | Kanäle | Herkunft |
+|---|---|---|
+| `T_Robot_ColorMask` / `LightMask` | Panzerung, Mechanik, Metall / Lichter | Material je Fläche |
+| `T_Robot_BadgeMask`, `…2` | 8 Abzeichen | Decals an Ankerpunkten, prozedurale Streifen |
+| `T_Robot_LineMask`, `…2` | Leiterbahnen, Ringe, Kanten, Blitze / Gelenke | ImageMagick-Kacheln, Normalen, Flächenattribut |
+| `T_Robot_ZoneMask`, `…2` | 8 Lackzonen | Flächenattribut `paint_zone` |
+
+- **Gebacken wird die Maske, nicht die Farbe:** Masken-Kanäle sind Emissions-Backs von Skalarfeldern (drei je Back);
+  beim Backen mit der Farbmaske multipliziert (Abzeichen/Zonen: Panzerung + Metall, Linien: Panzerung).
+- **Zusammensetzen mit Helligkeitsverhältnis:** Ein Abzeichen oder die Zweitfarbe ersetzt die Farbe, behält aber
+  Schmutz, Kratzer und AO: `neu = Farbe · clamp(lum(Basis) / lum(Bezug), 0.2, 1.6)`; Bezug = Panzerung oder Metall
+  laut Farbmaske. Dieselbe Formel steht in numpy (`decorate_skin()`), im Viewer-Shader und kommt so nach Unity.
+- **Leuchtlinien** färben die Albedo (`linePaint` 0,85 · 0,6) und addieren Emission; Bloom macht daraus Licht.
+- **Lackzonen aus Bauteil-Namen:** Beim Zusammenfügen bekommt jede Fläche ein Int-Attribut `paint_zone` (Name ohne
+  `_L/_R` → Zone) und `glow_part` (Ringteile). Ein Attribute-Node liest es, ein Vergleich macht daraus die Maske. Exakt
+  an Teilgrenzen, ohne Koordinaten-Raten, und es bleibt beim Join erhalten.
+- **Abzeichen an Ankerpunkten:** Ein Anker ist eine Projektionsebene mit Rechteck und Seitenbedingung (Schulter
+  seitlich, Ohrscheibe, Brust unten, Oberschenkel, Rücken, Hinterkopf). Seitenebenen nutzen `y · sign(x)`, damit Schrift
+  auf beiden Seiten lesbar bleibt. Jedes Abzeichen wählt seine Anker (`BADGE_PLACES`).
+- **Prozedurale Muster:** Warnstreifen = `fract((x+y+z)/0.06) < 0.5` in Regionen; Ringe = Bänder in z; Kanten =
+  `max(|n.x|,|n.y|,|n.z|) < 0.8` (Mitte jeder gerundeten Kante); Leiterbahnen/Blitze = kachelbare ImageMagick-Texturen,
+  box-projiziert (beim Zeichnen um ±Kachelgröße wiederholt, damit sie nahtlos kacheln).
+
+**Für Cubegen:** Modellsets mit Laufzeit-Varianten (Fraktionsfarben, Warnmarkierungen, Leuchtstreifen, Schadenszonen)
+als Maskenkanäle liefern; Zonen über benannte Teile und Flächenattribute; Decal-Anker je Modellfamilie definieren.
+
+## 4. Leistung beim Aufbau
+
+- **Jeder Shader-Knoten kostet in Blender etwa 1 ms** (eindeutige Namen, wachsender Baum). Die Abzeichen erzeugten
+  zuerst rund 600 Knoten; gemeinsame Projektionen je Anker senkten den Materialaufbau von 2,2 auf 0,4 s – bei
+  bitgleichen Masken.
+- Profilieren statt raten: `scripts/profile_run.py` (cProfile, `--workers 0`).
+- Zeiten nur auf ruhiger Maschine vergleichen; parallele Läufe anderer Agenten verfälschen um das 1,5- bis 5-Fache
+  (`timings.load` im Bericht).
+
+## 5. Vorschau wie die Konzeptbilder
+
+- **Skin-Karten** (`render_cards()`): perspektivische Dreiviertel-Kamera (Objektiv 58 mm, 2,45 m Abstand), Randlicht
+  in der Leuchtfarbe des Skins, Welt = Kartenfarbe, Bloom. Montage per ImageMagick: Render, vier Farbpunkte
+  (Panzerung, Zweitfarbe, Lichter, Augen), Systeme, „NN // NAME“, Thema, Startset-Stern → `Previews/skin_sheet.png`.
+- **Bloom in Blender 5.2:** Compositor als Node-Gruppe (`bpy.data.node_groups.new(..., "CompositorNodeTree")`,
+  Ausgang über `interface.new_socket`, `scene.compositing_node_group`), Glare-Knoten Typ „Bloom“. Schwelle **über**
+  der normalen Beleuchtung (2,2), sonst strahlt die ganze Figur; Stärke 0,3, Größe 0,3.
+- **Silhouetten** aus dem Alphakanal transparenter Frontrender (`-alpha extract -threshold`).
+- Alle Bögen mit `-depth 8` schreiben (16 Bit kosteten 19 MB für einen Bogen).
+
+**Für Cubegen:** Set- und Katalogübersichten im Stil der Konzeptbilder; Bloom nur auf Emission.
+
+## 6. Konzeptbögen auswerten
+
+- `scripts/concept_palettes.py`: festes Kartenraster je Bogen (gemessen am Prüfbild mit Markierungen), Median aus
+  5 × 5 Pixeln je Farbpunkt → `data/concept_palettes.json`. Namen abgetippt (schneller und sicherer als Texterkennung).
+- Lehre: Die generierten Bögen liegen **nicht** auf einem exakten Raster (Spaltenabstand schwankt um ±8 px). Eine
+  „automatische Feinsuche“ nach gleichmäßigen Flächen landete in Lücken zwischen den Punkten – feste, am Prüfbild
+  vermessene Positionen waren zuverlässiger.
+- Neural Engine nicht nötig (Zeitregel des Fahrplans eingehalten).
+
+## 7. UI-Icons und Lesbarkeit
+
+- `build_icons()`: Skins aus den Kartenrendern (Kopf und Brust), Ausdrücke/Display/Abzeichen direkt aus den Atlanten
+  (eingefärbt), Accessoires einzeln transparent gerendert und auf ihre Größe zugeschnitten → `Icons/<Art>/<ID>.png`.
+- Lesbarkeit ohne Saliency-Modell (`icon_check()`): Objekt füllt 30–96 % der längeren Seite und sitzt mittig; nur
+  Hinweis im Bericht. Deterministisch, unter 1 s für alle Icons.
+
+**Für Cubegen:** Icons je Modell, Variante und Set für die Werkbank-Palette; dieselbe Prüfung.
+
+## 8. Laufzeit-Vorschau (SceneKit-Viewer) – Fallen
+
+- **NSImage multipliziert RGB mit Alpha vor.** Steht im Alphakanal eine eigene Maske, sind die anderen Kanäle dort
+  gelöscht (betraf auch Metall/Glätte seit 1.7). Daten-Texturen deshalb roh laden: `CGImageSource` → Bytes →
+  `MTLTexture` (`RobotScene.pixels()`, `packed()`).
+- **SceneKit zeichnet einen Shader-Modifier ab etwa 23 eigenen Argumenten kommentarlos pink.** Keine Fehlermeldung
+  (auch nicht im System-Log); Fehlersuche durch Weglassen. Abhilfe: Uniforms packen (vier Bezugshelligkeiten in einem
+  `float4`, Zonen als Bitmaske in `finish.w`) und Masken beim Laden zusammenlegen (Zonen → eine Zonen-Nummer,
+  `filter::nearest`).
+- Den Shader-Text allein prüfen: `MTLDevice.makeLibrary(source:)` in einem kleinen Swift-Programm (die Metal-Toolchain
+  fehlt ohne Xcode-Download).
+- Animierte Display-Motive als Flipbook (Zeile je Motiv, `fps` in den Daten), Blinzeln als Laufzeitregel (`blink`),
+  Ausdrucks-Stile (Färbung, Leuchtkraft) als Daten – nichts davon ist eine Clip-Änderung.
+- A/B-Vergleich als zweite Szene mit gleichem Clip und gleicher Wiedergabe; Export als GIF (ImageIO) und MP4
+  (AVAssetWriter, H.264, gerade Kantenlängen) offscreen Bild für Bild.
+
+**Für Cubegen:** Gilt für jede macOS-Vorschau (App 0.16) mit Masken oder vielen Parametern.
+
+## 9. Prüfen
+
+- Teststufen `quick` / `standard` / `full` mit Zeitbudget; Worker-Pakete für QA und Renders.
+- **Bericht als Gate:** `qa`, `clips`, `type_bounds`, Dreiecke, Bones vor und nach der Änderung vergleichen – ohne
+  gewollte Modelländerung identisch (1.10: alles identisch mit 1.9, obwohl Materialien, Masken und Renders neu sind).
+- `verify_robot.py` prüft unabhängig (222 Prüfungen, davon 1.10: Skin-Daten, Masken mit Pixeln, Zonen
+  überlappungsfrei, Gesichter, Flipbook, Icons, Bögen); `viewer/test_viewer.sh` prüft Migrationen, unbekannte IDs,
+  Round Trip und Export.
+
+## 10. Checkliste für den Cubegen-Modell-Editor
+
+- [ ] Looks/Paletten als versionierte Datendatei mit Loader-Prüfung und Migration
+- [ ] Farbvarianten aus einmal gebackenen Gewichtskarten zusammensetzen, Gegenprobe im Volllauf
+- [ ] Maskenkanäle (Zonen, Abzeichen, Leuchtlinien) statt Textursatz je Variante; Formel mit Helligkeitsverhältnis
+- [ ] Lackzonen über benannte Teile → Flächenattribut → Attribute-Node
+- [ ] Decal-Anker je Modellfamilie, Decal-Bibliothek per ImageMagick
+- [ ] Gemeinsame Teilgraphen in Materialien (Knotenzahl messen)
+- [ ] Präsentationskarten mit Dreiviertel-Kamera, Randlicht, Bloom nur auf Emission; Silhouetten aus Alpha
+- [ ] Icons je Modell/Variante mit Lesbarkeitsprüfung
+- [ ] Vorschau-App: Daten-Texturen roh laden, Uniforms packen, A/B-Vergleich, GIF/MP4-Export
+- [ ] Bericht-Gate: Geometrie-/QA-Kennzahlen vor und nach jeder Änderung vergleichen

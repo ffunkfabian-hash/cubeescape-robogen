@@ -1,0 +1,759 @@
+{
+  "format": "CubeEscapeRobotSkins",
+  "version": 1,
+  "note": "Skin = data: palette (linear RGB lists or sRGB '#rrggbb'), finish, badges, glow lines, optional parts, expression and display. IDs are permanent (saved looks); skins are never renamed or removed.",
+  "skins": [
+    {
+      "id": "Classic",
+      "theme": "Standard / Cover Bot",
+      "since": "1.7.0",
+      "stage": "1.10",
+      "startSet": true,
+      "concept": "Ü Cover Bot",
+      "palette": {
+        "armor": [0.66, 0.685, 0.72],
+        "mech": [0.075, 0.08, 0.092],
+        "metal": [0.38, 0.395, 0.42],
+        "eye": [0.02, 0.62, 0.95],
+        "screen": [0.3, 1.0, 0.62],
+        "accent": [1.0, 0.38, 0.05],
+        "visor": [0.006, 0.007, 0.01],
+        "fabric": [0.78, 0.1, 0.12]
+      },
+      "finish": "Standard"
+    },
+    {
+      "id": "Sunrise",
+      "theme": "Warm / Orange",
+      "since": "1.7.0",
+      "stage": "1.7",
+      "startSet": false,
+      "palette": {
+        "armor": [0.86, 0.5, 0.12],
+        "mech": [0.085, 0.08, 0.078],
+        "metal": [0.42, 0.4, 0.38],
+        "eye": [0.02, 0.62, 0.95],
+        "screen": [0.3, 1.0, 0.62],
+        "accent": [0.95, 0.95, 0.9],
+        "visor": [0.006, 0.007, 0.01],
+        "fabric": [0.1, 0.16, 0.4]
+      },
+      "finish": "Standard"
+    },
+    {
+      "id": "Midnight",
+      "theme": "Dunkel / Nacht",
+      "since": "1.7.0",
+      "stage": "1.7",
+      "startSet": false,
+      "palette": {
+        "armor": [0.13, 0.14, 0.165],
+        "mech": [0.03, 0.032, 0.038],
+        "metal": [0.22, 0.23, 0.26],
+        "eye": [0.35, 1.0, 0.1],
+        "screen": [0.35, 1.0, 0.1],
+        "accent": [1.0, 0.2, 0.35],
+        "visor": [0.006, 0.007, 0.01],
+        "fabric": [0.1, 0.85, 0.95]
+      },
+      "finish": "Standard"
+    },
+    {
+      "id": "Rescue",
+      "theme": "Rettung / Rot",
+      "since": "1.7.0",
+      "stage": "1.7",
+      "startSet": false,
+      "palette": {
+        "armor": [0.78, 0.12, 0.1],
+        "mech": [0.08, 0.08, 0.085],
+        "metal": [0.8, 0.8, 0.82],
+        "eye": [0.02, 0.62, 0.95],
+        "screen": [0.3, 1.0, 0.62],
+        "accent": [1.0, 0.9, 0.2],
+        "visor": [0.006, 0.007, 0.01],
+        "fabric": [0.95, 0.95, 0.92]
+      },
+      "finish": "Standard"
+    },
+    {
+      "id": "Arctic",
+      "theme": "Eis / Kalt",
+      "since": "1.7.0",
+      "stage": "1.7",
+      "startSet": false,
+      "palette": {
+        "armor": [0.62, 0.8, 0.98],
+        "mech": [0.1, 0.22, 0.42],
+        "metal": [0.7, 0.8, 0.9],
+        "eye": [0.35, 0.85, 1.0],
+        "screen": [0.5, 0.9, 1.0],
+        "accent": [0.4, 0.8, 1.0],
+        "visor": [0.006, 0.007, 0.01],
+        "fabric": [0.1, 0.25, 0.6]
+      },
+      "finish": "Standard"
+    },
+    {
+      "id": "Jungle",
+      "theme": "Dschungel / Tarn",
+      "since": "1.7.0",
+      "stage": "1.7",
+      "startSet": false,
+      "palette": {
+        "armor": [0.3, 0.36, 0.18],
+        "mech": [0.1, 0.09, 0.06],
+        "metal": [0.4, 0.36, 0.26],
+        "eye": [1.0, 0.85, 0.1],
+        "screen": [0.9, 0.85, 0.2],
+        "accent": [1.0, 0.55, 0.1],
+        "visor": [0.006, 0.007, 0.01],
+        "fabric": [0.55, 0.3, 0.1]
+      },
+      "finish": "Standard"
+    },
+    {
+      "id": "Neon",
+      "theme": "Cyber / Leuchtlinien",
+      "since": "1.7.0",
+      "stage": "1.10",
+      "startSet": false,
+      "concept": "Ü Neon Bot",
+      "palette": {
+        "armor": [0.06, 0.06, 0.075],
+        "mech": [0.02, 0.02, 0.025],
+        "metal": [0.16, 0.16, 0.2],
+        "eye": [1.0, 0.1, 0.75],
+        "screen": [0.1, 0.95, 1.0],
+        "accent": [0.2, 1.0, 0.9],
+        "visor": [0.006, 0.007, 0.01],
+        "fabric": [1.0, 0.1, 0.75]
+      },
+      "finish": "Standard",
+      "lines": {"pattern": "Seams", "color": "#59f9ff", "strength": 1.2}
+    },
+    {
+      "id": "Gold",
+      "theme": "Edel / Glanz",
+      "since": "1.7.0",
+      "stage": "1.10",
+      "startSet": true,
+      "concept": "C16 Golden",
+      "palette": {
+        "armor": [0.95, 0.6, 0.1],
+        "mech": [0.1, 0.08, 0.06],
+        "metal": [0.8, 0.55, 0.18],
+        "eye": [1.0, 0.95, 0.75],
+        "screen": [1.0, 0.8, 0.4],
+        "accent": [1.0, 0.45, 0.1],
+        "visor": [0.006, 0.007, 0.01],
+        "fabric": [0.45, 0.05, 0.1]
+      },
+      "finish": "Glanz"
+    },
+    {
+      "id": "Mint",
+      "theme": "Frisch / Pastell",
+      "since": "1.7.0",
+      "stage": "1.7",
+      "startSet": false,
+      "palette": {
+        "armor": [0.55, 0.85, 0.72],
+        "mech": [0.2, 0.22, 0.28],
+        "metal": [0.8, 0.8, 0.85],
+        "eye": [1.0, 0.35, 0.6],
+        "screen": [1.0, 0.5, 0.75],
+        "accent": [1.0, 0.75, 0.2],
+        "visor": [0.006, 0.007, 0.01],
+        "fabric": [1.0, 0.45, 0.65]
+      },
+      "finish": "Standard"
+    },
+    {
+      "id": "Copper",
+      "theme": "Kupfer / Retro",
+      "since": "1.7.0",
+      "stage": "1.7",
+      "startSet": false,
+      "palette": {
+        "armor": [0.72, 0.38, 0.2],
+        "mech": [0.07, 0.06, 0.055],
+        "metal": [0.55, 0.45, 0.35],
+        "eye": [0.3, 1.0, 0.35],
+        "screen": [0.3, 1.0, 0.35],
+        "accent": [1.0, 0.6, 0.15],
+        "visor": [0.006, 0.007, 0.01],
+        "fabric": [0.1, 0.35, 0.3]
+      },
+      "finish": "Standard"
+    },
+    {
+      "id": "Royal",
+      "theme": "Königlich / Blau-Gold",
+      "since": "1.7.0",
+      "stage": "1.7",
+      "startSet": false,
+      "palette": {
+        "armor": [0.1, 0.18, 0.48],
+        "mech": [0.05, 0.05, 0.08],
+        "metal": [0.8, 0.65, 0.3],
+        "eye": [0.5, 0.8, 1.0],
+        "screen": [0.9, 0.75, 0.3],
+        "accent": [1.0, 0.8, 0.25],
+        "visor": [0.006, 0.007, 0.01],
+        "fabric": [0.85, 0.65, 0.2]
+      },
+      "finish": "Standard"
+    },
+    {
+      "id": "Lava",
+      "theme": "Vulkan / Glut",
+      "since": "1.7.0",
+      "stage": "1.7",
+      "startSet": false,
+      "palette": {
+        "armor": [0.2, 0.07, 0.05],
+        "mech": [0.03, 0.02, 0.02],
+        "metal": [0.3, 0.2, 0.15],
+        "eye": [1.0, 0.35, 0.02],
+        "screen": [1.0, 0.45, 0.05],
+        "accent": [1.0, 0.25, 0.02],
+        "visor": [0.006, 0.007, 0.01],
+        "fabric": [0.9, 0.3, 0.05]
+      },
+      "finish": "Standard"
+    },
+    {
+      "id": "Ocean",
+      "theme": "Unterwasser / Tech",
+      "since": "1.7.0",
+      "stage": "1.10",
+      "startSet": false,
+      "concept": "A11 Ocean",
+      "palette": {
+        "armor": [0.05, 0.35, 0.55],
+        "mech": [0.02, 0.08, 0.14],
+        "metal": [0.45, 0.6, 0.7],
+        "eye": [0.3, 1.0, 0.85],
+        "screen": [0.2, 0.9, 1.0],
+        "accent": [0.1, 1.0, 0.7],
+        "visor": [0.006, 0.007, 0.01],
+        "fabric": [0.95, 0.85, 0.4],
+        "armor2": "#a4bcc6"
+      },
+      "zones2": ["Ears", "Pads"],
+      "finish": "Standard",
+      "lines": {"pattern": "Seams", "color": "#3dffcf", "strength": 1.0}
+    },
+    {
+      "id": "Bubblegum",
+      "theme": "Bunt / Pastell",
+      "since": "1.7.0",
+      "stage": "1.7",
+      "startSet": false,
+      "palette": {
+        "armor": [0.95, 0.45, 0.7],
+        "mech": [0.35, 0.12, 0.4],
+        "metal": [0.85, 0.75, 0.9],
+        "eye": [0.35, 0.95, 1.0],
+        "screen": [1.0, 0.6, 0.9],
+        "accent": [0.6, 1.0, 0.95],
+        "visor": [0.006, 0.007, 0.01],
+        "fabric": [0.45, 0.2, 0.85]
+      },
+      "finish": "Standard"
+    },
+    {
+      "id": "Toxic",
+      "theme": "Gift / Biohazard",
+      "since": "1.7.0",
+      "stage": "1.10",
+      "startSet": false,
+      "concept": "C09 Toxic",
+      "palette": {
+        "armor": [0.05, 0.06, 0.05],
+        "mech": [0.02, 0.03, 0.02],
+        "metal": [0.2, 0.25, 0.18],
+        "eye": [0.55, 1.0, 0.05],
+        "screen": [0.55, 1.0, 0.05],
+        "accent": [0.7, 1.0, 0.0],
+        "visor": [0.006, 0.007, 0.01],
+        "fabric": [0.4, 0.9, 0.05]
+      },
+      "finish": "Standard",
+      "badges": [{"id": "Biohazard", "color": "#c4f000"}],
+      "lines": {"pattern": "Circuit", "color": "#acd009", "strength": 0.9}
+    },
+    {
+      "id": "Sand",
+      "theme": "Wüste / Erdig",
+      "since": "1.7.0",
+      "stage": "1.7",
+      "startSet": false,
+      "palette": {
+        "armor": [0.75, 0.62, 0.42],
+        "mech": [0.2, 0.15, 0.1],
+        "metal": [0.55, 0.48, 0.38],
+        "eye": [0.2, 0.75, 1.0],
+        "screen": [1.0, 0.75, 0.35],
+        "accent": [1.0, 0.45, 0.15],
+        "visor": [0.006, 0.007, 0.01],
+        "fabric": [0.6, 0.25, 0.12]
+      },
+      "finish": "Standard"
+    },
+    {
+      "id": "Cherry",
+      "theme": "Kirsche / Rot-Weiß",
+      "since": "1.7.0",
+      "stage": "1.7",
+      "startSet": false,
+      "palette": {
+        "armor": [0.85, 0.05, 0.12],
+        "mech": [0.92, 0.92, 0.9],
+        "metal": [0.75, 0.75, 0.78],
+        "eye": [1.0, 0.95, 0.9],
+        "screen": [1.0, 0.4, 0.5],
+        "accent": [1.0, 0.85, 0.9],
+        "visor": [0.006, 0.007, 0.01],
+        "fabric": [0.95, 0.95, 0.95]
+      },
+      "finish": "Standard"
+    },
+    {
+      "id": "Vapor",
+      "theme": "Vaporwave / Lila",
+      "since": "1.7.0",
+      "stage": "1.7",
+      "startSet": false,
+      "palette": {
+        "armor": [0.35, 0.15, 0.65],
+        "mech": [0.05, 0.03, 0.12],
+        "metal": [0.55, 0.45, 0.75],
+        "eye": [0.1, 1.0, 1.0],
+        "screen": [1.0, 0.3, 0.85],
+        "accent": [1.0, 0.3, 0.85],
+        "visor": [0.006, 0.007, 0.01],
+        "fabric": [0.1, 0.9, 1.0]
+      },
+      "finish": "Standard"
+    },
+    {
+      "id": "Noir",
+      "theme": "Schwarz / Elegant",
+      "since": "1.7.0",
+      "stage": "1.7",
+      "startSet": false,
+      "palette": {
+        "armor": [0.03, 0.03, 0.035],
+        "mech": [0.85, 0.85, 0.85],
+        "metal": [0.85, 0.7, 0.35],
+        "eye": [1.0, 1.0, 1.0],
+        "screen": [0.9, 0.9, 0.9],
+        "accent": [1.0, 0.8, 0.3],
+        "visor": [0.006, 0.007, 0.01],
+        "fabric": [0.7, 0.05, 0.08]
+      },
+      "finish": "Standard"
+    },
+    {
+      "id": "Forest",
+      "theme": "Wald / Grün",
+      "since": "1.7.0",
+      "stage": "1.7",
+      "startSet": false,
+      "palette": {
+        "armor": [0.12, 0.3, 0.12],
+        "mech": [0.08, 0.06, 0.04],
+        "metal": [0.45, 0.35, 0.22],
+        "eye": [1.0, 0.85, 0.3],
+        "screen": [0.6, 1.0, 0.3],
+        "accent": [1.0, 0.6, 0.1],
+        "visor": [0.006, 0.007, 0.01],
+        "fabric": [0.75, 0.15, 0.1]
+      },
+      "finish": "Standard"
+    },
+    {
+      "id": "Shadow",
+      "theme": "Tarnung / Dunkel",
+      "since": "1.10.0",
+      "stage": "1.10",
+      "startSet": true,
+      "concept": "Ü Stealth Bot",
+      "palette": {
+        "armor": "#2b2e33",
+        "mech": "#111214",
+        "metal": "#3b3e44",
+        "eye": "#3fd6ff",
+        "screen": "#3fd6ff",
+        "accent": "#1fa8d8",
+        "visor": "#060709",
+        "fabric": "#1c1e22"
+      },
+      "finish": "Matt"
+    },
+    {
+      "id": "Hazard",
+      "theme": "Warnung / Baustelle",
+      "since": "1.10.0",
+      "stage": "1.10",
+      "startSet": true,
+      "palette": {
+        "armor": "#f0b21a",
+        "mech": "#1b1b1d",
+        "metal": "#6b6a66",
+        "eye": "#3cd2ff",
+        "screen": "#ffcf3a",
+        "accent": "#ff6a00",
+        "visor": "#060709",
+        "fabric": "#1b1b1d"
+      },
+      "finish": "Standard",
+      "badges": [{"id": "HazardStripes", "color": "#151515"}]
+    },
+    {
+      "id": "Medic",
+      "theme": "Service / Hilfe",
+      "since": "1.10.0",
+      "stage": "1.10",
+      "startSet": true,
+      "concept": "A10 Medic",
+      "palette": {
+        "armor": "#ece7e3",
+        "mech": "#5f5a5c",
+        "metal": "#aaa4a1",
+        "eye": "#35d0ff",
+        "screen": "#ff6060",
+        "accent": "#e0201f",
+        "visor": "#060709",
+        "fabric": "#cd2221",
+        "armor2": "#cd2221"
+      },
+      "zones2": ["Pads", "Feet"],
+      "finish": "Standard",
+      "badges": [{"id": "Cross", "color": "#cd2221"}],
+      "display": "Heart"
+    },
+    {
+      "id": "Volt",
+      "theme": "Strom / Energie",
+      "since": "1.10.0",
+      "stage": "1.10",
+      "startSet": true,
+      "palette": {
+        "armor": "#1f2a44",
+        "mech": "#0b0f18",
+        "metal": "#4a5670",
+        "eye": "#fff04a",
+        "screen": "#fff04a",
+        "accent": "#ffe600",
+        "visor": "#060709",
+        "fabric": "#ffd400",
+        "armor2": "#ffd400"
+      },
+      "zones2": ["Ears"],
+      "finish": "Standard",
+      "lines": {"pattern": "Bolt", "color": "#ffe14a", "strength": 1.2},
+      "display": "Lightning"
+    },
+    {
+      "id": "Candy",
+      "theme": "Bunt / Spielerisch",
+      "since": "1.10.0",
+      "stage": "1.10",
+      "startSet": true,
+      "concept": "C10 Candy",
+      "palette": {
+        "armor": "#f2a6bd",
+        "mech": "#7d3a52",
+        "metal": "#63c7d4",
+        "eye": "#5fe3ff",
+        "screen": "#ff8fb0",
+        "accent": "#63d7e6",
+        "visor": "#060709",
+        "fabric": "#f47f95",
+        "armor2": "#58c3d1"
+      },
+      "zones2": ["Ears", "Pads", "Arms", "Feet"],
+      "finish": "Candy",
+      "expression": "Cute"
+    },
+    {
+      "id": "Industrial",
+      "theme": "Schwer / Gelb",
+      "since": "1.10.0",
+      "stage": "1.10",
+      "startSet": false,
+      "concept": "Ü Industrial Bot",
+      "palette": {
+        "armor": "#e9a910",
+        "mech": "#2a2a2c",
+        "metal": "#6f6e6a",
+        "eye": "#3cc8ff",
+        "screen": "#ffcf3a",
+        "accent": "#ff7a00",
+        "visor": "#060709",
+        "fabric": "#2a2a2c",
+        "armor2": "#2f2f31"
+      },
+      "zones2": ["Ears", "Hips"],
+      "finish": "Satin",
+      "badges": [{"id": "Number", "color": "#1b1b1b"}]
+    },
+    {
+      "id": "Prototype",
+      "theme": "Testlauf / Rot",
+      "since": "1.10.0",
+      "stage": "1.10",
+      "startSet": false,
+      "concept": "Ü Prototype Bot",
+      "palette": {
+        "armor": "#c8231e",
+        "mech": "#1c1c1f",
+        "metal": "#b8b8bc",
+        "eye": "#3ad0ff",
+        "screen": "#ffffff",
+        "accent": "#ffd000",
+        "visor": "#060709",
+        "fabric": "#f2d21b",
+        "armor2": "#d9d7d3"
+      },
+      "zones2": ["Arms", "Legs"],
+      "finish": "Standard",
+      "badges": [{"id": "Target", "color": "#121212"}]
+    },
+    {
+      "id": "Retro",
+      "theme": "8-Bit / Retro",
+      "since": "1.10.0",
+      "stage": "1.10",
+      "startSet": false,
+      "concept": "Ü Retro Bot",
+      "palette": {
+        "armor": "#e8dcc4",
+        "mech": "#3a3430",
+        "metal": "#b0a58f",
+        "eye": "#ffb12e",
+        "screen": "#ffb12e",
+        "accent": "#ff5a36",
+        "visor": "#060709",
+        "fabric": "#c0392b",
+        "armor2": "#c0392b"
+      },
+      "zones2": ["Ears", "Feet"],
+      "finish": "Satin",
+      "parts": {"Head": "Boxy", "AccHead": "Antenna"},
+      "expression": "Pixel",
+      "display": "Smiley"
+    },
+    {
+      "id": "Orbit",
+      "theme": "Raumfahrt / Antenne",
+      "since": "1.10.0",
+      "stage": "1.10",
+      "startSet": false,
+      "palette": {
+        "armor": "#e9edf5",
+        "mech": "#2a3550",
+        "metal": "#9aa6b8",
+        "eye": "#6fd0ff",
+        "screen": "#7fd7ff",
+        "accent": "#ff8a3c",
+        "visor": "#060709",
+        "fabric": "#ff8a3c",
+        "armor2": "#ff8a3c"
+      },
+      "zones2": ["Ears", "Pads"],
+      "finish": "Standard",
+      "parts": {"AccHead": "Antenna"},
+      "display": "Planet"
+    },
+    {
+      "id": "Bolt",
+      "theme": "Tempo / Rennstreifen",
+      "since": "1.10.0",
+      "stage": "1.10",
+      "startSet": false,
+      "palette": {
+        "armor": "#2f6fe0",
+        "mech": "#151a24",
+        "metal": "#9aa3b5",
+        "eye": "#ffffff",
+        "screen": "#7fe0ff",
+        "accent": "#ffd23a",
+        "visor": "#060709",
+        "fabric": "#ffd23a"
+      },
+      "finish": "Glanz",
+      "badges": [{"id": "RacingStripes", "color": "#f4f4f4"}]
+    },
+    {
+      "id": "Lab",
+      "theme": "Labor / Nummer",
+      "since": "1.10.0",
+      "stage": "1.10",
+      "startSet": false,
+      "palette": {
+        "armor": "#f3f4f2",
+        "mech": "#3a4048",
+        "metal": "#b5bcc4",
+        "eye": "#2fe08a",
+        "screen": "#2fe08a",
+        "accent": "#3fd1ff",
+        "visor": "#060709",
+        "fabric": "#2a6ee0",
+        "armor2": "#2a6ee0"
+      },
+      "zones2": ["Ears", "Feet"],
+      "finish": "Standard",
+      "badges": [{"id": "Number", "color": "#2a6ee0"}]
+    },
+    {
+      "id": "Nimbus",
+      "theme": "Himmel / Wolke",
+      "since": "1.10.0",
+      "stage": "1.10",
+      "startSet": false,
+      "palette": {
+        "armor": "#5fa8e6",
+        "mech": "#2f4a6b",
+        "metal": "#e8f1f8",
+        "eye": "#ffffff",
+        "screen": "#bfe6ff",
+        "accent": "#ffd86a",
+        "visor": "#060709",
+        "fabric": "#ffffff",
+        "armor2": "#ffffff"
+      },
+      "zones2": ["Pads", "Feet"],
+      "finish": "Standard",
+      "badges": [{"id": "Cloud", "color": "#ffffff"}],
+      "display": "Star"
+    },
+    {
+      "id": "Arc",
+      "theme": "Energie / Lichtbögen",
+      "since": "1.10.0",
+      "stage": "1.10",
+      "startSet": false,
+      "concept": "A08 Arc",
+      "palette": {
+        "armor": "#232a3d",
+        "mech": "#121624",
+        "metal": "#3c4a6b",
+        "eye": "#61cdfb",
+        "screen": "#d54ff6",
+        "accent": "#743cec",
+        "visor": "#060709",
+        "fabric": "#743cec",
+        "armor2": "#3a4766"
+      },
+      "zones2": ["Head", "Pads"],
+      "finish": "Standard",
+      "lines": {"pattern": "Joints", "color": "#9a5cff", "strength": 1.6}
+    },
+    {
+      "id": "Lumin",
+      "theme": "Licht / Energie",
+      "since": "1.10.0",
+      "stage": "1.10",
+      "startSet": false,
+      "concept": "C20 Lumin",
+      "palette": {
+        "armor": "#e9eef2",
+        "mech": "#0f507a",
+        "metal": "#b8c4cc",
+        "eye": "#7fe8ff",
+        "screen": "#a6eff9",
+        "accent": "#5fd8ff",
+        "visor": "#060709",
+        "fabric": "#0f507a",
+        "armor2": "#0f507a"
+      },
+      "zones2": ["Ears", "Arms", "Feet"],
+      "finish": "Standard",
+      "lines": {"pattern": "Joints", "color": "#6fe4ff", "strength": 1.4}
+    },
+    {
+      "id": "Cobalt",
+      "theme": "Kobalt / Leiterbahnen",
+      "since": "1.10.0",
+      "stage": "1.10",
+      "startSet": false,
+      "palette": {
+        "armor": "#1f4fbf",
+        "mech": "#0d1630",
+        "metal": "#8fa3c9",
+        "eye": "#e8f6ff",
+        "screen": "#5fd0ff",
+        "accent": "#5fd0ff",
+        "visor": "#060709",
+        "fabric": "#0d1630"
+      },
+      "finish": "Standard",
+      "lines": {"pattern": "Circuit", "color": "#59c8ff", "strength": 1.0}
+    },
+    {
+      "id": "Crimson",
+      "theme": "Karmesin / Edel",
+      "since": "1.10.0",
+      "stage": "1.10",
+      "startSet": false,
+      "palette": {
+        "armor": "#9e1022",
+        "mech": "#1a0d10",
+        "metal": "#5a4448",
+        "eye": "#ffcf5a",
+        "screen": "#ff4f5e",
+        "accent": "#ffcf5a",
+        "visor": "#060709",
+        "fabric": "#e8d39a",
+        "armor2": "#d4a640"
+      },
+      "zones2": ["Ears", "Pads"],
+      "finish": "Glanz"
+    },
+    {
+      "id": "Chrome",
+      "theme": "Chrom / Spiegel",
+      "since": "1.10.0",
+      "stage": "1.10",
+      "startSet": false,
+      "palette": {
+        "armor": "#c9ced6",
+        "mech": "#2a2d33",
+        "metal": "#e6e9ee",
+        "eye": "#4fd2ff",
+        "screen": "#4fd2ff",
+        "accent": "#ff3b6b",
+        "visor": "#060709",
+        "fabric": "#2a2d33"
+      },
+      "finish": "Chrom"
+    },
+    {
+      "id": "Tank",
+      "theme": "Schwer / Industrie",
+      "since": "1.10.0",
+      "stage": "1.10",
+      "startSet": false,
+      "concept": "A09 Tank",
+      "palette": {
+        "armor": "#6b6f52",
+        "mech": "#2a2b24",
+        "metal": "#8e8a7c",
+        "eye": "#ffb347",
+        "screen": "#ffb347",
+        "accent": "#f56705",
+        "visor": "#060709",
+        "fabric": "#5f5141",
+        "armor2": "#4a4d38"
+      },
+      "zones2": ["Pads", "Chest"],
+      "finish": "Matt",
+      "badges": [{"id": "Number", "color": "#e2deda"}],
+      "parts": {"Head": "Boxy", "Hands": "Claw", "Feet": "Mech", "Pads": "Square", "Backpack": "Battery"}
+    }
+  ]
+}

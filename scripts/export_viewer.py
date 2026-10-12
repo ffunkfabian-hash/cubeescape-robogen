@@ -24,7 +24,9 @@ C4 = Matrix(((1, 0, 0, 0), (0, 0, 1, 0), (0, -1, 0, 0), (0, 0, 0, 1)))
 C4_INV = C4.inverted()
 VIEWER_TEXTURES = ["T_Robot_BaseColor.png", "T_Robot_MetallicSmoothness.png", "T_Robot_Normal.png",
                    "T_Robot_Emission.png", "T_Robot_Occlusion.png", "T_Robot_ColorMask.png", "T_Robot_LightMask.png",
-                   "T_Robot_EyeAtlas.png", "T_Robot_DisplayAtlas.png"]
+                   "T_Robot_EyeAtlas.png", "T_Robot_DisplayAtlas.png", "T_Robot_DisplayFlipbook.png",
+                   "T_Robot_BadgeMask.png", "T_Robot_BadgeMask2.png", "T_Robot_LineMask.png",
+                   "T_Robot_LineMask2.png", "T_Robot_ZoneMask.png", "T_Robot_ZoneMask2.png"]
 KIND = {"M_Robot": "body", "M_RobotFabric": "fabric", "M_RobotEyes": "eyes", "M_RobotDisplay": "display"}
 
 

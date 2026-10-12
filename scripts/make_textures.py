@@ -6,6 +6,10 @@ Creates deterministic detail textures that the Blender shaders project onto the 
     T_Src_Brushed.png     tileable brushed-metal streaks
     T_Src_Scratches.png   tileable fine scratches (worn paint, bump)
     T_Src_Decals.png      RGBA decal atlas: status display UI, cube emblem, unit code, hazard stripes
+    T_Src_Badges.png      RGBA badge atlas (BADGE_ART): cross, cloud, number, biohazard, glyph, crash-test target
+    T_Src_Circuit.png     tileable circuit traces (glow line pattern "Circuit")
+    T_Src_Bolt.png        tileable zigzag lightning lines (glow line pattern "Bolt")
+    T_Robot_DisplayFlipbook.png  animated chest display motifs (DISPLAY_ANIMS), one row of frames per motif
 
 Every call uses a fixed seed, so a rerun produces identical images.
 
@@ -171,6 +175,10 @@ def makers():
         "decals": (make_decals, "T_Src_Decals.png"),
         "eyes": (make_eye_atlas, "T_Robot_EyeAtlas.png"),
         "displays": (make_display_atlas, "T_Robot_DisplayAtlas.png"),
+        "badges": (make_badges, "T_Src_Badges.png"),
+        "circuit": (make_circuit, "T_Src_Circuit.png"),
+        "bolt": (make_bolt, "T_Src_Bolt.png"),
+        "flipbook": (make_display_flipbook, "T_Robot_DisplayFlipbook.png"),
     }
 
 
@@ -213,17 +221,37 @@ def make_all(out_dir, magick=None, log=print, cache=True):
 # ------------------------------------------------------------------------------------------------
 
 EYE_CELL = (512, 256)          # one expression = both eyes; plane 0.33 m x 0.165 m
-EYE_GRID = (4, 8)
+EYE_GRID = (4, 10)             # 40 cells; the atlas grew from 4 x 8 in generator 1.10 (cells come from robot_config)
 EYE_CENTERS = ((119, 128), (393, 128))   # robot's right eye (image left), robot's left eye
 EXPRESSIONS = ["Normal", "Happy", "Excited", "Love", "Angry", "Sad", "Sleepy", "Surprised",
                "Skeptical", "Confused", "Wink", "Focused", "Glitch", "Pixel", "Off", "Cute",
                "Laugh", "Crying", "Shy", "Dollar", "Question", "Exclaim", "Loading", "LookLeft",
-               "LookRight", "Determined", "Sleeping", "Target"]
+               "LookRight", "Determined", "Sleeping", "Target",
+               "Damage", "LowPower", "Check", "Warning", "Blink"]          # 1.10
+# How the game shows some expressions besides the atlas cell: a fixed tint instead of the look's eye colour and/or a
+# glow factor. Data for Unity and the viewer (robot_config.json > expressionStyles).
+EXPRESSION_STYLES = {
+    "Damage": {"tint": [1.0, 0.06, 0.04]},
+    "Warning": {"tint": [1.0, 0.36, 0.02]},
+    "LowPower": {"glow": 0.45},
+}
+# Idle blinking (game/viewer rule, not a clip key): every 2.5-6 s for 0.12 s, only while one of these is shown.
+BLINK = {"expression": "Blink", "interval": [2.5, 6.0], "duration": 0.12,
+         "during": ["Normal", "Happy", "Determined", "LookLeft", "LookRight", "Cute", "Focused"]}
 DISPLAY_CELL = (512, 410)      # chest screen 0.082 m x 0.066 m
 DISPLAY_GRID = (4, 4)
 DISPLAY_ATLAS_H = 2048
 DISPLAYS = ["Status", "Heart", "Battery", "Smiley", "Wave", "Cube", "Hello", "Music",
             "Lightning", "Warning", "Thermo", "Clock", "Signal", "Star", "Planet", "Loading"]
+# Animated chest display motifs (1.10): a row of frames per motif in a flipbook atlas, played at fps in a loop.
+FLIPBOOK_CELL = (256, 205)     # half the static cell, same aspect
+FLIPBOOK_GRID = (8, 4)         # frames per row, rows (= motifs, at most 4)
+FLIPBOOK_SIZE = (2048, 1024)
+DISPLAY_ANIMS = [("Heartbeat", 8, 10), ("Spinner", 8, 12), ("Talk", 8, 12)]      # (name, frames, fps)
+
+# Badge artwork (white on transparent, 4 x 4 cells of 256 px); the generator projects these as decals.
+BADGE_CELL = 256
+BADGE_ART = ["Cross", "Cloud", "Number", "Biohazard", "Glyph", "Target"]
 
 
 def _star(cx, cy, r_out, r_in, n=5, rot=-90):
@@ -354,6 +382,21 @@ def _eye_draws(name):
                   "line %d,%d %d,%d" % (cx - 76, cy, cx - 30, cy), "line %d,%d %d,%d" % (cx + 30, cy, cx + 76, cy),
                   "line %d,%d %d,%d" % (cx, cy - 76, cx, cy - 30), "line %d,%d %d,%d" % (cx, cy + 30, cx, cy + 76),
                   "stroke none", "fill white", "circle %d,%d %d,%d" % (cx, cy, cx + 10, cy)]
+        elif name == "Damage":
+            d += ["fill none", "stroke white", "stroke-width 34", "stroke-linecap round",
+                  "line %d,%d %d,%d" % (cx - 54, cy - 54, cx + 54, cy + 54),
+                  "line %d,%d %d,%d" % (cx - 54, cy + 54, cx + 54, cy - 54), "stroke none"]
+        elif name == "LowPower":
+            d += ["fill rgb(150,150,150)", "roundrectangle %d,%d %d,%d 12,12" % (cx - 66, cy - 13, cx + 66, cy + 13),
+                  "fill black", "rectangle %d,%d %d,%d" % (cx - 6 - 40 * inner, cy - 20, cx + 6 - 40 * inner, cy + 20)]
+        elif name == "Check":
+            if idx == 0:                        # one tick across the visor
+                d += ["fill none", "stroke white", "stroke-width 40", "stroke-linecap round", "stroke-linejoin round",
+                      "polyline %d,%d %d,%d %d,%d" % (186, 132, 236, 184, 336, 66), "stroke none"]
+        elif name == "Warning":
+            d += ["fill white", ell(cx, cy, 60, 58)]
+        elif name == "Blink":
+            d += ["fill white", "roundrectangle %d,%d %d,%d 8,8" % (cx - 60, cy + 6, cx + 60, cy + 22)]
         elif name == "Cute":
             d += ["fill white", ell(cx, cy + 4, 72, 72), "fill black",
                   "circle %d,%d %d,%d" % (cx - 26 * inner, cy - 24, cx - 26 * inner + 15, cy - 24),
@@ -369,12 +412,15 @@ def make_eye_atlas(magick, out):
         cell = os.path.join(out, ".eye_%02d.png" % i)
         args = ["-size", "%dx%d" % (cw, ch), "xc:black"]
         for cmd in _eye_draws(name):
-            if cmd.startswith(("fill ", "stroke ", "stroke-width", "stroke-linecap", "font ", "pointsize ")):
+            if cmd.startswith(("fill ", "stroke ", "stroke-width", "stroke-linecap", "stroke-linejoin", "font ",
+                               "pointsize ")):
                 key, val = cmd.split(" ", 1)
                 args += {"fill": ["-fill", val], "stroke": ["-stroke", val], "stroke-width": ["-strokewidth", val],
-                         "stroke-linecap": [], "font": ["-font", val], "pointsize": ["-pointsize", val]}[key]
+                         "stroke-linecap": [], "stroke-linejoin": [], "font": ["-font", val],
+                         "pointsize": ["-pointsize", val]}[key]
             else:
-                args += ["-draw", ("stroke-linecap round " if cmd.startswith(("line ", "path ")) else "") + cmd]
+                args += ["-draw", ("stroke-linecap round stroke-linejoin round "
+                                   if cmd.startswith(("line ", "path ", "polyline ")) else "") + cmd]
         # soft glow under the crisp shape (the shader tints it; bright core stays near white)
         args += ["(", "+clone", "-blur", "0x14", "-evaluate", "multiply", "0.9", ")", "-compose", "screen", "-composite",
                  "-colorspace", "Gray", cell]
@@ -469,6 +515,186 @@ def make_display_atlas(magick, out):
     os.remove(tmp)
     for c in cells:
         os.remove(c)
+    return path
+
+
+def _grid_montage(magick, cells, grid, size, path, background="black"):
+    gx, gy = grid
+    tmp = path + ".grid.png"
+    run(magick, ["montage"] + cells + ["-tile", "%dx%d" % (gx, gy), "-geometry", "+0+0", "-background", background, tmp])
+    run(magick, [tmp, "-background", background, "-gravity", "northwest", "-extent", "%dx%d" % size,
+                 "-colorspace", "Gray", "-depth", "8", path])
+    os.remove(tmp)
+    for c in cells:
+        os.remove(c)
+
+
+def _flipbook_frame(name, f, n):
+    """Draw arguments (512 x 410 like a static cell) for frame f of n of an animated display motif."""
+    if name == "Heartbeat":
+        def ecg(u):                             # one beat every 256 px
+            u %= 256
+            for a, b, ya, yb in ((100, 116, 0, -40), (116, 132, -40, 120), (132, 148, 120, -150), (148, 164, -150, 0),
+                                 (190, 214, 0, -30), (214, 238, -30, 0)):
+                if a <= u < b:
+                    return ya + (yb - ya) * (u - a) / float(b - a)
+            return 0
+        pts = " ".join("%d,%d" % (x, 270 - 0.55 * ecg(x + f * 512 // n)) for x in range(36, 478, 4))
+        beat = (f * 512 // n) % 256 < 64
+        return ["-fill", "white", "-draw", _heart(110, 110, 3.4 if beat else 2.8),
+                "-fill", "none", "-stroke", "white", "-strokewidth", 12, "-draw", "polyline " + pts]
+    if name == "Spinner":
+        out = []
+        for k in range(8):
+            a = math.radians(k * 45 - 90)
+            g = 60 + int(195 * ((k - f) % 8) / 7.0)
+            x, y = 256 + 115 * math.cos(a), 205 + 115 * math.sin(a)
+            out += ["-fill", "rgb(%d,%d,%d)" % (g, g, g), "-draw", "circle %d,%d %d,%d" % (x, y, x + 30, y)]
+        return out
+    if name == "Talk":
+        out = ["-fill", "white"]
+        for k in range(9):
+            h = 22 + 120 * abs(math.sin(k * 1.7 + f * 2 * math.pi / n)) * (0.55 + 0.45 * abs(math.sin(f * 1.3 + k)))
+            x = 96 + k * 40
+            out += ["-draw", "roundrectangle %d,%d %d,%d 10,10" % (x - 13, 205 - h, x + 13, 205 + h)]
+        return out
+    raise ValueError(name)
+
+
+def make_display_flipbook(magick, out):
+    path = os.path.join(out, "T_Robot_DisplayFlipbook.png")
+    cw, ch = DISPLAY_CELL
+    frame = ["-fill", "none", "-stroke", "rgb(110,110,110)", "-strokewidth", 10,
+             "-draw", "roundrectangle 14,14 %d,%d 30,30" % (cw - 14, ch - 14), "-stroke", "none"]
+    gx, gy = FLIPBOOK_GRID
+    cells = []
+    for row in range(gy):
+        for f in range(gx):
+            cell = os.path.join(out, ".flip_%d_%d.png" % (row, f))
+            if row < len(DISPLAY_ANIMS) and f < DISPLAY_ANIMS[row][1]:
+                name, n, _ = DISPLAY_ANIMS[row]
+                art = frame + _flipbook_frame(name, f, n)
+            else:
+                art = []
+            run(magick, ["-size", "%dx%d" % (cw, ch), "xc:black"] + art +
+                ["-resize", "%dx%d!" % FLIPBOOK_CELL, "-colorspace", "Gray", cell])
+            cells.append(cell)
+    _grid_montage(magick, cells, FLIPBOOK_GRID, FLIPBOOK_SIZE, path)
+    return path
+
+
+def _pie(cx, cy, r, a0, a1, steps=12):
+    pts = ["%d,%d" % (cx, cy)]
+    for i in range(steps + 1):
+        a = math.radians(a0 + (a1 - a0) * i / steps)
+        pts.append("%d,%d" % (cx + r * math.cos(a), cy + r * math.sin(a)))
+    return "polygon " + " ".join(pts)
+
+
+def _badge_draws(name):
+    c = BADGE_CELL // 2
+    if name == "Cross":
+        return ["-fill", "white", "-draw", "roundrectangle 98,36 158,220 10,10",
+                "-draw", "roundrectangle 36,98 220,158 10,10"]
+    if name == "Cloud":
+        return ["-fill", "white", "-draw", "circle 88,150 88,104", "-draw", "circle 136,118 136,58",
+                "-draw", "circle 184,146 184,104", "-draw", "roundrectangle 46,140 226,192 26,26"]
+    if name == "Number":
+        return ["-fill", "white", "-font", "Arial-Black", "-pointsize", 150, "-gravity", "center",
+                "-annotate", "+0+6", "07", "-gravity", "northwest"]
+    if name == "Biohazard":
+        out = ["-fill", "white"]
+        for a in (-90, 30, 150):
+            r = math.radians(a)
+            out += ["-draw", "circle %d,%d %d,%d" % (c + 44 * math.cos(r), c + 44 * math.sin(r),
+                                                       c + 44 * math.cos(r) + 58, c + 44 * math.sin(r))]
+        out += ["-fill", "black"]
+        for a in (-90, 30, 150):
+            r = math.radians(a)
+            out += ["-draw", "circle %d,%d %d,%d" % (c + 64 * math.cos(r), c + 64 * math.sin(r),
+                                                       c + 64 * math.cos(r) + 38, c + 64 * math.sin(r))]
+        return out + ["-fill", "none", "-stroke", "white", "-strokewidth", 12, "-draw", "circle %d,%d %d,%d" % (
+            c, c, c + 40, c), "-stroke", "none", "-fill", "black", "-draw", "circle %d,%d %d,%d" % (c, c, c + 16, c)]
+    if name == "Glyph":                         # 侍 (samurai) for the Samurai skin, bold Hiragino from macOS
+        return ["-fill", "white", "-font", "Hiragino-Kaku-Gothic-StdN-W8", "-pointsize", 196, "-gravity", "center",
+                "-annotate", "+0+0", "\u4f8d", "-gravity", "northwest"]
+    if name == "Target":                        # crash-test marker
+        return ["-fill", "white", "-draw", _pie(c, c, 96, 0, 90), "-draw", _pie(c, c, 96, 180, 270),
+                "-fill", "none", "-stroke", "white", "-strokewidth", 14, "-draw", "circle %d,%d %d,%d" % (
+                    c, c, c + 104, c), "-stroke", "none"]
+    raise ValueError(name)
+
+
+def make_badges(magick, out):
+    """RGBA: white artwork, alpha = shape (like the decal atlas)."""
+    path = os.path.join(out, "T_Src_Badges.png")
+    cells = []
+    for i in range(16):
+        cell = os.path.join(out, ".badge_%02d.png" % i)
+        art = _badge_draws(BADGE_ART[i]) if i < len(BADGE_ART) else []
+        run(magick, ["-size", "%dx%d" % (BADGE_CELL, BADGE_CELL), "xc:black"] + art + ["-colorspace", "Gray", cell])
+        cells.append(cell)
+    gray = path + ".gray.png"
+    _grid_montage(magick, cells, (4, 4), (4 * BADGE_CELL, 4 * BADGE_CELL), gray)
+    run(magick, [gray, "-alpha", "copy", "-channel", "RGB", "-evaluate", "set", "100%", "+channel",
+                 "-define", "png:color-type=6", path])
+    os.remove(gray)
+    return path
+
+
+def _tiled_polylines(lines, width, extra=()):
+    """Draw arguments for polylines repeated at +-SIZE so that the texture tiles."""
+    out = ["-fill", "none", "-stroke", "white", "-strokewidth", width]
+    for pts in lines:
+        for dx in (-SIZE, 0, SIZE):
+            for dy in (-SIZE, 0, SIZE):
+                out += ["-draw", "stroke-linecap round stroke-linejoin round polyline " +
+                        " ".join("%d,%d" % (x + dx, y + dy) for x, y in pts)]
+    return out + list(extra)
+
+
+def make_circuit(magick, out):
+    """Tileable circuit traces: horizontal/vertical/45-degree runs on a 32 px grid with solder pads at the ends."""
+    path = os.path.join(out, "T_Src_Circuit.png")
+    rnd = random.Random(77)
+    lines, pads = [], []
+    dirs = [(1, 0), (0, 1), (1, 1), (1, -1), (-1, 0), (0, -1)]
+    for _ in range(24):
+        x, y = rnd.randrange(32) * 32, rnd.randrange(32) * 32
+        d = rnd.choice(dirs)
+        pts = [(x, y)]
+        for _ in range(rnd.randint(2, 4)):
+            n = rnd.randint(2, 6)
+            x, y = x + d[0] * n * 32, y + d[1] * n * 32
+            pts.append((x, y))
+            i = dirs.index(d)
+            d = dirs[(i + rnd.choice((1, -1))) % 4] if i < 4 else dirs[rnd.randrange(4)]
+        lines.append(pts)
+        pads += [pts[0], pts[-1]]
+    pad_draws = ["-stroke", "none", "-fill", "white"]
+    for x, y in pads:
+        for dx in (-SIZE, 0, SIZE):
+            for dy in (-SIZE, 0, SIZE):
+                pad_draws += ["-draw", "circle %d,%d %d,%d" % (x + dx, y + dy, x + dx + 11, y + dy)]
+    run(magick, ["-size", "%dx%d" % (SIZE, SIZE), "xc:black"] + _tiled_polylines(lines, 7, pad_draws) +
+        ["-blur", "0x0.7", "-colorspace", "Gray", "-depth", "8", path])
+    return path
+
+
+def make_bolt(magick, out):
+    """Tileable zigzag lightning lines, four per tile, with the same x at top and bottom."""
+    path = os.path.join(out, "T_Src_Bolt.png")
+    rnd = random.Random(5)
+    lines = []
+    for k in range(4):
+        x0 = 128 + k * 256
+        pts = [(x0, 0)]
+        for y in range(64, SIZE, 64):
+            pts.append((x0 + rnd.randint(-46, 46), y))
+        pts.append((x0, SIZE))
+        lines.append(pts)
+    run(magick, ["-size", "%dx%d" % (SIZE, SIZE), "xc:black"] + _tiled_polylines(lines, 9) +
+        ["-blur", "0x0.7", "-colorspace", "Gray", "-depth", "8", path])
     return path
 
 

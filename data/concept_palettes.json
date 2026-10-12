@@ -1,0 +1,439 @@
+{
+  "format": "CubeEscapeConceptPalettes",
+  "version": 1,
+  "note": "colour dots sampled from the concept sheets in docs/concepts by scripts/concept_palettes.py",
+  "sheets": {
+    "C": {
+      "file": "docs/concepts/skins_c_neue_konzepte.webp",
+      "title": "Spieler Roboter - neue Skin Konzepte",
+      "cards": [
+        {
+          "number": 1,
+          "name": "Chrono",
+          "dots": [
+            "#f59f2b",
+            "#b9ab9d",
+            "#ac733d",
+            "#5c483a"
+          ]
+        },
+        {
+          "number": 2,
+          "name": "Pixel",
+          "dots": [
+            "#fce1ca",
+            "#8bd7e3",
+            "#5b8192",
+            "#96908f"
+          ]
+        },
+        {
+          "number": 3,
+          "name": "Steam",
+          "dots": [
+            "#fa821b",
+            "#f97e11",
+            "#ed4214",
+            "#29201b"
+          ]
+        },
+        {
+          "number": 4,
+          "name": "Origami",
+          "dots": [
+            "#555358",
+            "#f5eeec",
+            "#605b5d",
+            "#756e6e"
+          ]
+        },
+        {
+          "number": 5,
+          "name": "Geo",
+          "dots": [
+            "#f96f32",
+            "#7d28f5",
+            "#503282",
+            "#454246"
+          ]
+        },
+        {
+          "number": 6,
+          "name": "Bamboo",
+          "dots": [
+            "#557c05",
+            "#f6e5d0",
+            "#d1b29f",
+            "#535c1d"
+          ]
+        },
+        {
+          "number": 7,
+          "name": "Void",
+          "dots": [
+            "#2e1d4c",
+            "#dbbff8",
+            "#1f1855",
+            "#8531e9"
+          ]
+        },
+        {
+          "number": 8,
+          "name": "Ice",
+          "dots": [
+            "#1fbbfa",
+            "#4bd4fa",
+            "#0e82dc",
+            "#eef6fc"
+          ]
+        },
+        {
+          "number": 9,
+          "name": "Toxic",
+          "dots": [
+            "#d1ee10",
+            "#51633c",
+            "#4d5c27",
+            "#acd009"
+          ]
+        },
+        {
+          "number": 10,
+          "name": "Candy",
+          "dots": [
+            "#e5a2b3",
+            "#58c3d1",
+            "#854055",
+            "#f47f95"
+          ]
+        },
+        {
+          "number": 11,
+          "name": "Bone",
+          "dots": [
+            "#be7d4f",
+            "#edcdb4",
+            "#a07b5f",
+            "#c09473"
+          ]
+        },
+        {
+          "number": 12,
+          "name": "Holo",
+          "dots": [
+            "#eb57f7",
+            "#5ca9f2",
+            "#3e4ad9",
+            "#6064f8"
+          ]
+        },
+        {
+          "number": 13,
+          "name": "Wire",
+          "dots": [
+            "#edcfb8",
+            "#67d1e7",
+            "#647283",
+            "#bbafa8"
+          ]
+        },
+        {
+          "number": 14,
+          "name": "Paper",
+          "dots": [
+            "#fab840",
+            "#eab682",
+            "#a16e49",
+            "#8a5d3c"
+          ]
+        },
+        {
+          "number": 15,
+          "name": "Concrete",
+          "dots": [
+            "#f5dbc9",
+            "#938175",
+            "#786d63",
+            "#a2897a"
+          ]
+        },
+        {
+          "number": 16,
+          "name": "Golden",
+          "dots": [
+            "#e48709",
+            "#e89728",
+            "#7a501c",
+            "#44311e"
+          ]
+        },
+        {
+          "number": 17,
+          "name": "Rainbow",
+          "dots": [
+            "#f5b544",
+            "#c3a8f3",
+            "#5652cd",
+            "#694ed9"
+          ]
+        },
+        {
+          "number": 18,
+          "name": "Scribble",
+          "dots": [
+            "#e6d8d0",
+            "#bdafa6",
+            "#b7b2ad",
+            "#ded0ca"
+          ]
+        },
+        {
+          "number": 19,
+          "name": "Circuit",
+          "dots": [
+            "#99bd37",
+            "#054f2e",
+            "#265626",
+            "#e0c2b0"
+          ]
+        },
+        {
+          "number": 20,
+          "name": "Lumin",
+          "dots": [
+            "#ceeaf6",
+            "#a6eff9",
+            "#0f507a",
+            "#d9d7d8"
+          ]
+        },
+        {
+          "number": 21,
+          "name": "Obsidian",
+          "dots": [
+            "#df3015",
+            "#f8741a",
+            "#b22a1c",
+            "#521e1c"
+          ]
+        },
+        {
+          "number": 22,
+          "name": "Celest",
+          "dots": [
+            "#f2d7b9",
+            "#e1e2e2",
+            "#055892",
+            "#e8ceb4"
+          ]
+        },
+        {
+          "number": 23,
+          "name": "Arbor",
+          "dots": [
+            "#674027",
+            "#b3e62d",
+            "#444a1a",
+            "#ceb21e"
+          ]
+        },
+        {
+          "number": 24,
+          "name": "Nebula",
+          "dots": [
+            "#f077f8",
+            "#a6ebfa",
+            "#2e6fcc",
+            "#4f36b9"
+          ]
+        }
+      ]
+    },
+    "A": {
+      "file": "docs/concepts/skins_a.webp",
+      "title": "Roboter - Skin Konzepte",
+      "cards": [
+        {
+          "number": 1,
+          "name": "Astronaut",
+          "dots": [
+            "#f46209",
+            "#ebe0d7",
+            "#333335",
+            "#907766"
+          ]
+        },
+        {
+          "number": 2,
+          "name": "Scout",
+          "dots": [
+            "#ebcbb1",
+            "#676927",
+            "#6a6824",
+            "#424136"
+          ]
+        },
+        {
+          "number": 3,
+          "name": "Miner",
+          "dots": [
+            "#e0851a",
+            "#d8cdc6",
+            "#644529",
+            "#e4832b"
+          ]
+        },
+        {
+          "number": 4,
+          "name": "Samurai",
+          "dots": [
+            "#ce2326",
+            "#e6ddda",
+            "#2b2f35",
+            "#743131"
+          ]
+        },
+        {
+          "number": 5,
+          "name": "Moss",
+          "dots": [
+            "#5c740b",
+            "#e2d3c6",
+            "#527113",
+            "#d5c5af"
+          ]
+        },
+        {
+          "number": 6,
+          "name": "Glass",
+          "dots": [
+            "#9ed6f8",
+            "#0c3f67",
+            "#129aea",
+            "#1870cb"
+          ]
+        },
+        {
+          "number": 7,
+          "name": "Wood",
+          "dots": [
+            "#b47246",
+            "#efdfd0",
+            "#47382f",
+            "#6a8910"
+          ]
+        },
+        {
+          "number": 8,
+          "name": "Arc",
+          "dots": [
+            "#1b60bf",
+            "#61cdfb",
+            "#743cec",
+            "#d54ff6"
+          ]
+        },
+        {
+          "number": 9,
+          "name": "Tank",
+          "dots": [
+            "#5d6263",
+            "#e2deda",
+            "#5f5141",
+            "#f56705"
+          ]
+        },
+        {
+          "number": 10,
+          "name": "Medic",
+          "dots": [
+            "#716a6c",
+            "#d8d0cb",
+            "#dcc7ba",
+            "#cd2221"
+          ]
+        },
+        {
+          "number": 11,
+          "name": "Ocean",
+          "dots": [
+            "#2b7c8c",
+            "#a4bcc6",
+            "#0f8cc2",
+            "#194858"
+          ]
+        },
+        {
+          "number": 12,
+          "name": "Spike",
+          "dots": [
+            "#523224",
+            "#ead6c6",
+            "#d03c0e",
+            "#c6271d"
+          ]
+        },
+        {
+          "number": 13,
+          "name": "Pixel",
+          "dots": [
+            "#258feb",
+            "#efe7e3",
+            "#fa660a",
+            "#178ce8"
+          ]
+        },
+        {
+          "number": 14,
+          "name": "Ghost",
+          "dots": [
+            "#6f6cf6",
+            "#b3d7f6",
+            "#2347c8",
+            "#dcaafa"
+          ]
+        },
+        {
+          "number": 15,
+          "name": "Scrap",
+          "dots": [
+            "#da5c09",
+            "#d6c5b5",
+            "#b2998c",
+            "#494544"
+          ]
+        },
+        {
+          "number": 16,
+          "name": "Observer",
+          "dots": [
+            "#28353c",
+            "#f3f3f5",
+            "#2f5770",
+            "#03b1f4"
+          ]
+        },
+        {
+          "number": 17,
+          "name": "Clockwork",
+          "dots": [
+            "#b35e13",
+            "#ebccaa",
+            "#7d4c21",
+            "#af7649"
+          ]
+        },
+        {
+          "number": 18,
+          "name": "Inferno",
+          "dots": [
+            "#ba2918",
+            "#e4cbb8",
+            "#ef4307",
+            "#ffb604"
+          ]
+        }
+      ]
+    }
+  }
+}

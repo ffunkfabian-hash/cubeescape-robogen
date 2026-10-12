@@ -1,0 +1,14 @@
+{
+  "format": "CubeEscapeRobotLook",
+  "version": 3,
+  "name": "Unbekannte Teile 1.10",
+  "variants": {},
+  "expression": "Damage",
+  "display": "Heartbeat",
+  "skin": "Galaxy",
+  "armor2": {"r": 0.2, "g": 0.4, "b": 0.9},
+  "zones2": ["Pads", "Tail", "Pads"],
+  "badges": [{"id": "Cross", "color": {"r": 1, "g": 0, "b": 0}}, {"id": "Skull", "color": {"r": 1, "g": 1, "b": 1}},
+             {"id": "Cloud", "color": {"r": 1, "g": 1, "b": 1}}],
+  "lines": {"pattern": "Plasma", "color": {"r": 0, "g": 1, "b": 1}, "strength": 5}
+}

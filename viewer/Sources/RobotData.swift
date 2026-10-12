@@ -73,6 +73,8 @@ struct RobotType: Decodable, Identifiable {
 }
 
 struct Skin: Decodable, Identifiable {
+    struct Badge: Decodable { let id: String; let color: [Double] }
+    struct Lines: Decodable { let pattern: String; let color: [Double]; let strength: Double }
     let name: String
     let armor: [Double]
     let mech: [Double]
@@ -82,7 +84,57 @@ struct Skin: Decodable, Identifiable {
     let accent: [Double]
     let visor: [Double]
     let fabric: [Double]
+    // since generator 1.10 (optional so older ViewerData still loads)
+    let armor2: [Double]?
+    let zones2: [String]?
+    let finish: String?
+    let badges: [Badge]?
+    let lines: Lines?
+    let parts: [String: String]?
+    let expression: String?
+    let display: String?
+    let theme: String?
+    let stage: String?
+    let startSet: Bool?
     var id: String { name }
+}
+
+/// A channel of a mask texture (badges, glow line patterns).
+struct MaskChannel: Decodable, Identifiable {
+    let id: String
+    let texture: String
+    let channel: Int
+}
+
+struct FinishInfo: Decodable {
+    let id: String
+    let roughness: Double
+    let metalOffset: Double
+}
+
+struct ExpressionStyle: Decodable {
+    let tint: [Double]?
+    let glow: Double?
+}
+
+struct BlinkInfo: Decodable {
+    let expression: String
+    let interval: [Double]
+    let duration: Double
+    let during: [String]
+}
+
+struct DisplayAnimation: Decodable {
+    let name: String
+    let row: Int
+    let frames: Int
+    let fps: Double
+}
+
+struct FlipbookInfo: Decodable {
+    let texture: String
+    let grid: [Int]
+    let cell: [Double]          // UV size of one frame
 }
 
 /// `[frame, value]` pair from the generator's clip data.
@@ -173,6 +225,19 @@ struct RobotConfig: Decodable {
     let groupLabels: [String: String]?
     let clips: [String: ClipMeta]?
     let typeBounds: [String: TypeBounds]?
+    // since generator 1.10
+    let finishes: [FinishInfo]?
+    let badges: [MaskChannel]?
+    let linePatterns: [MaskChannel]?
+    let zones: [MaskChannel]?
+    let linePaint: Double?
+    let expressionStyles: [String: ExpressionStyle]?
+    let blink: BlinkInfo?
+    let displayAnimations: [DisplayAnimation]?
+    let flipbook: FlipbookInfo?
+
+    /// Static motifs and animated ones (flipbook).
+    var allDisplays: [String] { displays + (displayAnimations ?? []).map(\.name) }
 }
 
 /// Loaded robot: JSON + binary buffers.

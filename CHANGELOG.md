@@ -3,6 +3,44 @@
 Versionen des Roboter-Generators (zählen getrennt von Cube Escape und Cubegen). Jede Version hat einen Tag
 `v<Version>` und einen Release-Branch `release/<Version>`.
 
+## 1.10.0 „Paintjob“ – 2026-10-12
+
+Skins werden Daten: 38 Skins (20 bestehende, Gold/Neon/Toxic/Ocean aufgewertet, 18 neue: Shadow, Hazard, Medic, Volt,
+Candy, Industrial, Prototype, Retro, Orbit, Bolt, Lab, Nimbus, Arc, Lumin, Cobalt, Crimson, Chrome, Tank) aus
+`data/skins.json`. Modell, QA-Bericht, Clip-Daten und Typ-Maße identisch mit 1.9.
+
+* **Skin-Datenformat** `CubeEscapeRobotSkins` 1: Palette (linear oder sRGB-`#rrggbb`), `armor2` + `zones2`, Oberfläche,
+  bis zu zwei Abzeichen, ein Leuchtlinien-Muster, optional Teile/Ausdruck/Display, Thema, Stufe, Startset, Konzeptbezug.
+  Prüfung beim Laden mit Skin-Namen in der Meldung.
+* **Masken statt Textursätze:** Abzeichen (Warnstreifen, Kreuz, Wolke, Nummer, Biohazard, Schriftzeichen,
+  Rennstreifen, Zielmarke) als Decals an Ankerpunkten (Ohrscheibe, Brust, Schulter, Oberschenkel, Rücken, Hinterkopf)
+  oder prozedural; Leuchtlinien (Leiterbahnen, Ringe, Kanten, Blitze, Gelenke); 8 Lackzonen für die Zweitfarbe aus
+  dem Flächenattribut `paint_zone`. Neue Texturen `T_Robot_BadgeMask*`, `LineMask*`, `ZoneMask*` (RGBA, Kanal = ID).
+  Skins werden weiter aus einmal gebackenen Ebenen per numpy zusammengesetzt (`decorate_skin()`).
+* **Oberflächen je Skin** (auch in den Blender-Vorschauen); Candy und Chrom mit weniger Metall, damit sie im dunklen
+  Spiel nicht schwarz wirken.
+* **Gesichter:** Damage (rot), LowPower (gedimmt), Check, Warning (orange), Blink; Augen-Atlas 4 × 10; Färbung und
+  Leuchtkraft als Daten (`expressionStyles`), Blinzeln als Laufzeitregel (`blink`).
+* **Animierte Display-Motive** Heartbeat, Spinner, Talk als Flipbook (`T_Robot_DisplayFlipbook.png`,
+  `displayAnimations`).
+* **Skin-Bogen im Stil der Konzeptbilder** (`Previews/skin_sheet.png`): Dreiviertel-Karte mit Randlicht in der
+  Leuchtfarbe und Bloom (Compositor-Node-Gruppe, Blender 5.2), Farbpunkte, Systeme, Startset-Stern;
+  `Previews/silhouettes.png` aus dem Alphakanal.
+* **UI-Icons** (`Icons/`, 113 Stück: Skins, Ausdrücke, Display-Motive, Abzeichen, Accessoires) mit
+  Lesbarkeitsprüfung (Füllgrad und Lage, ohne Neural Engine).
+* **Konzeptbögen ausgewertet:** `scripts/concept_palettes.py` → `data/concept_palettes.json` (42 Karten), Bögen in
+  `docs/concepts/`.
+* **Look-Format 3** (`skin`, `armor2`, `zones2`, `badges`, `lines`) mit Migration aus Version 1 und 2; neue
+  Test-Fixtures `look_v2.json`, `look_v3_unknown.json`.
+* **Viewer:** Zweitfarbe, Abzeichen, Leuchtlinien, Skin-Teile, animierte Displays, Gesichts-Stile, Blinzeln,
+  A/B-Vergleich, GIF-/MP4-Export (auch `--gif`/`--video`). Daten-Texturen werden roh geladen (NSImage multiplizierte
+  Masken mit Alpha vor – betraf auch Metall/Glätte seit 1.7); Masken und Uniforms gepackt (SceneKit zeichnet ab etwa
+  23 Shader-Argumenten kommentarlos pink).
+* Materialaufbau mit gemeinsamen Projektionen je Anker: 0,4 statt 2,2 s, bitgleiche Masken.
+* `verify_robot.py`: Skin-Daten, Masken mit Pixeln, Zonen überlappungsfrei, Gesichter, Flipbook, Icons, Bögen.
+* Doku: `docs/TECHNIK.md` (Techniken und Lehren, Übertrag auf den Cubegen-Modell-Editor), README, AGENTS,
+  `docs/FAHRPLAN.md` (Entscheidungen vom 12.10., 1.10-Stand, neue Punkte für später).
+
 ## 1.9.2 „Afterburner“ – 2026-10-12
 
 Prüfung der Neural Engine (Fahrplan-Vorschläge „visuelle Prüfung per Vision“ und „Vorlagen per Bildgenerator“):

@@ -1,10 +1,12 @@
-# Cube Escape – Roboter-Charakter (Generator 1.9.2)
+# Cube Escape – Roboter-Charakter (Generator 1.10.0)
 
 Der spielbare Roboter aus dem Cube-Escape-Keyart, vollständig per Skript erzeugt: Geometrie mit Bauteil-Varianten
 und Accessoires, Materialien, gebackene Texturen (Detail- und Ausdrucks-Texturen per ImageMagick), Rig mit Bein- und
 Arm-IK, 69 Animationen, maschinenlesbare Clip-Daten fürs Spiel, automatische QA, Vorschaurender, `.blend`,
 Unity-fertige `.fbx` (Standard, modular und je Robotertyp) und ein eigener **Robot Viewer** zum Anpassen: 69
-Animationen in 8 Gruppen, 20 Skins, 28 Augen-Ausdrücke, 16 Display-Motive, 20 Accessoires, 14 Robotertypen.
+Animationen in 8 Gruppen, 38 Skins als Daten (Palette mit Zweitfarbe, Oberfläche, Abzeichen, Leuchtlinien), 33
+Augen-Ausdrücke, 16 Display-Motive und 3 animierte, 20 Accessoires, 14 Robotertypen, Skin-Bogen im Stil der
+Konzeptbilder und UI-Icons.
 **Das Spielprojekt wurde nicht verändert** – dieser Ordner steht für sich.
 
 ![Robotertypen](docs/images/types.png)
@@ -16,6 +18,8 @@ Animationen in 8 Gruppen, 20 Skins, 28 Augen-Ausdrücke, 16 Display-Motive, 20 A
 | Pfad | Inhalt |
 |---|---|
 | `output/RobotViewer.app` | **Robot Viewer** – macOS-App zum Anpassen und Ansehen (Doppelklick) |
+| `data/skins.json` | **Skins als Daten** (Format `CubeEscapeRobotSkins` 1): Palette, Zweitfarben-Zonen, Oberfläche, Abzeichen, Leuchtlinien, Teile, Ausdruck, Display, Stufe/Startset |
+| `data/concept_palettes.json`, `docs/concepts/` | Farbpunkte der Konzeptbögen (`scripts/concept_palettes.py`) und die Bögen selbst |
 | `output/CubeEscape_Robot.fbx` | Unity: Standard-Look als 1 Mesh (3 Materialien) + Rig + 69 Takes |
 | `output/CubeEscape_Robot_Modular.fbx` | Unity: alle Bauteil-Varianten und Accessoires als einzelne Meshes am selben Rig (ohne Animation) |
 | `output/Types/CubeEscape_Robot_<Typ>.fbx` | Unity: jeder Robotertyp fertig kombiniert als 1 Mesh + Rig (ohne Animation, Clips aus der Haupt-FBX) |
@@ -23,16 +27,19 @@ Animationen in 8 Gruppen, 20 Skins, 28 Augen-Ausdrücke, 16 Display-Motive, 20 A
 | `output/CubeEscape_Robot.blend` | Blender-Szene: Standard-Mesh, `Robot_Parts` (alle Teile), Rig, NLA-Spur je Animation |
 | `output/robot_config.json` | Slots, Varianten, Robotertypen (mit Maßen), Skins, Ausdrücke, Display-Motive, Atlas-Zellen und **Clip-Daten** (für Unity) |
 | `output/ANIMATIONS.md` | automatisch erzeugte Clip-Liste (Frames, Loop, Grundtempo, Höhe, Schritt-Frames, Unity-Hinweise) |
-| `output/Textures/` | 2048² PNGs: BaseColor/Emission je Skin, MetallicSmoothness, Normal, Occlusion, ColorMask, Eye-/Display-Atlas |
+| `output/Textures/` | 2048² PNGs: BaseColor/Emission je Skin, MetallicSmoothness, Normal, Occlusion, ColorMask, LightMask, **Masken** (Badge ×2, Line ×2, Zone ×2), Eye-Atlas (2048 × 2560), Display-Atlas, Display-Flipbook |
+| `output/Icons/` | UI-Icons 256²: `Skins/`, `Expressions/`, `Displays/`, `Badges/`, `Accessories/` |
 | `output/ViewerData/` | Daten für den Viewer (Geometrie, Rig, Animationen, Texturen) |
-| `output/Previews/` | Ansichten, Typen, Skins, Ausdrücke, Kontaktbögen je Phase, GIFs |
+| `output/Previews/` | Ansichten, Typen, Skins, **Skin-Bogen** (`skin_sheet.png`), **Silhouetten**, Ausdrücke, Kontaktbögen je Phase, GIFs |
 | `scripts/generate_robot.py` | Generator (Blender 5.2 LTS) |
-| `scripts/make_textures.py` | ImageMagick: Gebrauchsspuren, Metall, Kratzer, Decals, 16 Augen-Ausdrücke, 8 Display-Motive |
+| `scripts/make_textures.py` | ImageMagick: Gebrauchsspuren, Metall, Kratzer, Decals, Abzeichen, Leiterbahnen, Blitze, 33 Augen-Ausdrücke, 16 Display-Motive, 3 animierte (Flipbook) |
+| `scripts/concept_palettes.py` | einmaliges Werkzeug: Farbpunkte der Konzeptbögen auslesen (nie im Generatorlauf) |
 | `scripts/export_viewer.py`, `scripts/reexport_viewer.py` | Datenexport für den Viewer (im Generator bzw. separat aus der `.blend`) |
 | `scripts/profile_run.py` | Lauf unter cProfile (Profil nach `<out>/logs/profile.prof`) |
 | `scripts/verify_robot.py` | unabhängige Prüfung von `.blend`, allen FBX, Konfiguration, Clip-Daten, Looks und Viewer-Daten |
 | `scripts/debug_*.py`, `scripts/diag_parts.py` | Hilfen zur Fehlersuche |
 | `viewer/` | Quellcode des Viewers (SwiftUI + SceneKit), `build.sh`, `test_viewer.sh` und Test-Looks in `tests/` |
+| `docs/TECHNIK.md` | **Techniken und Lehren** des Generators – Übertrag auf den Cubegen-Modell-Editor |
 
 ## Neu erzeugen
 
@@ -160,7 +167,7 @@ Weitere Optionen (überschreiben die Stufe): `--out`, `--tex-size 1024`, `--ao-s
 Classic immer), `--skip-bake` (ohne Texturen), `--no-cache`, `--check-compose`, `--bake-device cpu|gpu`,
 `--workers 4`, `--render-workers 2`. Benötigt ImageMagick 7 und für den Viewer die Xcode-Kommandozeilenwerkzeuge.
 Regeln für Agenten (Prüfablauf, Cache, Worker): [AGENTS.md](AGENTS.md); Versionen: [CHANGELOG.md](CHANGELOG.md);
-Fahrplan: [docs/FAHRPLAN.md](docs/FAHRPLAN.md).
+Fahrplan: [docs/FAHRPLAN.md](docs/FAHRPLAN.md); Techniken und Lehren (für Cubegen): [docs/TECHNIK.md](docs/TECHNIK.md).
 
 ## Robot Viewer
 
@@ -173,22 +180,30 @@ Fahrplan: [docs/FAHRPLAN.md](docs/FAHRPLAN.md).
 - **Accessoires (20):** Kopf (Antenne, Propellermütze – Propeller dreht sich, Kopfhörer, Zylinder, Krone, Irokese),
   Gesicht (Sonnenbrille, Monokel, Schnurrbart, Schutzbrille), Hals (Fliege, Schal, Medaille, Glöckchen), Rücken
   (Jetpack, Umhang, Flügel), Hand (Schraubenschlüssel, Blume, Fahne – in Kletter-/Hänge-Clips automatisch ausgeblendet).
-- **Farben:** 20 Skins als Startpunkt (Classic, Sunrise, Midnight, Rescue, Arctic, Jungle, Neon, Gold, Mint, Copper,
-  Royal, Lava, Ocean, Bubblegum, Toxic, Sand, Cherry, Vapor, Noir, Forest), danach frei: Panzerung, Mechanik, Metall,
-  Lichter, Augen, Display, Visier, Stoff; Oberfläche Standard/Matt/Satin/Glanz/Candy/Chrom.
-- **Augen:** 28 Ausdrücke (Normal, Happy, Excited, Love, Angry, Sad, Sleepy, Surprised, Skeptical, Confused, Wink,
+- **Farben:** 38 Skins als Startpunkt (★ = Startset), Thema darunter; ein Skin setzt Farben, Oberfläche, Zweitfarbe,
+  Abzeichen und Leuchtlinien, Retro/Orbit/Tank auch eigene Teile. Danach frei: Panzerung, Mechanik, Metall, Lichter,
+  Augen, Display, Visier, Stoff; Oberfläche Standard/Matt/Satin/Glanz/Candy/Chrom.
+- **Zweitfarbe:** Farbe und Lackzonen (Kopf, Ohren, Brust, Schultern, Arme, Hüfte, Beine, Füße).
+- **Abzeichen:** bis zu zwei mit eigener Farbe – Warnstreifen, Kreuz, Wolke, Nummer, Biohazard, Schriftzeichen,
+  Rennstreifen, Zielmarke (Ohrscheibe, Brust, Schulter, Oberschenkel, Rücken, Hinterkopf je nach Abzeichen).
+- **Leuchtlinien:** Leiterbahnen, Ringe, Kanten, Blitze, Gelenke mit Farbe und Stärke.
+- **Augen:** 33 Ausdrücke (Normal, Happy, Excited, Love, Angry, Sad, Sleepy, Surprised, Skeptical, Confused, Wink,
   Focused, Glitch, Pixel, Off, Cute, Laugh, Crying, Shy, Dollar, Question, Exclaim, Loading, LookLeft, LookRight,
-  Determined, Sleeping, Target), Leuchtkraft; optional passt sich der Ausdruck der Animation an.
+  Determined, Sleeping, Target; 1.10: Damage rot, LowPower gedimmt, Check, Warning orange, Blink), Leuchtkraft; optional
+  passt sich der Ausdruck der Animation an, dann blinzelt der Roboter auch (alle 2,5–6 s, `robot_config.json` › `blink`).
 - **Brust-Display:** 16 Motive (Status, Heart, Battery, Smiley, Wave, Cube, Hello, Music, Lightning, Warning, Thermo,
-  Clock, Signal, Star, Planet, Loading); optional passend zur Animation (Tanz → Musik, Strom → Blitz …).
+  Clock, Signal, Star, Planet, Loading) und 3 animierte (Heartbeat, Spinner, Talk); optional passend zur Animation.
 - **Animation:** alle 69 Clips nach Gruppen, Play/Pause (Leertaste), Zeitleiste, Tempo, Wiederholen. Unter dem Clip
   stehen seine Spieldaten (Grundtempo, Höhe, Root Motion, Schritt-Frames, aktuelles Ereignis). Augen, Display,
   „Strom“ (Death schaltet ab, Respawn an) und ausgeblendete Hand-Gegenstände kommen aus den Clip-Daten.
 - **Hilfsobjekte:** Kante, Stange, Leiter oder Kiste an der Stelle, die der Clip voraussetzt – damit sieht man, ob
   Hände und Füße wirklich greifen.
 - **Ansicht:** Iso, Front, Side, Back, Face, Drehteller, Boden; Maus/Trackpad dreht und zoomt.
-- **Look laden/speichern** (`*.robotlook.json`, Version 2; alte Dateien werden übernommen, unbekannte Teile/Namen
-  durch Standardwerte ersetzt und gemeldet) und **Screenshot** (1600 × 1600 PNG).
+- **Look laden/speichern** (`*.robotlook.json`, Version 3; Version 1 und 2 werden übernommen, unbekannte Teile/Namen
+  durch Standardwerte ersetzt und gemeldet), **Screenshot** (1600 × 1600 PNG), **GIF** (15 fps, 600 px) und **Video**
+  (MP4, 30 fps, 1080 px) der laufenden Animation.
+- **Vergleich A/B:** „Als B merken“ stellt den aktuellen Look rechts daneben (gleicher Clip, gleiche Ansicht),
+  „Tauschen“ wechselt die Seiten.
 - Universal-App (Apple Silicon und Intel), ab macOS 13.
 
 Für automatische Tests rendert die App auch ohne Fenster:
@@ -198,8 +213,9 @@ output/RobotViewer.app/Contents/MacOS/RobotViewer --snapshot /tmp/robot.png --ty
 ```
 
 Weitere Schalter: `--look datei.json`, `--save-look out.json` (schreibt den geladenen, ggf. migrierten Look),
-`--skin`, `--expression`, `--display`, `--finish`, `--variant Slot=Variante`, `--size 1000x1000`, `--no-floor`,
-`--no-props`. `viewer/test_viewer.sh` nutzt das für Migrations- und Round-Trip-Tests.
+`--skin` (mit `--skin-parts` samt Teilen), `--expression`, `--display`, `--finish`, `--variant Slot=Variante`,
+`--size 1000x1000`, `--no-floor`, `--no-props`, mit `--anim` auch `--gif clip.gif` oder `--video clip.mp4` (ganzer
+Clip). `viewer/test_viewer.sh` nutzt das für Migrations-, Round-Trip- und Export-Tests.
 
 ## Kennzahlen
 
@@ -219,6 +235,13 @@ Weitere Schalter: `--look datei.json`, `--save-look out.json` (schreibt den gela
 - **Farben ohne neue Texturen:** `T_Robot_ColorMask.png` – R Panzerung, G Mechanik, B Metall; `T_Robot_LightMask.png`
   – Lichter; Rest auf Körper-Flächen = Visier. Ein Shader färbt mit `Farbe × Helligkeit(Albedo) / Helligkeit(Classic-Farbe)` um; Schmutz,
   Kratzer, AO und Decals bleiben erhalten. Alternativ fertige Texturen je Skin (`T_Robot_BaseColor_<Skin>.png`).
+- **Skins = Daten (1.10):** Zweitfarbe, Abzeichen und Leuchtlinien kommen aus Masken (je Kanal eine ID, Zuordnung in
+  `robot_config.json` › `badges`, `linePatterns`, `zones`). Reihenfolge im Shader: Grundfarben → Zweitfarbe
+  (`mix(c, armor2 · r, Zone)`) → Abzeichen (`mix(c, Abzeichenfarbe · r, Maske)`) → Leuchtlinien (Albedo
+  `c · (1 − m · 0,85) + m · 0,85 · 0,6 · Farbe`, Emission `+ Farbe · m · Stärke`), mit
+  `r = clamp(Helligkeit(Albedo) / (R · Helligkeit(Panzerung) + B · Helligkeit(Metall)), 0,2, 1,6)` aus der Farbmaske.
+  Die Masken sind mit der Farbmaske vormultipliziert; Lackzonen schließen einander aus. Herleitung und Lehren:
+  [docs/TECHNIK.md](docs/TECHNIK.md).
 - **Augen und Display:** eigene kleine Flächen mit eigenem Material. Der Ausdruck/das Motiv ist eine Zelle im Atlas
   (`robot_config.json` → `atlasCells`: Scale/Offset in UV, Ursprung unten links). Augen werden additiv gezeichnet;
   der weiche Glow steckt im Atlas.
@@ -284,7 +307,12 @@ teilen. Animation-Events lassen sich direkt aus `clips.*.footsteps` und `clips.*
 | `M_Robot` | URP/Lit (oder Shader Graph mit Farbmaske) | BaseColor, MetallicSmoothness (Metallic Alpha), Normal, Occlusion, Emission × 2–3 |
 | `M_RobotFabric` | URP/Lit | wie `M_Robot`, Base Color = Stofffarbe |
 | `M_RobotEyes` | URP/Particles/Unlit, Blending Additive | `T_Robot_EyeAtlas.png` (4×8 Zellen), Tiling 0.25/0.125, Offset = Atlas-Zelle des Ausdrucks, Farbe = Augenfarbe (HDR) |
-| `M_RobotDisplay` | URP/Unlit | `T_Robot_DisplayAtlas.png` (4×4 Zellen), Tiling 0.25/0.2002, Offset = Motiv-Zelle, Farbe = Displayfarbe |
+| `M_RobotDisplay` | URP/Unlit | `T_Robot_DisplayAtlas.png` (4×4 Zellen), Tiling 0.25/0.2002, Offset = Motiv-Zelle, Farbe = Displayfarbe; animierte Motive aus `T_Robot_DisplayFlipbook.png` (8 Bilder je Zeile, `displayAnimations`: Zeile, Bilder, fps) |
+
+Die Masken (`T_Robot_BadgeMask*`, `T_Robot_LineMask*`, `T_Robot_ZoneMask*`) sind Daten: in Unity **sRGB aus**,
+**Alpha is Transparency aus** (der Alphakanal ist eine eigene Maske), Kompression verlustarm. Augen-Atlas seit 1.10
+4×10 Zellen (Werte in `atlasCells`); Damage/Warning bringen eine eigene Farbe, LowPower eine geringere Leuchtkraft
+mit (`expressionStyles`).
 
 Ausdrücke im Spiel umschalten = `material.mainTextureOffset` setzen (Werte in `robot_config.json`). Augen und Display
 bleiben bewusst eigene Materialien: so reichen Standard-Shader mit Tiling/Offset, der Gewinn eines gemeinsamen
@@ -296,10 +324,11 @@ CrouchWalk/Walk/Run/RunFast/Sprint nach `naturalSpeed`. Als neue Variante neben 
 `RobotAnimator` einführen (Golden Rule). Für einen festen Robotertyp die FBX aus `output/Types/` nehmen (1 Mesh statt
 eines Meshes je Bauteil).
 
-**Spieler-Looks:** Format `CubeEscapeRobotLook` Version 2 (`robot_look.schema.json`, Beispiele in `output/Looks/`).
-Namen von Skins, Bauteilen, Ausdrücken, Motiven und Oberflächen sind **ewige IDs**. Version-1-Dateien (ohne
-`format`/`version`) werden beim Laden übernommen, unbekannte IDs durch Standardwerte ersetzt, neuere Versionen
-abgelehnt – dieselben Regeln gehören in die Spielstand-Migration.
+**Spieler-Looks:** Format `CubeEscapeRobotLook` Version 3 (`robot_look.schema.json`, Beispiele in `output/Looks/`):
+zusätzlich `skin`, `armor2`, `zones2`, `badges` (höchstens 2), `lines`. Namen von Skins, Bauteilen, Ausdrücken, Motiven,
+Oberflächen, Abzeichen, Mustern und Zonen sind **ewige IDs**. Version 1 (ohne `format`/`version`) und Version 2 werden
+beim Laden übernommen (ein v2-Look behält seine Farben und heißt Skin „Custom“), unbekannte IDs durch Standardwerte
+ersetzt, neuere Versionen abgelehnt – dieselben Regeln gehören in die Spielstand-Migration.
 
 ## Offene Punkte
 
@@ -312,6 +341,8 @@ abgelehnt – dieselben Regeln gehören in die Spielstand-Migration.
 | Draw Calls | Standard und je Robotertyp: 1 Mesh, 3–4 Materialien; modular 1 Mesh je Teil | bei frei kombinierbaren Looks die Teile zur Laufzeit zu einem Skinned Mesh kombinieren |
 | Spieler-Looks | Format, Schema, Migration und Beispiele fertig, Viewer getestet | im Spiel in den Spielstand übernehmen (`SaveData`-Migration) |
 | Robot Viewer | Universal-App ab macOS 13, lokal (ad hoc) signiert | für Weitergabe mit einer Apple-Developer-ID signieren und notarisieren |
+| Masken im Spiel | 6 RGBA-Masken à 2048² (Abzeichen, Linien, Zonen) | für Unity packen: Zonen und Gelenke als ID-Kanal, Masken in 1024² (der Viewer macht es beim Laden schon so) |
+| Leuchten im Spiel | Skin-Karten nutzen Bloom (Schwelle über der Beleuchtung) | URP-Bloom so einstellen, dass nur Emission strahlt |
 
 ## Qualitätssicherung (automatisch bei jedem Lauf)
 
@@ -332,12 +363,16 @@ abgelehnt – dieselben Regeln gehören in die Spielstand-Migration.
 
 ## Aufbau des Generators (Kurzfassung)
 
-1. **ImageMagick:** kachelbare Detailtexturen, Decal-Atlas, Augen- und Display-Atlas.
-2. **Materialien** (Shader Nodes) lesen alle Farben aus der Skin-Palette.
+1. **ImageMagick:** kachelbare Detailtexturen, Decal- und Abzeichen-Atlas, Leiterbahnen, Blitze, Augen- und
+   Display-Atlas, Display-Flipbook.
+2. **Materialien** (Shader Nodes) lesen alle Farben aus der Skin-Palette (`data/skins.json`); die Panzerung erzeugt
+   die Abzeichen- und Leuchtlinien-Felder, jedes Material die Lackzonen aus dem Flächenattribut `paint_zone`.
 3. **Geometrie:** Teile mit Slot/Variante (`with variant("Head", "Dome"):`), Accessoires an Sockets, Robotertypen als
    Daten (`ROBOT_TYPES`). Gelenkkugeln exakt in den Drehpunkten, Weighted Normals.
-4. **Ein Atlas für alle Teile** (Smart UV über alle Objekte), Baking aller Kanäle, Material-Remap.
+4. **Ein Atlas für alle Teile** (Smart UV über alle Objekte), Baking aller Kanäle und Masken, Skins per numpy
+   zusammengesetzt (Palette, Zweitfarbe, Abzeichen, Leuchtlinien), Material-Remap.
 5. **Rig + Animationen:** Posen in Armatur-Achsen, Zwei-Knochen-IK für Beine (Kniezielrichtung, Fußdrehung,
    Root-Drehung, Abrollen über Ferse/Spitze) und Arme (Griffpunkt + Ellbogenrichtung, stufenlos mit FK gemischt);
    geschichtete Action-API (Slots, Channelbags), je Clip eine NLA-Spur.
-6. **QA, Clip-Messung, Export (FBX, Typ-FBX, Konfiguration, Looks), Viewer-Daten, Renders.**
+6. **QA, Clip-Messung, Export (FBX, Typ-FBX, Konfiguration, Looks), Viewer-Daten, Renders, Skin-Karten mit Bloom,
+   Bögen, Silhouetten und UI-Icons.**

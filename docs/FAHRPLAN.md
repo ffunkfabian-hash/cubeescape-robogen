@@ -2,7 +2,7 @@
 https://claude.ai/code/artifact/ed285e14-821e-4986-8b02-3a281874174a – Änderungen dort vornehmen und hier nachziehen. -->
 
 > **Führende Fassung:** [Claude Doc „Fahrplan Roboter-Generator“](https://claude.ai/code/artifact/ed285e14-821e-4986-8b02-3a281874174a).
-> Diese Datei ist ein Abbild (Stand 12.10.2026, Generator 1.9.2).
+> Diese Datei ist ein Abbild (Stand 12.10.2026, Generator 1.10.0).
 
 # Fahrplan Roboter-Generator
 
@@ -77,6 +77,13 @@ Sechs Generator-Versionen bauen erst die Skin-Systeme (1.10–1.14), dann die K�
 | **1.14 Reshape** | **Formvarianten** des Körpers: facettiert, durchbrochen, offene Kabel, Voxel. | 5 | Gleiche Gelenkpunkte, alle Clips laufen, QA grün |
 | **2.0 Bodyplan** | **Körperpläne** neben Humanoid: Schwebend (Würfel, Kugel), Stelzen, Vierbeiner, Spinne, Rollend, Ortsfest (Turret, Terminal, Falle). Eigene Rigs und Clip-Sätze, gemeinsame Masken und Augen-Atlas. NPC-Reihe als Typen, Gegner als rote Paletten. | NPCs + Gegner | Jeder Plan im Viewer, QA je Plan gegen seine Clips grün |
 
+**1.10 Paintjob umgesetzt:** Skins als Daten (`data/skins.json`, 38 Skins: 20 bestehende, Gold/Neon/Toxic/Ocean
+aufgewertet, 18 neue), Look-Format 3, Oberflächen je Skin, 8 Abzeichen, 5 Leuchtlinien-Muster (inkl. „Gelenke“),
+Zweitfarbe in 8 Lackzonen, 5 neue Gesichter, 3 animierte Display-Motive, Skin-Bogen mit Dreiviertel-Karten, Bloom und
+Silhouetten, 113 UI-Icons, Viewer mit A/B-Vergleich und GIF/MP4-Export. Aus dem Konzeptvergleich vom 12.10. kamen
+Zweitfarbe, Leuchtzonen an Bauteilen, größere Abzeichen-Plätze (Ohrscheibe, Brust) und die Konzept-Vorschau dazu.
+Modell, QA, Clip-Daten und Typ-Maße sind identisch mit 1.9. Techniken für Cubegen: `docs/TECHNIK.md`.
+
 ## Spiel-Versionen
 
 Fünf Spielversionen holen den Roboter ins Spiel; jede ist für sich spielbar. Die Nummern werden beim Start vergeben (je Auftrag Minor +1), hier gezählt ab 0.44.
@@ -91,22 +98,27 @@ Fünf Spielversionen holen den Roboter ins Spiel; jede ist für sich spielbar. D
 
 ## Zusätzliche Aufgaben
 
-Vierzehn weitere Punkte (zwei Vorschläge vom 12. Oktober 2026 wurden in Generator 1.9.2 geprüft und verworfen; die letzten zwei nutzen die Neural Engine und fallen weg, wenn sie zu viel Zeit kosten), jeweils der Stufe zugeordnet, in der sie am besten mitlaufen.
+Neunzehn weitere Punkte (zwei Vorschläge vom 12. Oktober 2026 wurden in Generator 1.9.2 geprüft und verworfen; fünf kamen aus dem Konzeptvergleich in 1.10 dazu), jeweils der Stufe zugeordnet, in der sie am besten mitlaufen.
 
-- [ ] **UI-Icons per ImageMagick** je Accessoire, Skin und Ausdruck, direkt verwendbar für ein Anpassungsmenü im Spiel – Generator 1.10 (mit dem Skin-Bogen), genutzt in Spiel 0.45
+- [x] **UI-Icons per ImageMagick** je Accessoire, Skin und Ausdruck, direkt verwendbar für ein Anpassungsmenü im Spiel – umgesetzt in Generator 1.10 (113 Icons, dazu Display-Motive und Abzeichen), genutzt in Spiel 0.45
 - [ ] **Detailstufen (LOD):** vereinfachte Meshes mit etwa 6 000 und 2 500 Dreiecken für Entfernung und Menge – vor Spiel 0.44
 - [ ] **Treffer-Kapseln pro Knochen** als Daten für Treffererkennung und eine spätere Ragdoll – vor Spiel 0.44 (Daten), genutzt ab 0.48
-- [ ] **Animierte Display-Motive** wie Herzschlag, Ladekreisel, Sprechen als Flipbook-Atlas – Generator 1.10
+- [x] **Animierte Display-Motive** wie Herzschlag, Ladekreisel, Sprechen als Flipbook-Atlas – umgesetzt in Generator 1.10 (Heartbeat, Spinner, Talk)
 - [ ] **Abnutzungsstufen** von sauber bis verbeult als Masken-Kanal – Generator 1.11 (Teil der Oberflächen-Schichten)
 - [ ] **Typ-eigene Emotes:** Gentleman lüftet den Hut, King schwenkt die Fahne – Generator 1.12
 - [ ] **Nachschwingen** für Umhang und Antenne – Generator 1.12
 - [ ] **Servo-Geräusch-Ereignisse** aus der Gelenkgeschwindigkeit berechnet (in die Clip-Daten wie die Fußschritte) – vor Spiel 0.44
-- [ ] **Viewer:** GIF- oder Video-Export und A/B-Vergleich zweier Looks – Generator 1.10
+- [x] **Viewer:** GIF- oder Video-Export und A/B-Vergleich zweier Looks – umgesetzt in Generator 1.10 (GIF und MP4, auch per Kommandozeile)
 - [ ] **Unity-Testpaket** in einem separaten, leeren Unity-Projekt; das Spiel bleibt unberührt – direkt nach den Testzeiten, damit jede Generator-Stufe dort sofort geprüft werden kann
 - [ ] **Vorschlag: Visuelle Prüfung aller Kombinationen auf der Neural Engine:** Typ × Skin × Ausdruck per `RobotViewer --snapshot` rendern und mit Apples Bilderkennung (Vision, Merkmalsvergleich) gegen Referenzbilder prüfen; verzeiht kleine Pixelabweichungen aus nicht reproduzierbarem UV-Packing, findet echte Ausreißer in Millisekunden je Bild – ab der Stufe Paintjob, zusammen mit dem Skin-Bogen-Render. Geprüft in 1.9.2: kein Mehrwert – die Renders sind über Prozesse hinweg bitnah gleich (Pixel-RMSE 1e-5), ein exakter Pixelvergleich genügt; Feature Prints trennen eine fehlende Hand (0,106) kaum von 12 statt 24 Samples (0,061) und liefern je Gerät andere Abstände (Neural Engine 0,0026, CPU 0,0003), taugen also nicht als Prüfschranke
 - [ ] **Vorschlag: Weathering- und Paintjob-Vorlagen per Bildgenerator** (Core ML auf der Neural Engine) nur als einmaliges Vorlagenwerkzeug, Ergebnisse eingecheckt – nie im Generatorlauf, weil gleiche Eingabe nicht dasselbe Bild garantiert und Cache-Schlüssel reproduzierbar bleiben müssen; Stil-Abnahme vorher; passt zur Stufe Weathering. Geprüft in 1.9.2: kein Einsatz – die Vorlagen entstehen reproduzierbar per ImageMagick im Low-Poly-Stil und hängen im Cache-Schlüssel; ein Bildgenerator (mehrere GB Modell, Lizenz- und Stilprüfung) liefert das nicht
-- [ ] **Konzeptbögen auswerten (Neural Engine):** die drei Skin-Bögen per Apple Vision in Einzelbilder schneiden, die Namen per Texterkennung lesen und Hauptfarben vorschlagen – einmaliges Werkzeug, das Ergebnis wird geprüft als Katalogdaten eingecheckt, nie im Generatorlauf – Generator 1.10 (Start von Paintjob). **Zeitregel:** höchstens eine Sitzung für Werkzeug und Prüfung; ist Abtippen der 74 Namen und Farben schneller, wird das Feature nicht umgesetzt
-- [ ] **Icon-Lesbarkeit prüfen (Neural Engine):** ein Aufmerksamkeitsmodell (Vision Saliency) meldet Icons, in denen das Objekt nicht im Fokus steht oder angeschnitten ist – nur Hinweis im Bericht – Generator 1.10 (mit den UI-Icons). **Zeitregel:** höchstens 5 % mehr Laufzeit der Stufe, die die Icons erzeugt; sonst wird das Feature nicht umgesetzt
+- [x] **Konzeptbögen auswerten:** umgesetzt in Generator 1.10 ohne Neural Engine – `scripts/concept_palettes.py` liest die vier Farbpunkte aller 42 Karten der Bögen A und C an vermessenen Positionen aus (`data/concept_palettes.json`), Namen abgetippt; innerhalb der Zeitregel (eine Sitzung)
+- [x] **Icon-Lesbarkeit prüfen:** umgesetzt in Generator 1.10 ohne Neural Engine – Füllgrad und Lage des Motivs je Icon per ImageMagick (unter 1 s, nur Hinweis im Bericht); ein Saliency-Modell war nicht nötig
+- [ ] **Proportionen des Basismodells** (Konzeptvergleich 12.10.): gedrungener, größerer Kopf, klobigere Platten, Fugen und Schrauben wie auf den Konzeptbildern – betrifft alle 69 Clips und die QA, eigene Entscheidung des Nutzers, spätestens vor Generator 2.0
+- [ ] **Abnutzung je Skin** statt für alle Skins gleicher Schmutz und Kratzer (Konzeptvergleich 12.10.) – Generator 1.11, zusammen mit den Abnutzungsstufen
+- [ ] **Masken für Unity packen:** Lackzonen und Gelenke als ID-Kanal, Masken in 1024² (der Viewer packt schon beim Laden) – vor Spiel-Roboter
+- [ ] **Bloom im Spiel:** URP-Bloom so, dass nur Emission strahlt (wie auf den Skin-Karten) – Spiel-Roboter
+- [ ] **Cubegen übernimmt die Techniken** aus `docs/TECHNIK.md` (Checkliste dort: Looks als Daten, Masken, Zonen, Decal-Anker, Präsentationskarten, Icons, Vorschau-App) – nächste Cubegen-Version
 
 ## Skin-Katalog
 
@@ -212,12 +224,12 @@ Insgesamt etwa 11–16 Arbeitssitzungen bis alle Skins im Spiel sind, gemessen a
 
 Der schwerere Teil ist Unity: Was der Viewer zeigt, muss im Spiel genauso aussehen, ohne Ruckler, in Iso und Ego. Eine volle Generator-Runde dauert seit 1.9 rund 3,5 Minuten.
 
-## Offene Entscheidungen
+## Entscheidungen
 
-- [ ] **Startset** so übernehmen oder eigene Favoriten?
-- [ ] **Wo lebt der Generator?** Eigenes GitHub-Repo (Empfehlung), Unterordner in Cube Escape oder Teil von Cubegen. Die Cubegen-Frage nach 0.47 neu stellen.
-- [ ] **Doppelte Namen:** Void (Glitch, B) gegen Void (Galaxie, C) und Obsidian (Kristall, B) gegen Obsidian (Magma, C). Vorschlag: Galaxie geht in Nebula auf, Magma heißt Magma.
-- [ ] **Reihenfolge:** Spieler-Roboter vor NPCs und Gegnern (Empfehlung) oder umgekehrt?
-- [ ] **Gegner:** bewegte Gefahren nach festem Muster (Empfehlung) oder echte Verfolger mit Navigation (eigenes System)?
-- [ ] **Alter Stand sichten:** Worktree `claude/cube-escape-robot-model-04030e` vor 0.44 prüfen, damit nichts doppelt entsteht.
-- [ ] **Freischalten** von Skins im Spiel: alle sofort frei oder über Discoveries/Flags?
+- [x] **Startset:** so übernommen (12.10.). Jede Stufe hat damit genau die Skins, an denen ihr System geprüft wird; die Favoriten Samurai und Glass sind schon dabei.
+- [x] **Wo lebt der Generator?** Im eigenen GitHub-Repo `ffunkfabian-hash/cubeescape-robogen` (seit 1.7.0).
+- [x] **Doppelte Namen:** Galaxie geht in Nebula auf, Magma heißt Magma; Void (Glitch, B) und Obsidian (B) behalten ihre Namen.
+- [x] **Reihenfolge:** erst der Spieler-Roboter, dann NPCs und Gegner – wie in den Spiel-Versionen oben.
+- [ ] **Gegner – zurückgestellt bis vor Generator 2.0:** Empfehlung bleibt das feste Muster: Pfad und Takt als Daten (Sequenzer, Wegpunkte), vorhersehbar, in der Werkbank baubar und für jede Levelgröße gleich billig. Echte Verfolger bräuchten eine Navigation zur Laufzeit über Spielerlevel aus JSON (bis 100 000 Objekte) und machen Rätsel unberechenbar; sie lohnen nur, wenn Verfolgung selbst zur Spielidee wird.
+- [x] **Alter Stand gesichtet (12.10.):** Der Branch `claude/cube-escape-robot-model-04030e` hatte keine eigenen Commits (Spitze = Cube Escape 0.43.2, in main) und keinen Worktree mehr. Gearbeitet wurde im Ordner `CubeEscape-Robot`, der vollständig als 1.7.0 ins Repo übernommen ist (Unterschied nur die Bildpfade im README). Nichts entsteht doppelt; Branch gelöscht, Ordner in den Papierkorb verschoben (12.10.).
+- [ ] **Freischalten** von Skins im Spiel: alle sofort frei oder über Discoveries/Flags? Fabian entscheidet später, spätestens zur Werkstatt-Version.

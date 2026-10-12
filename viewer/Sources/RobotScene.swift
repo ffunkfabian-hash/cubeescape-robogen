@@ -1,4 +1,6 @@
 import AppKit
+import ImageIO
+import Metal
 import SceneKit
 import simd
 
@@ -30,7 +32,16 @@ final class RobotScene: NSObject, SCNSceneRendererDelegate {
     private var turntable = false
     private var look = Look()
     private var shownExpression = ""
+    private var wantedExpression = "Normal"
     private var shownDisplay = ""
+    private var displayAnim: DisplayAnimation?     // animated motif (flipbook) currently shown
+    private var displayFrame = -1
+    private var blinkUntil: TimeInterval = 0
+    private var nextBlink: TimeInterval = 0
+    private var blinkClock: TimeInterval = 0
+    private var eyeGlowStyle = 1.0
+    private var staticDisplayAtlas: NSImage?
+    private var flipbookAtlas: NSImage?
     private var heldItemNodes: [SCNNode] = []
     private var heldItemVisible = false
     private var shownPower = -1.0
@@ -51,6 +62,64 @@ final class RobotScene: NSObject, SCNSceneRendererDelegate {
     // MARK: - scene
 
     private func image(_ name: String) -> NSImage? { NSImage(contentsOf: data.texture(name)) }
+
+
+    /// Pixels of a texture as straight (not premultiplied) RGBA8, row 0 = top. NSImage premultiplies RGB by alpha,
+    /// which wipes mask channels whenever the alpha channel holds another mask, so RGBA PNGs are read raw.
+    private func pixels(_ name: String) -> (Int, Int, [UInt8])? {
+        guard let src = CGImageSourceCreateWithURL(data.texture(name) as CFURL, nil),
+              let cg = CGImageSourceCreateImageAtIndex(src, 0, nil) else { return nil }
+        let w = cg.width, h = cg.height
+        if cg.bitsPerComponent == 8, cg.bitsPerPixel == 32, cg.alphaInfo == .last || cg.alphaInfo == .noneSkipLast,
+           let d = cg.dataProvider?.data, let ptr = CFDataGetBytePtr(d) {
+            var out = [UInt8](repeating: 0, count: w * h * 4)
+            for y in 0..<h { for x in 0..<(w * 4) { out[y * w * 4 + x] = ptr[y * cg.bytesPerRow + x] } }
+            return (w, h, out)
+        }
+        var out = [UInt8](repeating: 0, count: w * h * 4)       // no alpha: drawing is lossless
+        guard let ctx = CGContext(data: &out, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
+                                  space: CGColorSpaceCreateDeviceRGB(),
+                                  bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue) else { return nil }
+        ctx.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
+        return (w, h, out)
+    }
+
+    private static let device = MTLCreateSystemDefaultDevice()
+
+    /// RGBA8 texture whose channels are picked from other textures: [(file, channel)] per output channel
+    /// (nil = 0). SceneKit draws a shader modifier with more than six custom textures magenta, so the viewer
+    /// packs the generator's masks into fewer textures. Zone masks become one zone number (index / 8).
+    private func packed(_ channels: [(String, Int)?], zoneIDs: [String]? = nil, zoneChannel: Int = -1) -> Any? {
+        var cache: [String: (Int, Int, [UInt8])] = [:]
+        func px(_ f: String) -> (Int, Int, [UInt8])? {
+            if let c = cache[f] { return c }
+            let p = pixels(f)
+            cache[f] = p
+            return p
+        }
+        let files = channels.compactMap { $0?.0 } + (zoneIDs ?? [])
+        guard let size = files.lazy.compactMap({ px($0) }).first, let dev = RobotScene.device else { return nil }
+        let (w, h) = (size.0, size.1)
+        var out = [UInt8](repeating: 0, count: w * h * 4)
+        for (o, ch) in channels.enumerated() {
+            guard let (f, c) = ch, let p = px(f), p.0 == w, p.1 == h else { continue }
+            for i in 0..<(w * h) { out[i * 4 + o] = p.2[i * 4 + c] }
+        }
+        if let zones = zoneIDs, zoneChannel >= 0 {       // zones: [file#channel] in zone order
+            for (z, spec) in zones.enumerated() {
+                let parts = spec.split(separator: "#")
+                guard parts.count == 2, let c = Int(parts[1]), let p = px(String(parts[0])), p.0 == w else { continue }
+                let v = UInt8((z + 1) * 255 / 8)
+                for i in 0..<(w * h) where p.2[i * 4 + c] > 127 { out[i * 4 + zoneChannel] = v }
+            }
+        }
+        let desc = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .rgba8Unorm, width: w, height: h,
+                                                            mipmapped: false)
+        desc.usage = .shaderRead
+        guard let tex = dev.makeTexture(descriptor: desc) else { return nil }
+        tex.replace(region: MTLRegionMake2D(0, 0, w, h), mipmapLevel: 0, withBytes: out, bytesPerRow: w * 4)
+        return tex
+    }
 
     private func buildMaterials() {
         bodyMat = makeBodyMaterial(fabric: false)
@@ -88,7 +157,9 @@ final class RobotScene: NSObject, SCNSceneRendererDelegate {
         float l = atlas.sample(s, _surface.diffuseTexcoord * cell.xy + cell.zw).r;
         _surface.diffuse = float4(mix(float3(0.01, 0.025, 0.02), screenColor.rgb * 1.6 * power, l), 1.0);
         """]
-        displayMat.setValue(SCNMaterialProperty(contents: image("T_Robot_DisplayAtlas.png") as Any), forKey: "atlas")
+        staticDisplayAtlas = image("T_Robot_DisplayAtlas.png")
+        flipbookAtlas = data.config.flipbook.flatMap { image($0.texture) }
+        displayMat.setValue(SCNMaterialProperty(contents: staticDisplayAtlas as Any), forKey: "atlas")
         displayMat.setValue(NSNumber(value: 1.0), forKey: "power")
     }
 
@@ -108,46 +179,69 @@ final class RobotScene: NSObject, SCNSceneRendererDelegate {
             p.wrapT = .repeat
         }
         let body = fabric ? """
-        c = fabricColor.rgb * (lum / max(fabricRef.w, 1e-4));
+        c = fabricColor.rgb * (lum / max(refB.y, 1e-4));
         rough = 0.75; metalness = 0.0;
         """ : """
         float vis = saturate(1.0 - (mk.r + mk.g + mk.b + mk.a));
-        c = mix(c, armorColor.rgb * (lum / armorRef.w), mk.r);
-        c = mix(c, mechColor.rgb * (lum / mechRef.w), mk.g);
-        c = mix(c, metalColor.rgb * (lum / metalRef.w), mk.b);
-        c = mix(c, lightsColor.rgb * (lum / lightsRef.w), mk.a);
-        c = mix(c, visorColor.rgb * (lum / visorRef.w), vis);
+        c = mix(c, armorColor.rgb * (lum / refA.x), mk.r);
+        c = mix(c, mechColor.rgb * (lum / refA.y), mk.g);
+        c = mix(c, metalColor.rgb * (lum / refA.z), mk.b);
+        c = mix(c, lightsColor.rgb * (lum / refA.w), mk.a);
+        c = mix(c, visorColor.rgb * (lum / refB.x), vis);
         rough = mix(rough, saturate(rough * finish.x), mk.r);
         metalness = mix(metalness, saturate(metalness + finish.y), mk.r);
         rough = mix(rough, mix(rough, 0.04, 0.8), vis);
+        float ratio = clamp(lum / max(mk.r * refA.x + mk.b * refA.z, 1e-3), 0.2, 1.6);
+        int zid = int(round(aux.g * 8.0));
+        float mz = zid >= 1 && zid <= 8 ? float((int(finish.w) >> (zid - 1)) & 1) : 0.0f;
+        c = mix(c, armor2Color.rgb * ratio, mz);
+        float4 b0 = badgeTex0.sample(s, uv), b1 = badgeTex1.sample(s, uv);
+        float mA = saturate(dot(b0, badgeA0) + dot(b1, badgeA1));
+        float mB = saturate(dot(b0, badgeB0) + dot(b1, badgeB1));
+        c = mix(c, badgeAColor.rgb * ratio, mA);
+        c = mix(c, badgeBColor.rgb * ratio, mB);
+        float ml = saturate(dot(lineTex.sample(s, uv), lineSel0) + aux.r * finish.z);
+        c = c * (1.0 - ml * linePaint) + ml * linePaint * 0.6 * lineColor.rgb;
         float3 e = _surface.emission.rgb;
         float le = dot(e, float3(0.2126, 0.7152, 0.0722));
-        _surface.emission.rgb = mix(e, lightsColor.rgb * (le / lightsRef.w) * 1.6, mk.a) * glowAll;
+        _surface.emission.rgb = (mix(e, lightsColor.rgb * (le / refA.w) * 1.6, mk.a)
+                                 + lineColor.rgb * (ml * lineColor.w * 1.6)) * glowAll;
         """
         if CommandLine.arguments.contains("--debug-no-shader") { return m }
         m.shaderModifiers = [.surface: """
         #pragma arguments
         texture2d<float> maskTexture;
-        texture2d<float> lightTexture;
         texture2d<float> msTexture;
+        texture2d<float> badgeTex0;
+        texture2d<float> badgeTex1;
+        texture2d<float> lineTex;
+        texture2d<float> auxTexture;
+        float4 armor2Color;
+        float4 badgeA0;
+        float4 badgeA1;
+        float4 badgeB0;
+        float4 badgeB1;
+        float4 badgeAColor;
+        float4 badgeBColor;
+        float4 lineSel0;
+        float4 lineColor;
+        float linePaint;
         float4 armorColor;
         float4 mechColor;
         float4 metalColor;
         float4 lightsColor;
         float4 visorColor;
         float4 fabricColor;
-        float4 armorRef;
-        float4 mechRef;
-        float4 metalRef;
-        float4 lightsRef;
-        float4 visorRef;
-        float4 fabricRef;
-        float4 finish;
+        float4 refA;            // luminance of the Classic colours: armour, mechanics, metal, lights
+        float4 refB;            // visor, fabric
+        float4 finish;          // roughness factor, metal offset, joints glow on/off, paint zone bits (armor2)
         float glowAll;
         #pragma body
         constexpr sampler s(filter::linear, mip_filter::linear, address::repeat);
         float2 uv = _surface.diffuseTexcoord;
-        float4 mk = float4(maskTexture.sample(s, uv).rgb, lightTexture.sample(s, uv).r);
+        constexpr sampler sn(filter::nearest, address::repeat);
+        float4 mk = maskTexture.sample(s, uv);
+        float4 aux = auxTexture.sample(sn, uv);
         float4 ms = msTexture.sample(s, uv);
         float3 c = _surface.diffuse.rgb;
         float lum = max(dot(c, float3(0.2126, 0.7152, 0.0722)), 1e-5);
@@ -158,14 +252,49 @@ final class RobotScene: NSObject, SCNSceneRendererDelegate {
         _surface.roughness = rough;
         _surface.metalness = metalness;
         """]
-        m.setValue(SCNMaterialProperty(contents: image("T_Robot_ColorMask.png") as Any), forKey: "maskTexture")
-        m.setValue(SCNMaterialProperty(contents: image("T_Robot_LightMask.png") as Any), forKey: "lightTexture")
-        m.setValue(SCNMaterialProperty(contents: image("T_Robot_MetallicSmoothness.png") as Any), forKey: "msTexture")
-        let refs: [(String, [Double])] = [("armorRef", classic.armor), ("mechRef", classic.mech),
-                                          ("metalRef", classic.metal), ("lightsRef", classic.accent),
-                                          ("visorRef", classic.visor), ("fabricRef", [0.71, 0.71, 0.71])]
-        for (k, v) in refs { m.setValue(vec(RGB(v)), forKey: k) }
+        // six custom textures at most (see packed): colour mask + lights, metal/smoothness, 2 x badges, lines, aux
+        let cfg = data.config
+        func chan(_ list: [MaskChannel]?, _ i: Int) -> (String, Int)? {
+            guard let l = list, i < l.count else { return nil }
+            return (l[i].texture, l[i].channel)
+        }
+        let lines = cfg.linePatterns ?? []
+        let props: [(String, Any?)] = [
+            ("maskTexture", packed([("T_Robot_ColorMask.png", 0), ("T_Robot_ColorMask.png", 1),
+                                    ("T_Robot_ColorMask.png", 2), ("T_Robot_LightMask.png", 0)])),
+            ("msTexture", packed([("T_Robot_MetallicSmoothness.png", 0), nil, nil,
+                                  ("T_Robot_MetallicSmoothness.png", 3)])),
+            ("badgeTex0", packed((0..<4).map { chan(cfg.badges, $0) })),
+            ("badgeTex1", packed((4..<8).map { chan(cfg.badges, $0) })),
+            ("lineTex", packed((0..<4).map { chan(lines, $0) })),
+            // aux: R = fifth glow pattern (Joints), G = paint zone number
+            ("auxTexture", packed([chan(lines, 4), nil, nil, nil],
+                                  zoneIDs: (cfg.zones ?? []).map { "\($0.texture)#\($0.channel)" }, zoneChannel: 1)),
+        ]
+        let black = NSImage(size: NSSize(width: 4, height: 4), flipped: false) { r in
+            NSColor.black.setFill(); r.fill(); return true
+        }
+        for (key, tex) in props { m.setValue(SCNMaterialProperty(contents: tex ?? black), forKey: key) }
+        // SceneKit silently draws a shader modifier magenta beyond about 23 custom arguments: keep them packed
+        let lum = { (c: [Double]) in RGB(c).luminance }
+        m.setValue(vec4([lum(classic.armor), lum(classic.mech), lum(classic.metal), lum(classic.accent)]), forKey: "refA")
+        m.setValue(vec4([lum(classic.visor), 0.71, 0, 0]), forKey: "refB")
+        m.setValue(NSNumber(value: data.config.linePaint ?? 0.85), forKey: "linePaint")
         return m
+    }
+
+    /// One-hot channel weights per mask texture (badges: 2 textures x RGBA, lines: 1 texture).
+    private func maskSelector(_ id: String?, in channels: [MaskChannel]) -> [[Double]] {
+        var sel = [[Double]](repeating: [0, 0, 0, 0], count: 2)
+        guard let id = id, let ch = channels.first(where: { $0.id == id }) else { return sel }
+        let textures = Array(NSOrderedSet(array: channels.map(\.texture))) as? [String] ?? []
+        let t = textures.firstIndex(of: ch.texture) ?? 0
+        if t < 2 && ch.channel < 4 { sel[t][ch.channel] = 1 }
+        return sel
+    }
+
+    private func vec4(_ v: [Double]) -> NSValue {
+        NSValue(scnVector4: SCNVector4(CGFloat(v[0]), CGFloat(v[1]), CGFloat(v[2]), CGFloat(v[3])))
     }
 
     private func vec(_ c: RGB, w: Double? = nil) -> NSValue {
@@ -327,7 +456,10 @@ final class RobotScene: NSObject, SCNSceneRendererDelegate {
 
     static let views = ["Iso", "Front", "Side", "Back", "Face"]
 
+    private(set) var currentView = "Iso"
+
     func setView(_ name: String) {
+        currentView = name
         let target = SIMD3<Float>(0, 0.66, 0)
         var pos: SIMD3<Float>
         switch name {
@@ -365,7 +497,7 @@ final class RobotScene: NSObject, SCNSceneRendererDelegate {
             if obj.hasPrefix("AccHand_") && visible.contains(obj) { heldItemNodes += nodes }
         }
         heldItemVisible = true
-        let (rf, mo) = look.finish.params
+        let (rf, mo) = look.finish.params(data.config)
         for m in [bodyMat, fabricMat] {
             m.setValue(vec(look.armor), forKey: "armorColor")
             m.setValue(vec(look.mech), forKey: "mechColor")
@@ -373,9 +505,24 @@ final class RobotScene: NSObject, SCNSceneRendererDelegate {
             m.setValue(vec(look.lights), forKey: "lightsColor")
             m.setValue(vec(look.visor), forKey: "visorColor")
             m.setValue(vec(look.fabric), forKey: "fabricColor")
-            m.setValue(NSValue(scnVector4: SCNVector4(CGFloat(rf), CGFloat(mo), 0, 0)), forKey: "finish")
+            let joints = maskSelector(look.lines.pattern, in: data.config.linePatterns ?? [])[1][0]
+            var zoneBits = 0
+            for (i, z) in (data.config.zones ?? []).enumerated() where look.zones2.contains(z.id) { zoneBits |= 1 << i }
+            m.setValue(NSValue(scnVector4: SCNVector4(CGFloat(rf), CGFloat(mo), CGFloat(joints), CGFloat(zoneBits))),
+                       forKey: "finish")
+            for (i, slot) in ["A", "B"].enumerated() {
+                let badge = i < look.badges.count ? look.badges[i] : nil
+                let sel = maskSelector(badge?.id, in: data.config.badges ?? [])
+                m.setValue(vec4(sel[0]), forKey: "badge\(slot)0")
+                m.setValue(vec4(sel[1]), forKey: "badge\(slot)1")
+                m.setValue(vec(badge?.color ?? RGB(0, 0, 0)), forKey: "badge\(slot)Color")
+            }
+            let ls = maskSelector(look.lines.pattern, in: data.config.linePatterns ?? [])
+            m.setValue(vec4(ls[0]), forKey: "lineSel0")
+            m.setValue(vec(look.armor2), forKey: "armor2Color")
+            m.setValue(vec(look.lines.color, w: look.lines.strength), forKey: "lineColor")
         }
-        eyeMat.setValue(vec(look.eyes), forKey: "eyeColor")
+        shownExpression = ""            // eye colour or style may have changed
         displayMat.setValue(vec(look.screen), forKey: "screenColor")
         shownPower = -1
         setPower(1.0, glow: look.glow)
@@ -392,16 +539,71 @@ final class RobotScene: NSObject, SCNSceneRendererDelegate {
     }
 
     func setExpression(_ name: String) {
+        wantedExpression = name
+        refreshEyes()
+    }
+
+    /// Shows the wanted expression - or the blink cell while blinking (only over expressions the blink rule names).
+    private func refreshEyes() {
+        var name = wantedExpression
+        if let b = data.config.blink, blinkClock < blinkUntil, b.during.contains(name) { name = b.expression }
         guard name != shownExpression, let i = data.config.expressions.firstIndex(of: name) else { return }
         shownExpression = name
         eyeMat.setValue(cell(index: i, grid: data.config.eyeGrid), forKey: "cell")
+        let style = data.config.expressionStyles?[name]
+        lock.lock()
+        let eyes = look.eyes
+        lock.unlock()
+        eyeMat.setValue(vec(style?.tint.map { RGB($0) } ?? eyes), forKey: "eyeColor")
+        eyeGlowStyle = style?.glow ?? 1.0
+        shownPower = -1             // re-applies the glow with the style factor
+    }
+
+    /// Idle blinking (robot_config.json > blink): random interval, short duration; GUI only (snapshots never blink).
+    private func updateBlink(_ time: TimeInterval) {
+        guard let b = data.config.blink, b.interval.count == 2 else { return }
+        blinkClock = time
+        if nextBlink == 0 { nextBlink = time + Double.random(in: b.interval[0]...b.interval[1]) }
+        if time >= nextBlink {
+            blinkUntil = time + b.duration
+            nextBlink = time + Double.random(in: b.interval[0]...b.interval[1])
+        }
+        refreshEyes()
     }
 
     func setDisplay(_ name: String) {
-        guard name != shownDisplay, let i = data.config.displays.firstIndex(of: name) else { return }
+        guard name != shownDisplay else { return }
+        if let anim = data.config.displayAnimations?.first(where: { $0.name == name }), let fb = data.config.flipbook,
+           let atlas = flipbookAtlas {
+            shownDisplay = name
+            displayAnim = anim
+            displayFrame = -1
+            displayMat.setValue(SCNMaterialProperty(contents: atlas), forKey: "atlas")
+            setDisplayFrame(0, fb)
+            return
+        }
+        guard let i = data.config.displays.firstIndex(of: name) else { return }
+        if displayAnim != nil {
+            displayAnim = nil
+            displayMat.setValue(SCNMaterialProperty(contents: staticDisplayAtlas as Any), forKey: "atlas")
+        }
         shownDisplay = name
         displayMat.setValue(cell(index: i, grid: data.config.displayGrid, cellHeight: data.config.displayCellHeight),
                             forKey: "cell")
+    }
+
+    private func setDisplayFrame(_ frame: Int, _ fb: FlipbookInfo) {
+        guard let anim = displayAnim, frame != displayFrame else { return }
+        displayFrame = frame
+        displayMat.setValue(NSValue(scnVector4: SCNVector4(CGFloat(fb.cell[0]), CGFloat(fb.cell[1]),
+                                                           CGFloat(Double(frame) * fb.cell[0]),
+                                                           CGFloat(Double(anim.row) * fb.cell[1]))), forKey: "cell")
+    }
+
+    /// Advances an animated display motif (flipbook) with the wall clock.
+    private func updateDisplayAnimation(_ time: TimeInterval) {
+        guard let anim = displayAnim, let fb = data.config.flipbook else { return }
+        setDisplayFrame(Int(time * anim.fps) % max(anim.frames, 1), fb)
     }
 
     /// "Power" of all emissive parts: eyes, chest display and lights (Death switches off, Respawn on).
@@ -410,7 +612,7 @@ final class RobotScene: NSObject, SCNSceneRendererDelegate {
         guard abs(key - shownPower) > 1e-4 else { return }
         shownPower = key
         for m in [bodyMat, fabricMat] { m.setValue(NSNumber(value: min(glow, 1.6) * p), forKey: "glowAll") }
-        eyeMat.setValue(NSNumber(value: glow * p), forKey: "glow")
+        eyeMat.setValue(NSNumber(value: glow * p * eyeGlowStyle), forKey: "glow")
         displayMat.setValue(NSNumber(value: min(p, 1.5)), forKey: "power")
     }
 
@@ -523,6 +725,8 @@ final class RobotScene: NSObject, SCNSceneRendererDelegate {
         if spin { robotRoot.simdEulerAngles.y += Float(dt * 0.6) }
         for n in spinNodes { n.simdLocalRotate(by: simd_quatf(angle: Float(dt * 14), axis: [0, 0, 1])) }
         evaluate()
+        updateDisplayAnimation(time)
+        if look.autoExpression { updateBlink(time) }
     }
 
     /// Sets bone transforms for the current clip time (also used for offscreen snapshots).

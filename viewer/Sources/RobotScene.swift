@@ -12,7 +12,8 @@ final class RobotScene: NSObject, SCNSceneRendererDelegate {
     let cameraNode = SCNNode()
     private(set) var boneNodes: [String: SCNNode] = [:]
     private var boneOrder: [SCNNode] = []
-    private var objectNodes: [String: [SCNNode]] = [:]     // key "<form>|<object>", form "" = base geometry
+    private struct ChunkKey: Hashable { let form: String; let object: String }      // form "" = base geometry
+    private var objectNodes: [ChunkKey: [SCNNode]] = [:]
     private var spinNodes: [SCNNode] = []
     private var bodyMat = SCNMaterial()
     private var fabricMat = SCNMaterial()
@@ -594,7 +595,7 @@ final class RobotScene: NSObject, SCNSceneRendererDelegate {
                 node = pivot
             }
             boneNodes[part.bone]?.addChildNode(node)
-            objectNodes["\(part.form ?? "")|\(part.object)", default: []].append(node)
+            objectNodes[ChunkKey(form: part.form ?? "", object: part.object), default: []].append(node)
         }
     }
 
@@ -741,11 +742,9 @@ final class RobotScene: NSObject, SCNSceneRendererDelegate {
         if form?.kind == "parts" { visible.insert("Form_\(look.form)") }
         heldItemNodes = []
         for (key, nodes) in objectNodes {
-            let cut = key.firstIndex(of: "|")!
-            let (chunkForm, obj) = (String(key[..<cut]), String(key[key.index(after: cut)...]))
-            let shown = visible.contains(obj) && chunkForm == meshForm
+            let shown = visible.contains(key.object) && key.form == meshForm
             for n in nodes { n.isHidden = !shown }
-            if obj.hasPrefix("AccHand_") && shown { heldItemNodes += nodes }
+            if key.object.hasPrefix("AccHand_") && shown { heldItemNodes += nodes }
         }
         heldItemVisible = true
         let cfg = data.config

@@ -31,6 +31,11 @@ und Bodenkontakte bleiben unverändert. Der Classic ist jetzt 1,38 m hoch (vorhe
 * 5 neue Skins: Pixel ★, Origami ★, Geo, Bone, Wire (76 insgesamt).
 * Viewer: Abschnitt „Form“, Schalter `--form`, Tests für Migration v5 → v6, unbekannte Form und sichtbare Form.
   Unity-Testbett: Form-FBX mit den Hauptknochen, Form je Skin gelesen, Lochung im Shader, 2 neue EditMode-Tests.
+* Code-Review vor dem Release: das Unity-Testbett legte je Checkout eine neue URP-Datei an und schrieb deren GUID in
+  die Projekteinstellungen – die URP-Datei ist jetzt versioniert; Unity-Body-Shader beidseitig (Innenseiten in den
+  Löchern), die URP-Beschreibung verlangt den Loch-Clip auch in Schatten- und Tiefenpässen; Voxel ohne toten
+  Verschiebe-Code (Würfel liegen ohnehin innen), Viewer-Schlüssel als Struktur, Prüfungen der Formen-QA an der
+  Typenliste statt an der Größe des Berichts.
 * Offen notiert: der Textur-Atlas ist nur zu ≈ 19 % belegt (Smart UV Project ohne Skalierung).
 * Doku: README, AGENTS, TECHNIK.md › 15, FAHRPLAN.
 

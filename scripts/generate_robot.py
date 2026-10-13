@@ -456,12 +456,14 @@ FORMS = collections.OrderedDict([
                  "urp": "eigene Meshes (Forms/…_Faceted.fbx), flach schattiert; dasselbe Material und dieselben Clips"}),
     ("Voxel", {"kind": "mesh", "label": "Voxel",
                "description": "aus Würfeln von 3 cm gebaut, jede Würfelseite einfarbig (Pixel)",
-               "urp": "eigene Meshes (Forms/…_Voxel.fbx); Visier und Bildschirme bleiben glatt vor den Würfeln"}),
+               "urp": "eigene Meshes (Forms/…_Voxel.fbx); Gelenke, Finger, Kleinteile, Visier und Bildschirme bleiben glatt"}),
     ("Perforated", {"kind": "shader", "label": "Durchbrochen",
                     "description": "runde Löcher in der Panzerung, innen sichtbar (Bone)",
                     "urp": "Alpha-Clip im Body-Shader: Lochraster im UV-Raum (perforation.cells je UV-Einheit, jede "
                            "zweite Reihe um eine halbe Zelle versetzt), Loch bei Abstand zur Zellmitte < "
-                           "perforation.radius × Zelle, nur wo ColorMask R > 0,5; Cull Off"}),
+                           "perforation.radius × Zelle, nur wo ColorMask R > 0,5; Cull Off; derselbe Clip auch im "
+                           "ShadowCaster-, DepthOnly- und DepthNormals-Pass (sonst Schatten ohne Löcher und "
+                           "Tiefe, wo die Farbe fehlt)"}),
     ("Wired", {"kind": "parts", "label": "Offene Kabel",
                "description": "Kabelstränge an Armen, Beinen, Hals und Rumpf (Wire)",
                "urp": "zusätzliches Teil Form_Wired im modularen FBX bzw. Forms/…_Wired.fbx, starr an den Knochen"}),
@@ -3362,8 +3364,8 @@ def combine_objects(objs, name, coll):
 # atlases); in the voxel form they move in front of the blocks.
 FACET_RATIO = 0.16          # share of the triangles the collapse keeps (sharp, paper-like facets)
 VOXEL_CELL = 0.03           # metres; world grid in the rest pose, so the blocks of neighbouring parts line up
-VOXEL_INSET = 0.5           # a cell counts if its centre lies this share of a cell inside the part: blocks stick out
-                            # at most 3 mm (more: blocks of neighbouring parts collide when crouching or folding arms)
+VOXEL_INSET = 0.5           # a cell counts if its centre lies half a cell inside the part: every block stays inside
+                            # the base form, so its collision-free clips carry over (0.25 collided in 67 of 69 clips)
 FORM_KEEP = ("Head_Visor", "Eye_Screen", "Chest_Display", "Chest_Screen")
 # voxel form: joints stay round (a block cluster is not rotation-invariant like a ball: it would cut into its
 # neighbour in every clip) and fingers stay as they are (smaller than a cell); matched on the part name without side
@@ -3405,11 +3407,11 @@ class FaceCopier:
             if sl is not None:
                 self.ints.append((sl, dst.faces.layers.int.get(name) or dst.faces.layers.int.new(name)))
 
-    def copy(self, faces, shift=None):
+    def copy(self, faces):
         for f in faces:
             vs = []
             for v in f.verts:
-                nv = self.dst.verts.new(v.co + shift if shift is not None else v.co)
+                nv = self.dst.verts.new(v.co)
                 for k, w in v[self.src_def].items():
                     nv[self.dst_def][k] = w
                 vs.append(nv)
@@ -3445,7 +3447,8 @@ def faceted_copy(src, coll):
     """Collapse-decimated copy with flat facets; screens and visor are carried over unchanged."""
     bm = bmesh.new()
     bm.from_mesh(src.data)
-    keep = [f for f in bm.faces if form_keep(src, bm)(f)]
+    keeps = form_keep(src, bm)
+    keep = [f for f in bm.faces if keeps(f)]
     rest = bmesh.new()
     rest.from_mesh(src.data)
     rest_keep = form_keep(src, rest)
@@ -3562,9 +3565,9 @@ def _voxelise_island(isl, tris, out, cell, uv_layer, int_layers, group):
 
 
 def voxel_copies(part_objs, keys, coll):
-    """Voxel copies of the part objects; the smooth screens and the visor move in front of the blocks."""
-    built, decals = {}, []
-    fronts = {"head": [], "chest": []}          # (x, z, y) of block corners near the decals
+    """Voxel copies of the part objects. Joints, fingers, thin parts, the visor and the screens stay smooth; the
+    blocks lie inside the base form (VOXEL_INSET), so nothing covers the visor or the screens."""
+    objs = collections.OrderedDict()
     for key in keys:
         src = part_objs[key]
         bm = bmesh.new()
@@ -3573,51 +3576,20 @@ def voxel_copies(part_objs, keys, coll):
         tris = collections.defaultdict(list)
         for lt in bm.calc_loop_triangles():
             tris[lt[0].face.index].append(lt)
-        keeps, decal = form_keep(src, bm, VOXEL_KEEP), form_keep(src, bm)
+        keeps = form_keep(src, bm, VOXEL_KEEP)
         deform = bm.verts.layers.deform.verify()
         uv_layer = bm.loops.layers.uv.active
         out = bmesh.new()
-        ints = FaceCopier(bm, out).ints
-        gnames = {g.index: g.name for g in src.vertex_groups}
-        keep, smooth = [], []
+        copier = FaceCopier(bm, out)
+        smooth = []
         for isl in _islands(bm):
             if keeps(isl[0]):
-                (keep if decal(isl[0]) else smooth).extend(isl)
-                continue
-            group = max(isl[0].verts[0][deform].items(), key=lambda kv: kv[1])[0]
-            n0 = len(out.verts)
-            if not _voxelise_island(isl, tris, out, VOXEL_CELL, uv_layer, ints, group):
                 smooth.extend(isl)
                 continue
-            fam = {"Head": "head", "Spine": "chest"}.get(gnames[group])
-            if fam and (key == "Body" or key.startswith("Head_")):
-                out.verts.ensure_lookup_table()
-                fronts[fam] += [tuple(v.co) for v in out.verts[n0:]]
-        if smooth:
-            FaceCopier(bm, out).copy(smooth)
-        if keep:
-            decals.append((key, keep))
-        built[key] = (src, bm, out)
-    # decals: the visor and the eye screen move together (head), the chest screen on its own
-    for key, keep in decals:
-        src, bm, out = built[key]
-        gnames = {g.index: g.name for g in src.vertex_groups}
-        deform = bm.verts.layers.deform.verify()
-        by_fam = collections.defaultdict(list)
-        for f in keep:
-            g = max(f.verts[0][deform].items(), key=lambda kv: kv[1])[0]
-            by_fam["chest" if gnames[g] == "Spine" else "head"].append(f)
-        for fam, faces in by_fam.items():
-            co = [v.co for f in faces for v in f.verts]
-            x0, x1 = min(c.x for c in co), max(c.x for c in co)
-            z0, z1 = min(c.z for c in co), max(c.z for c in co)
-            front = min(c.y for c in co)
-            blocks = [y for x, y, z in ((p[0], p[1], p[2]) for p in fronts[fam]) if x0 <= x <= x1 and z0 <= z <= z1]
-            shift = Vector((0, min(0.0, min(blocks) - 0.003 - front) if blocks else 0.0, 0))
-            FaceCopier(bm, out).copy(faces, shift)
-    objs = collections.OrderedDict()
-    for key in keys:
-        src, bm, out = built[key]
+            group = max(isl[0].verts[0][deform].items(), key=lambda kv: kv[1])[0]
+            if not _voxelise_island(isl, tris, out, VOXEL_CELL, uv_layer, copier.ints, group):
+                smooth.extend(isl)
+        copier.copy(smooth)
         objs[key] = _form_object(src, out, "Voxel", coll)
         bm.free()
         out.free()

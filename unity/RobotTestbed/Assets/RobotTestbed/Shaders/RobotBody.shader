@@ -74,6 +74,8 @@ Shader "CubeEscape/RobotBody"
         {
             Name "ForwardLit"
             Tags { "LightMode" = "UniversalForward" }
+            Cull Off        // 1.14 form "Perforated": the holes show the inside of the plates (testbed: the depth and
+                            // shadow passes below come from URP Lit and do not clip - the game shader must)
 
             HLSLPROGRAM
             #pragma vertex vert

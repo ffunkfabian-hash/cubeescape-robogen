@@ -609,7 +609,7 @@ def verify_reshape():
           any(p["object"] == "Form_Wired" for p in doc["parts"]), "Form_Wired")
     rep_ = json.load(open(os.path.join(OUT, "logs", "robot_report.json"), encoding="utf-8"))
     qa = rep_.get("qa", {})
-    if len(qa) > 4:                         # full tier: every type and every geometry form over all clips
+    if all(t["name"] in qa for t in cfg["robotTypes"]):     # all types checked (not --qa-types): the forms too
         form_qa = {k: v for k, v in qa.items() if k.startswith("Form_")}
         bad = {k: [n for n, e in v["actions"].items() if e["new_overlaps"] or e["detached_joints"] or e["min_z"] < -0.006]
                for k, v in form_qa.items()}

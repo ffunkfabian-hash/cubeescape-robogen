@@ -8,5 +8,10 @@ RobotTestbed/*.csproj
 RobotTestbed/*.sln
 RobotTestbed/Assets/RobotImport/
 RobotTestbed/Assets/RobotImport.meta
-RobotTestbed/Assets/RobotTestbed/Generated/
+RobotTestbed/Assets/RobotTestbed/Generated/*
+# the URP asset stays versioned: ProjectSettings reference its GUID (a new asset per checkout rewrote them every run)
+!RobotTestbed/Assets/RobotTestbed/Generated/URP.asset
+!RobotTestbed/Assets/RobotTestbed/Generated/URP.asset.meta
+!RobotTestbed/Assets/RobotTestbed/Generated/URP_Renderer.asset
+!RobotTestbed/Assets/RobotTestbed/Generated/URP_Renderer.asset.meta
 RobotTestbed/Assets/RobotTestbed/Generated.meta

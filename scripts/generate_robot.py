@@ -52,7 +52,7 @@ import make_textures  # noqa: E402 - ImageMagick source textures
 import export_viewer  # noqa: E402 - data for the RobotViewer app
 
 LOG = logging.getLogger("robot")
-VERSION = "1.14.1"
+VERSION = "1.15.0"
 
 # ----------------------------------------------------------------------------------------------
 # Arguments and logging
@@ -2266,7 +2266,8 @@ def apply_weighted_normals(ob):
         bpy.ops.object.modifier_apply(modifier=mod.name)
 
 
-UV_SCHEMA = "1.8-a"     # bump when unwrap() changes
+UV_SCHEMA = "1.15-a"    # bump when unwrap() changes
+UV_MARGIN = 0.002       # gap between packed islands, share of the atlas (4 px at 2048, 2 px in the 1024 Unity masks)
 
 
 def mesh_arrays(me):
@@ -2372,8 +2373,14 @@ def unwrap_fresh(objs):
         if not o.data.uv_layers:
             o.data.uv_layers.new(name="UVMap")
     bpy.ops.object.mode_set(mode="EDIT")
-    bpy.ops.uv.smart_project(angle_limit=math.radians(60), island_margin=0.003, area_weight=0.0,
+    bpy.ops.uv.smart_project(angle_limit=math.radians(60), island_margin=UV_MARGIN, area_weight=0.0,
                              correct_aspect=True, scale_to_bounds=False)
+    # 1.15: smart project leaves wide gaps between its thousands of small islands (19 % of the atlas used); the
+    # concave packer with free rotation fills the atlas far more densely - more texels per centimetre in every map
+    t0 = time.time()
+    bpy.ops.uv.pack_islands(rotate=True, rotate_method="ANY", scale=True, margin_method="FRACTION",
+                            margin=UV_MARGIN, shape_method="CONCAVE")
+    LOG.info("  packed UV islands in %.1f s", time.time() - t0)
     bpy.ops.object.mode_set(mode="OBJECT")
     eye_i, disp_i = MAT_ORDER.index("EyeScreen"), MAT_ORDER.index("Display")
     x0, x1, z0, z1 = DISPLAY_RECT
@@ -3104,8 +3111,9 @@ def bake_ao_configs(objs, mats, size, samples, dummy):
         for o in scene.objects:
             o.select_set(o == conf)
         bpy.context.view_layer.objects.active = conf
-        # small margin: neighbouring islands of other variants must not be overwritten
-        bpy.ops.object.bake(type="AO", margin=2 if i < len(passes) - 1 else 4, use_clear=(i == 0))
+        # margin at most half the gap between packed islands: neighbouring islands of other variants (baked in other
+        # passes) must not be overwritten
+        bpy.ops.object.bake(type="AO", margin=max(1, int(UV_MARGIN * size / 2)), use_clear=(i == 0))
         remove_object(conf)
     for key in MAT_ORDER:
         nt = mats[key].node_tree

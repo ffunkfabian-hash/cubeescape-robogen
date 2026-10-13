@@ -106,6 +106,9 @@ Glieder, Fugen und Schrauben, 1,38 m) und Körperformen Facettiert, Voxel, Durch
 Meshes mit demselben Rig, Lochung als Formel, Kabel als Teil), 76 Skins (Pixel, Origami, Geo, Bone, Wire), Look-Format
 6; QA aller Typen und Formen über alle Clips ohne Befund.
 
+1.14.1: Viewer-Seitenleiste bleibt in ihrer Spalte. **1.15 Pack Rat** (13.10., v1.15.0): Textur-Atlas dicht gepackt
+(18 % → 51 % belegt). Als Nächstes 1.16 mit den Kriech-Clips, danach 2.0 Bodyplan.
+
 1.13.1–1.13.3: Prüfungen parallel (`check_output.sh`), QA-Cache und Render-Cache – mit warmem Cache Standardlauf
 etwa 45 s, Volllauf 90–115 s statt rund 7 Minuten; eine sichtbare Änderung rendert nur ihre eigenen Bilder neu.
 
@@ -142,7 +145,9 @@ Neunzehn weitere Punkte (zwei Vorschläge vom 12. Oktober 2026 wurden in Generat
 - [x] **Konzeptbögen auswerten:** umgesetzt in Generator 1.10 ohne Neural Engine – `scripts/concept_palettes.py` liest die vier Farbpunkte aller 42 Karten der Bögen A und C an vermessenen Positionen aus (`data/concept_palettes.json`), Namen abgetippt; innerhalb der Zeitregel (eine Sitzung)
 - [x] **Icon-Lesbarkeit prüfen:** umgesetzt in Generator 1.10 ohne Neural Engine – Füllgrad und Lage des Motivs je Icon per ImageMagick (unter 1 s, nur Hinweis im Bericht); ein Saliency-Modell war nicht nötig
 - [x] **Proportionen des Basismodells** (Konzeptvergleich 12.10.): gedrungener, größerer Kopf, klobigere Platten, Fugen und Schrauben wie auf den Konzeptbildern – umgesetzt in Generator 1.14 (Umformung je Knochen nach dem Bauen, Gelenke und Clips unverändert, zehn Posen angepasst; Standhöhe 1,38 m statt 1,30 m – Spiel-Kapsel ist eine Design-Entscheidung)
-- [ ] **Textur-Atlas besser nutzen:** die UV-Inseln belegen nur ≈ 19 % des 2048²-Atlas (Smart UV Project ohne Skalierung) – Inseln auf die Fläche skalieren, alle Masken neu backen; vor dem Spiel-Import
+- [x] **Textur-Atlas besser nutzen:** die UV-Inseln belegten nur ≈ 18 % des 2048²-Atlas – umgesetzt in Generator 1.15 (dicht gepackt, ≈ 51 %, etwa 1,7-mal so viele Texel je cm)
+- [x] **Spielkapsel und Ducken** (Entscheidung 13.10.): Kapsel stehend 1,40 m statt 1,20 m (Cube Escape), Duck-Kapsel bleibt 0,65 m
+- [ ] **Kriech-Clips Crawl und CrawlIdle** unter 0,65 m für Lüftungsschächte, QA wie alle Clips – Generator 1.16
 - [x] **Abnutzung je Skin** statt für alle Skins gleicher Schmutz und Kratzer (Konzeptvergleich 12.10.) – umgesetzt in Generator 1.11 (`wear` je Skin)
 - [x] **Masken für Unity packen:** Lackzonen und Gelenke als ID-Kanal, Masken in 1024² (der Viewer packt schon beim Laden) – umgesetzt in Generator 1.13 (`Textures/Unity`, Testbett-Shader nutzt sie)
 - [ ] **Bloom im Spiel:** URP-Bloom so, dass nur Emission strahlt (wie auf den Skin-Karten) – Spiel-Roboter

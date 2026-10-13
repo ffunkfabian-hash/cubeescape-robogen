@@ -3,6 +3,20 @@
 Versionen des Roboter-Generators (zählen getrennt von Cube Escape und Cubegen). Jede Version hat einen Tag
 `v<Version>` und einen Release-Branch `release/<Version>`.
 
+## 1.15.0 „Pack Rat“ – 2026-10-13
+
+**Textur-Atlas dichter gepackt:** Smart UV Project ließ große Lücken zwischen seinen Tausenden kleinen Inseln – nur
+17,6 % des Atlas waren belegt. Danach packt jetzt `pack_islands` (konkave Form, freie Drehung, Abstand 0,002 = 4 px
+bei 2048) die Inseln neu: rund 51 % belegt, also etwa 1,7-mal so viele Texel je Zentimeter in jeder Karte und Maske.
+
+* Gemessen: der Inselabstand bestimmt die Belegung, nicht der Abwicklungswinkel (60° → 80°: 41 → 43 %; Abstand
+  0,003 → 0,002: 41 → 51 %; 0,0015 brächte nur noch 4 Punkte bei doppelter Packzeit).
+* Der AO-Bake mit mehreren Varianten-Durchgängen nutzt als Rand höchstens den halben Inselabstand (vorher fest 2/4 px,
+  die in den kleinen Teststufen schon in Nachbarinseln liefen).
+* UV- und Bake-Cache neu (Schema `1.15-a`); Packen ≈ 2–5 s, danach aus dem Cache.
+* Entscheidungen zur Spielkapsel festgehalten (Fahrplan): Stehen 1,40 m (Änderung in Cube Escape), Ducken bleibt
+  0,65 m – der Generator bekommt Kriech-Clips (1.16).
+
 ## 1.14.1 „Reshape“ – 2026-10-13
 
 Viewer: In einem bildschirmbreiten Fenster wurde die Seitenleiste in ihrer Wunschbreite (≈ 525 pt) statt in der

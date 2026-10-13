@@ -1,4 +1,4 @@
-# Cube Escape – Roboter-Charakter (Generator 1.14.0)
+# Cube Escape – Roboter-Charakter (Generator 1.15.0)
 
 Der spielbare Roboter aus dem Cube-Escape-Keyart, vollständig per Skript erzeugt: Geometrie mit Bauteil-Varianten
 und Accessoires, Materialien, gebackene Texturen (Detail- und Ausdrucks-Texturen per ImageMagick), Rig mit Bein- und
@@ -432,8 +432,8 @@ Ausdrücke im Spiel umschalten = `material.mainTextureOffset` setzen (Werte in `
 bleiben bewusst eigene Materialien: so reichen Standard-Shader mit Tiling/Offset, der Gewinn eines gemeinsamen
 Materials wäre ein einziger Draw Call.
 
-**Spieler-Prefab:** CharacterController Height 1,30, Radius 0,30, Center (0, 0,65, 0) – seit 1.14 ist der Roboter
-1,38 m hoch (Kopf ragt 8 cm über die Kapsel, siehe Offene Punkte). Animator-Parameter aus
+**Spieler-Prefab:** CharacterController Height 1,40, Radius 0,30, Center (0, 0,70, 0) – entschieden am 13.10. (der
+Roboter ist seit 1.14 1,38 m hoch; das Spiel hat heute 1,20 m). Ducken: Kapsel 0,65 m mit den Kriech-Clips (1.16). Animator-Parameter aus
 `IRobotMotion` (`Speed`, `Grounded`, `Crouch`, Trigger `Land`) plus `Push`, `Interact`, `Dead`; Lauf-Blend-Tree
 CrouchWalk/Walk/Run/RunFast/Sprint nach `naturalSpeed`. Als neue Variante neben dem bestehenden code-basierten
 `RobotAnimator` einführen (Golden Rule). Für einen festen Robotertyp die FBX aus `output/Types/` nehmen (1 Mesh statt
@@ -455,9 +455,8 @@ ersetzt, neuere Versionen abgelehnt – dieselben Regeln gehören in die Spielst
 |---|---|---|
 | Unity-Integration | nicht begonnen, nicht im Spiel getestet (Spielprojekt bewusst unverändert) | FBX importieren, Materialien/Animator nach diesem README aufbauen, als neue Variante neben `RobotAnimator` |
 | Tempo Laufen | Clips bis Sprint ≈ 4,2 m/s; Spiel: 5 bzw. 8 m/s | Animator-Tempo = Geschwindigkeit / `naturalSpeed` (Sprint bei 8 m/s ≈ 1,9-fach) oder Spieltempo senken (Design-Entscheidung) |
-| Standhöhe | seit 1.14 (Proportionen) 1,38 m statt 1,30 m; Spiel-Kapsel 1,30 m. Kürzere Beine würden ClimbUp (1,20 m) und die Griffhöhen an Kante und Leiter brechen | Kapsel 1,40 m oder Kopf darf überstehen (Design-Entscheidung) |
-| Ducken | CrouchDeep ≈ 1,05 m, tiefer geht es mit dem großen Kopf nicht ohne Überschneidung; Spiel-Kapsel 0,65 m | Duck-Kapsel auf ≈ 1,05 m anheben (Design-Entscheidung) |
-| Textur-Atlas | Smart UV Project ohne Skalierung auf die Fläche: die Inseln aller Teile belegen nur ≈ 19 % des 2048²-Atlas | Inseln auf den Atlas skalieren (mehr Texel je cm, alle Masken neu backen) |
+| Standhöhe | Roboter seit 1.14 1,38 m, Spiel-Kapsel 1,20 m (`Player.prefab`). Entschieden (13.10.): Kapsel 1,40 m | in Cube Escape umsetzen (eigene Version) |
+| Ducken | CrouchDeep ≈ 1,05 m, tiefer geht es mit dem großen Kopf nicht ohne Überschneidung; Duck-Kapsel 0,65 m. Entschieden (13.10.): Kapsel bleibt, Kriech-Clips | Generator 1.16: Crawl, CrawlIdle unter 0,65 m |
 | Formen im Spiel | Mesh-Formen als eigene FBX, Lochung als Formel, Kabel als Teil | Spielversion „Spektrum“: Formen als Meshes bzw. Shader-Variante (Cull Off) mit Fallback |
 | Kapselbreite | Rumpf + Schultern 0,70 m (Runner) bis 0,77 m, mit Armen 0,73–0,87 m (`typeBounds`); Kapsel 0,6 m | Überstand akzeptieren (üblich) oder Radius 0,35 |
 | Draw Calls | Standard und je Robotertyp: 1 Mesh, 3–4 Materialien, LOD1/LOD2 (1.13); modular 1 Mesh je Teil | bei frei kombinierbaren Looks die Teile zur Laufzeit zu einem Skinned Mesh kombinieren |

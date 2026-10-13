@@ -379,3 +379,17 @@ Szenen-Abdruck, Hashes über kanonische Daten, Engine-Prüfungen gebündelt in e
 
 **Für Cubegen:** Formvarianten als Ableitung (Facetten, Voxel, Lochung) eines gemeinsamen Modells mit gemeinsamem Atlas;
 Voxel konservativ (innen) rastern, Gelenke/Kleinteile glatt lassen; Variantengeometrie mit derselben QA wie das Original.
+
+## 16. Atlas packen (1.15)
+
+- **Belegung messen:** Fläche aller UV-Polygone der Atlas-Materialien (ohne feste UVs wie Augen und Display) –
+  Smart UV Project allein belegte 18 %, obwohl die Inseln das ganze Quadrat überspannen.
+- **Nachpacken:** `pack_islands(shape_method="CONCAVE", rotate=True, rotate_method="ANY", scale=True)` nach dem
+  Abwickeln. Bei Tausenden kleiner Inseln bestimmt der Inselabstand die Belegung (0,003 → 0,002: 41 → 51 %), der
+  Abwicklungswinkel kaum.
+- **Ränder an den Abstand koppeln:** Bakes in mehreren Durchgängen (Varianten) dürfen höchstens den halben Abstand
+  dilatieren, sonst überschreiben sie Nachbarinseln anderer Durchgänge; ein einziger Durchgang über alle Teile darf
+  großzügig dilatieren (er füllt nur freie Pixel).
+
+**Für Cubegen:** Atlas-Belegung als Kennzahl im Bericht; nach Smart UV Project konkav nachpacken; Bake-Ränder aus
+dem Inselabstand ableiten.

@@ -144,7 +144,7 @@ def verify_blend():
         fcs = sum(len(cb.fcurves) for layer in act.layers for strip in layer.strips for cb in strip.channelbags)
         check("blend: action %s is a layered action with keys" % a, act.is_action_layered and fcs > 0 and
               len(act.slots) == 1, "%d fcurves, frames %s" % (fcs, tuple(act.frame_range)))
-    # rest bounding box: robot stands on the floor, about 1.3 m tall
+    # rest bounding box: robot stands on the floor, about 1.38 m tall (1.14 Reshape; 1.3 m before)
     arm.animation_data.action = None
     for pb in arm.pose.bones:
         pb.location = (0, 0, 0)
@@ -295,8 +295,8 @@ def verify_types():
             zs = [(meshes[0].matrix_world @ v.co).z for v in me.vertices]
             mats = {m.name.split(".")[0] for m in me.materials}
             bones_ok = all(b in arms[0].data.bones for b in REQUIRED)
-            # accessories (hats, antenna, cape) add up to ~1.7k triangles and ~0.25 m on top of the 12k/1.3 m body
-            ok = (5000 <= tris <= 15000 and 1.2 <= max(zs) - min(zs) <= 1.6 and bones_ok and
+            # accessories (hats, antenna, cape) add up to ~1.7k triangles and ~0.3 m on top of the 12k/1.38 m body (1.14)
+            ok = (5000 <= tris <= 15000 and 1.2 <= max(zs) - min(zs) <= 1.75 and bones_ok and
                   mats <= MAIN_MATERIALS | {"M_RobotFabric"} and len(mats) <= 4)
             detail = "%d tris, %.2f m, %d materials" % (tris, max(zs) - min(zs), len(mats))
         check("fbx types: %s" % n, ok, detail)

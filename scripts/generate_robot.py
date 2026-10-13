@@ -51,7 +51,7 @@ import make_textures  # noqa: E402 - ImageMagick source textures
 import export_viewer  # noqa: E402 - data for the RobotViewer app
 
 LOG = logging.getLogger("robot")
-VERSION = "1.13.3"
+VERSION = "1.14.0"
 
 # ----------------------------------------------------------------------------------------------
 # Arguments and logging
@@ -1280,6 +1280,82 @@ def define_joints():
         J["knuckle_" + side] = wr + d2 * 0.090
 
 
+# ------------------------------- 1.14 Reshape: base proportions -------------------------------
+# The parts are modelled at the 1.13 measures and then reshaped per bone towards the concept art: stocky, a bigger head,
+# chunky plates. Limb joints stay where they are, so every clip, IK target and ground contact keeps working; what hangs
+# on the head and the torso (eyes, sockets, spring bones, emitters) moves with the reshape.
+#   axes: per-axis scale about a pivot | radial: thicker around the bone line
+# Pivots name a joint ("ankle" + side) or are points; "axes" with a joint pivot keeps the given z (feet stay on y = 0).
+PROPORTIONS = {
+    "Head": ("axes", (1.14, 1.06, 1.24), (0.0, 0.0, 0.935)),        # mostly taller: raised arms and pads pass its sides
+    "Spine": ("axes", (1.05, 1.0, 1.0), (0.0, 0.010, 0.730)),       # deeper chests meet the forearms (Jump, EdgeBalance)
+    "Pelvis": ("axes", (1.05, 1.0, 1.0), (0.0, 0.005, 0.470)),      # deeper hips meet the shins when crouching
+    "UpperArm": ("radial", 1.16, ("shoulder", "dir_upper")),
+    "LowerArm": ("radial", 1.20, ("elbow", "dir_fore")),
+    "Hand": ("radial", 1.24, ("wrist", "dir_fore")),
+    "Thumb": ("radial", 1.10, ("wrist", "dir_fore")),             # sticks out of the fist: meets pads (ClimbUp)
+    "UpperLeg": ("axes", (1.18, 1.0, 1.0), ("hip", 0.0)),           # wider only: heels reach the thighs in Run
+    "LowerLeg": ("axes", (1.16, 1.0, 1.0), ("knee", 0.0)),
+    "Foot": ("axes", (1.05, 1.0, 1.0), ("ankle", 0.0)),           # wide Mech feet meet in turns
+}
+# variants with their own shape on a reshaped bone (group -> spec, None = keep the 1.13 shape): the pads are chunky
+# already and rise beside the head and the thumbs (ClimbUp); round feet would meet the thighs in CrouchWalk
+SHAPE_VARIANTS = {"Pads_Round": None, "Pads_Slim": None, "Pads_Square": None, "Feet_Round": None,
+                  # the wide box head keeps its width (Sleep, Death: it rests on the square pads), grows in height
+                  "Head_Boxy": ("axes", (1.04, 1.06, 1.24), (0.0, 0.0, 0.935))}
+# bones that take the shape of another bone (sockets, spring bones, fingers); None = keep the 1.13 shape
+SHAPE_OF = {"Eyes": "Head", "Socket_Head": "Head", "Antenna": "Head", "Socket_Neck": "Spine", "Socket_Back": "Spine",
+            "Cape": "Spine", "Fingers": "Hand"}
+_SHAPES = {}
+
+
+def shape_matrix(bone, group=None):
+    """4x4 reshape matrix of a bone (identity for bones and variants that keep their 1.13 shape)."""
+    key = (bone, group if group in SHAPE_VARIANTS else None)
+    if key in _SHAPES:
+        return _SHAPES[key]
+    base, side = bone, ""
+    if bone[-2:] in ("_L", "_R"):
+        base, side = bone[:-2], bone[-1]
+    spec = SHAPE_VARIANTS[group] if key[1] else PROPORTIONS.get(SHAPE_OF.get(base, base))
+    m = Matrix.Identity(4)
+    if spec:
+        kind, k, piv = spec
+        if kind == "radial":
+            a = J["%s_%s" % (piv[0], side)]
+            d = (J["%s_%s" % (piv[1], side)] if piv[1] else Vector((0, 0, 1))).normalized()
+            dd = Matrix([[d[i] * d[j] for j in range(3)] for i in range(3)])
+            s3 = Matrix.Identity(3) * k + dd * (1 - k)
+        else:
+            if isinstance(piv[0], str):
+                j = J["%s_%s" % (piv[0], side)]
+                a = Vector((j.x, j.y, piv[1]))
+            else:
+                a = Vector(piv)
+            s3 = Matrix.Diagonal(k)
+        m = Matrix.Translation(a) @ s3.to_4x4() @ Matrix.Translation(-a)
+    _SHAPES[key] = m
+    return m
+
+
+def shaped(bone, co):
+    return (shape_matrix(bone) @ Vector(co).to_4d()).to_3d()
+
+
+def apply_proportions():
+    """Reshapes every part with the matrix of its bone and moves what rides on the head and torso along."""
+    _SHAPES.clear()
+    ident = Matrix.Identity(4)
+    for p in PARTS:
+        m = shape_matrix(p["bone"], p["group"])
+        if m != ident:
+            bmesh.ops.transform(p["bm"], matrix=m, verts=p["bm"].verts[:])
+    for e in EMITTERS:
+        e["position"] = tuple(shaped(e["bone"], e["position"]))
+    J["head_top"] = shaped("Head", J["head_top"])
+    J["eyes"] = shaped("Head", J["eyes"])
+
+
 def foot_deform(co):
     """Toe slope: lowers the top surface towards the toe tip (local foot coordinates)."""
     if co.z > 0.0:
@@ -1617,6 +1693,36 @@ def build_robot():
                      "Fingers_" + side, r=0.007, segs=1, rot=frame_from_dir(tip_dir))
             rbox("Claw_Thumb_" + side, (0.024, 0.026, 0.060), tb + tdir * 0.022, D, "Thumb_" + side, r=0.008,
                  segs=1, rot=frame_from_dir(tdir))
+
+    # ================= 1.14 seams and bolts of the concept art, on the core plates (every type) =================
+    # built around y = 0 and laid onto the plate's front (conform_front), half sunk in so they stay connected
+    def front_detail(name, bm, target, cx, cz, mat, bone):
+        conform_front(bm, target, (cx, cz), gap=0.0)
+        add_part(name, bm, mat, bone)
+
+    def strip(w, h, d=0.006):
+        bm = bmesh.new()
+        bmesh.ops.create_cube(bm, size=1.0)
+        bmesh.ops.scale(bm, vec=(w, d, h), verts=bm.verts[:])
+        for i in range(1, 8):           # cuts, so the strip bends with the rounded plate
+            geom = bm.verts[:] + bm.edges[:] + bm.faces[:]
+            bmesh.ops.bisect_plane(bm, geom=geom, plane_co=(w * (i / 8 - 0.5), 0, 0), plane_no=(1, 0, 0))
+        return bm
+
+    def bolt(r=0.011, d=0.008):
+        bm = bmesh.new()
+        bmesh.ops.create_cone(bm, cap_ends=True, segments=8, radius1=r, radius2=r * 0.8, depth=d)
+        bmesh.ops.rotate(bm, verts=bm.verts[:], cent=(0, 0, 0), matrix=Matrix.Rotation(math.radians(90), 3, "X"))
+        return bm
+
+    for s, side in ((1, "L"), (-1, "R")):
+        x0 = s * LEG_X
+        front_detail("Shin_Seam_" + side, strip(0.120, 0.008), "Shin_" + side, x0, 0.180, D, "LowerLeg_" + side)
+        front_detail("Thigh_Seam_" + side, strip(0.110, 0.008), "Thigh_" + side, x0, 0.315, D, "UpperLeg_" + side)
+        for i, dx in enumerate((-0.030, 0.030)):
+            front_detail("Shin_Bolt_%d_%s" % (i, side), bolt(), "Shin_" + side, x0 + dx, 0.142, G, "LowerLeg_" + side)
+        front_detail("Hips_Bolt_" + side, bolt(), "Hips", s * 0.120, 0.470, G, "Pelvis")
+        front_detail("Chest_Bolt_" + side, bolt(), "Chest_Plate", s * 0.165, 0.770, G, "Spine")
 
     # ================= accessories (on socket bones) =================
     with variant("AccHead", "Antenna"):
@@ -2180,6 +2286,7 @@ def unwrap_fresh(objs):
     bpy.ops.object.mode_set(mode="OBJECT")
     eye_i, disp_i = MAT_ORDER.index("EyeScreen"), MAT_ORDER.index("Display")
     x0, x1, z0, z1 = DISPLAY_RECT
+    eye_unshape, disp_unshape = shape_matrix("Eyes").inverted(), shape_matrix("Spine").inverted()
     for o in objs:
         me = o.data
         me.uv_layers[0].name = "UVMap"
@@ -2187,8 +2294,9 @@ def unwrap_fresh(objs):
         for p in me.polygons:
             if p.material_index not in (eye_i, disp_i):
                 continue
+            unshape = eye_unshape if p.material_index == eye_i else disp_unshape     # UVs in the 1.13 frame
             for li in p.loop_indices:
-                co = me.vertices[me.loops[li].vertex_index].co
+                co = unshape @ me.vertices[me.loops[li].vertex_index].co
                 if p.material_index == eye_i:
                     uv[li].uv = ((co.x + EYE_SCREEN_W / 2) / EYE_SCREEN_W, (co.z - (EYE_Z - EYE_SCREEN_H / 2)) / EYE_SCREEN_H)
                 else:
@@ -3180,12 +3288,16 @@ def build_armature(coll):
     bone("Head", J["neck"], J["head_top"], "Spine", connect=True, roll_up=(0, -1, 0))
     bone("Eyes", J["eyes"], J["eyes"] + Vector((0, -0.08, 0)), "Head", roll_up=(0, 0, 1))
     # accessory sockets (deforming, so accessories can be skinned rigidly like every other part)
-    bone("Socket_Head", (0, 0, 1.30), (0, 0, 1.40), "Head", roll_up=(0, -1, 0))
-    bone("Socket_Neck", (0, -0.17, 0.872), (0, -0.25, 0.872), "Spine", roll_up=(0, 0, 1))
-    bone("Socket_Back", (0, 0.22, 0.77), (0, 0.30, 0.77), "Spine", roll_up=(0, 0, 1))
+    # sockets and spring bones sit where the reshaped head and torso put their parts (PROPORTIONS)
+    bone("Socket_Head", shaped("Head", (0, 0, 1.30)), shaped("Head", (0, 0, 1.40)), "Head", roll_up=(0, -1, 0))
+    bone("Socket_Neck", shaped("Spine", (0, -0.17, 0.872)), shaped("Spine", (0, -0.25, 0.872)), "Spine",
+         roll_up=(0, 0, 1))
+    bone("Socket_Back", shaped("Spine", (0, 0.22, 0.77)), shaped("Spine", (0, 0.30, 0.77)), "Spine", roll_up=(0, 0, 1))
     # 1.12 spring bones (SPRINGS): baked secondary motion of the cape and the antenna rod
-    bone("Cape", (0, 0.235, 0.830), (0, 0.235, 0.600), "Socket_Back", roll_up=(0, 1, 0))
-    bone("Antenna", (0, 0.0, 1.325), (0, 0.0, 1.480), "Socket_Head", roll_up=(0, -1, 0))
+    bone("Cape", shaped("Spine", (0, 0.235, 0.830)), shaped("Spine", (0, 0.235, 0.600)), "Socket_Back",
+         roll_up=(0, 1, 0))
+    bone("Antenna", shaped("Head", (0, 0.0, 1.325)), shaped("Head", (0, 0.0, 1.480)), "Socket_Head",
+         roll_up=(0, -1, 0))
     for side in ("L", "R"):
         bone("Shoulder_" + side, J["clav_" + side], J["shoulder_" + side], "Spine", roll_up=(0, 0, 1))
         bone("UpperArm_" + side, J["shoulder_" + side], J["elbow_" + side], "Shoulder_" + side, True, (0, -1, 0))
@@ -3777,11 +3889,11 @@ JUMP_KEYS = [
     (0, STAND),
     (7, P(pelvis=(0, 0, -0.105), spine=(14, 0, 0), head=(-8, 0, 0), uarm_LR=arm(38, 10), larm_LR=arm(-22),
           fing_LR=curl(40))),
-    (11, P(pelvis=(0, 0, 0.0), spine=(-2, 0, 0), head=(-10, 0, 0), uarm_LR=arm(-95, 34), larm_LR=arm(-20),
+    (11, P(pelvis=(0, 0, 0.0), spine=(-2, 0, 0), head=(-10, 0, 0), uarm_LR=arm(-95, 34, 10), larm_LR=arm(-20),
            foot_LR=(0, 0.02, 0.0, 30), fing_LR=curl(10), eyes=(1.08, 0, 0.002)), "out"),
-    (14, P(pelvis=(0, 0, 0.0), spine=(-4, 0, 0), head=(-10, 0, 0), uarm_LR=arm(-100, 40), larm_LR=arm(-15),
+    (14, P(pelvis=(0, 0, 0.0), spine=(-4, 0, 0), head=(-10, 0, 0), uarm_LR=arm(-100, 40, 12), larm_LR=arm(-15),
            foot_LR=(0, 0.03, 0.05, 25), fing_LR=curl(5), eyes=(1.08, 0, 0.002))),
-    (21, P(pelvis=(0, 0, 0.0), spine=(4, 0, 0), head=(-6, 0, 0), uarm_LR=arm(-95, 40), larm_LR=arm(-35),
+    (21, P(pelvis=(0, 0, 0.0), spine=(4, 0, 0), head=(-6, 0, 0), uarm_LR=arm(-95, 50, 10), larm_LR=arm(-24),
            foot_LR=(0.01, -0.03, 0.15, -8), fing_LR=curl(20))),
     (28, P(pelvis=(0, 0, 0.0), spine=(2, 0, 0), head=(4, 0, 0), uarm_LR=arm(-45, 50), larm_LR=arm(-25),
            foot_LR=(0.01, -0.02, 0.05, -10), fing_LR=curl(20))),
@@ -3845,7 +3957,7 @@ def crouch(f):
         pelvis=(0, 0.060, -0.165 - 0.005 * w),
         pelvis_rot=(6, 0, 0),
         spine=(36 + 1.0 * w, 0, 0),
-        head=(-36 - 1.0 * w, 0, 0),
+        head=(-32 - 1.0 * w, 0, 0),         # 1.14: the taller head would touch backpacks and wings at -36
         shoulder_LR=(0, 2, 0),
         uarm_LR=arm(-28, 14),
         larm_LR=arm(-48),
@@ -4275,7 +4387,8 @@ def idle_scratch(f):
         p["fing_R"] = (15.0 if i % 2 else 50.0,)
         p["hand_R"] = arm(-20 + (6 if i % 2 else -6))
         keys.append((fr, p))
-    keys += [(60, P(head=(2, -3, -4), uarm_R=arm(-20, 8), larm_R=arm(-20), eyes=(0.3, 0, 0))),
+    keys += [(53, with_(up, uarm_R=arm(-130, -30), larm_R=arm(-48))),
+             (60, P(head=(2, -3, -4), uarm_R=arm(-20, 8), larm_R=arm(-20), eyes=(0.3, 0, 0))),
              (66, P(eyes=(1.0, 0, 0))), (90, STAND)]
     return keyed(f, keys)
 
@@ -4446,8 +4559,8 @@ def edge_balance(f):
         pelvis_rot=(5 * sway, 0, 0),
         spine=(8 * sway, 0, 3 * wave(t, 1, 0.3)),
         head=(14 - 4 * sway, 0, 4 * wave(t, 2)),
-        uarm_L=arm(-60 + 38 * wave(t, 2), 78),
-        uarm_R=arm(-60 + 38 * wave(t, 2, 0.5), 78),
+        uarm_L=arm(-56 + 30 * wave(t, 2), 78),
+        uarm_R=arm(-56 + 30 * wave(t, 2, 0.5), 78),
         larm_LR=arm(-20),
         fing_LR=curl(5),
         thumb_LR=curl(0),
@@ -4487,16 +4600,16 @@ def dance_bob(f):
 
 
 ROBOT_POSES = [
-    P(uarm_L=arm(-90, 0), larm_L=arm(-90), uarm_R=arm(0, 4), larm_R=arm(0), head=(0, 0, 30), eyes=(0.8, 0.01, 0)),
+    P(uarm_L=arm(-90, -12), larm_L=arm(-90), uarm_R=arm(0, 4), larm_R=arm(0), head=(0, 0, 30), eyes=(0.8, 0.01, 0)),
     P(uarm_L=arm(0, 85), larm_L=arm(0, 0, 0), uarm_R=arm(0, 85), larm_R=arm(0), head=(0, 0, 0), spine=(0, 0, 0),
       pelvis=(0, 0, -0.04), eyes=(1.0, 0, 0)),
-    P(uarm_R=arm(-90, 0), larm_R=arm(-90), uarm_L=arm(0, 4), larm_L=arm(0), head=(0, 0, -30), eyes=(0.8, -0.01, 0)),
+    P(uarm_R=arm(-90, -12), larm_R=arm(-90), uarm_L=arm(0, 4), larm_L=arm(0), head=(0, 0, -30), eyes=(0.8, -0.01, 0)),
     P(uarm_LR=arm(-90, 0), larm_LR=arm(0), spine=(0, 0, 20), head=(0, 0, -20), pelvis=(0, 0, -0.03)),
     P(uarm_LR=arm(-90, 0), larm_LR=arm(0), spine=(0, 0, -20), head=(0, 0, 20), pelvis=(0, 0, -0.03)),
     P(uarm_L=arm(-40, 30), larm_L=arm(-90), uarm_R=arm(-40, 30), larm_R=arm(-90), head=(10, 0, 0),
       pelvis=(0, 0, -0.06), eyes=(0.5, 0, 0)),
-    P(uarm_L=arm(0, 85), larm_L=arm(-90, 0, 0), uarm_R=arm(0, 4), larm_R=arm(0), head=(-8, 0, 25)),
-    P(uarm_R=arm(0, 85), larm_R=arm(-90, 0, 0), uarm_L=arm(0, 4), larm_L=arm(0), head=(-8, 0, -25)),
+    P(uarm_L=arm(0, 80), larm_L=arm(-90, 0, 0), uarm_R=arm(0, 4), larm_R=arm(0), head=(-8, 0, 25)),
+    P(uarm_R=arm(0, 80), larm_R=arm(-90, 0, 0), uarm_L=arm(0, 4), larm_L=arm(0), head=(-8, 0, -25)),
 ]
 
 
@@ -4611,7 +4724,7 @@ def with_(pose, **kw):
 
 @anim("Wave", 48, False, "freundlich winken (rechte Hand)", "Phase5")
 def wave_hello(f):
-    up = P(head=(0, -6, -6), spine=(0, -3, 0), uarm_R=arm(-12, 95), larm_R=arm(0, 85), hand_R=arm(0), fing_R=curl(0),
+    up = P(head=(0, -6, -6), spine=(0, -3, 0), uarm_R=arm(-12, 78), larm_R=arm(0, 85), hand_R=arm(0), fing_R=curl(0),
            thumb_R=curl(0), eyes=(0.9, -0.006, 0))
     keys = [(0, STAND), (9, up)]
     for i, fr in enumerate((13, 17, 21, 25, 29, 33)):
@@ -4639,7 +4752,7 @@ def clap(f):
 @anim("Think", 72, True, "Nachdenken, Hand am Kinn", "Phase5")
 def think(f):
     t = f / 72.0
-    return P(pelvis=(0.008 * wave(t, 1), 0, -0.016), spine=(4, 0, -4), head=(-6 + 2 * wave(t, 2), -10, 8 + 4 * wave(t, 1)),
+    return P(pelvis=(0.008 * wave(t, 1), 0, -0.016), spine=(4, 0, -4), head=(-15 + 2 * wave(t, 2), -4, 8 + 4 * wave(t, 1)),
              uarm_R=arm(-66, -16), larm_R=arm(-96), hand_R=arm(-30), fing_R=curl(65), thumb_R=curl(40),
              uarm_L=arm(2, 6), eyes=(0.8, 0.008 * wave(t, 1), 0.004))
 
@@ -4697,7 +4810,7 @@ def sit_idle(f):
 def sleep(f):
     t = f / 120.0
     br = wave(t, 3)
-    return P(pelvis=(0, 0.06, -0.334), pelvis_rot=(-32, 0, 0), spine=(42 + 2 * br, 0, 0), head=(50 + 3 * br, 5, 6),
+    return P(pelvis=(0, 0.06, -0.334), pelvis_rot=(-32, 0, 0), spine=(42 + 2 * br, 0, 0), head=(50 + 3 * br, 0, 4),
              shoulder_LR=(0, 8 - 2 * br, 0), uarm_LR=arm(0, 16), larm_LR=arm(-10), fing_LR=curl(38),
              foot_LR=(0.13, -0.40, 0.0, -68), eyes=(0.12, 0, -0.008))
 
@@ -4960,7 +5073,7 @@ def crouch_walk(f):
         pelvis=(0.016 * math.sin(2 * math.pi * t), 0.050, -0.135 - 0.006 * math.cos(4 * math.pi * t)),
         pelvis_rot=(-6, 0, -5 * c),
         spine=(44 + math.cos(4 * math.pi * t), 0, 5 * c),
-        head=(-34, 0, -3 * c),
+        head=(-30, 0, -3 * c),              # 1.14: the taller head would touch backpacks and wings at -34
         shoulder_LR=(0, 2, 0),
         uarm_L=arm(-26 + 12 * c, 14),
         uarm_R=arm(-26 - 12 * c, 14),
@@ -4979,9 +5092,9 @@ def crouch_walk(f):
 def hat_tip(f):
     # the arms cannot reach the crown of the head: the hat lifts and slides towards the hand that comes up beside the
     # head, then rides on the hand (ATTACHMENTS) through the bow and back
-    lifted = (0, -24, -0.160, 0.005)     # the right brim edge rests on the fingers
+    lifted = (0, -24, -0.210, -0.053)    # the right brim edge rests on the fingers (1.14: head wider and taller)
     reach = P(head=(-4, 6, 4), spine=(-2, 0, -3), hat=lifted, fing_R=curl(55), thumb_R=curl(45),
-              handik_R=(0.335, -0.040, 1.180, 1.0, 0.3, -0.2, 1.0), uarm_L=arm(4, 6))
+              handik_R=(0.385, -0.040, 1.180, 1.0, 0.3, -0.2, 1.0), uarm_L=arm(4, 6))
     sweep = P(pelvis=(0, 0.03, -0.022), pelvis_rot=(6, 0, 0), spine=(20, 0, 0), head=(12, 0, 0), hat=lifted,
               fing_R=curl(55), thumb_R=curl(45), handik_R=(0.450, -0.200, 0.900, 1.0, 0.3, -0.2, 1.0),
               uarm_L=arm(10, 4), larm_L=arm(-12), eyes=(0.35, 0, -0.004))
@@ -7128,6 +7241,7 @@ def main():
     with Step("geometry"):
         define_joints()
         build_robot()
+        apply_proportions()
         floating = check_part_connectivity(report)
         parts_coll = get_collection("Robot_Parts")
         part_objs = assemble_groups(mats, parts_coll)

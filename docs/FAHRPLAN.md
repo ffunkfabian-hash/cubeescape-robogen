@@ -147,7 +147,7 @@ Neunzehn weitere Punkte (zwei Vorschläge vom 12. Oktober 2026 wurden in Generat
 - [x] **Icon-Lesbarkeit prüfen:** umgesetzt in Generator 1.10 ohne Neural Engine – Füllgrad und Lage des Motivs je Icon per ImageMagick (unter 1 s, nur Hinweis im Bericht); ein Saliency-Modell war nicht nötig
 - [x] **Proportionen des Basismodells** (Konzeptvergleich 12.10.): gedrungener, größerer Kopf, klobigere Platten, Fugen und Schrauben wie auf den Konzeptbildern – umgesetzt in Generator 1.14 (Umformung je Knochen nach dem Bauen, Gelenke und Clips unverändert, zehn Posen angepasst; Standhöhe 1,38 m statt 1,30 m – Spiel-Kapsel ist eine Design-Entscheidung)
 - [x] **Textur-Atlas besser nutzen:** die UV-Inseln belegten nur ≈ 18 % des 2048²-Atlas – umgesetzt in Generator 1.15 (dicht gepackt, ≈ 51 %, etwa 1,7-mal so viele Texel je cm)
-- [x] **Spielkapsel und Ducken** (Entscheidung 13.10.): Kapsel stehend 1,40 m statt 1,20 m (Cube Escape), Duck-Kapsel bleibt 0,65 m
+- [x] **Spielkapsel und Ducken** (Entscheidung 13.10.): Kapsel stehend 1,40 m statt 1,20 m – umgesetzt in Cube Escape 0.52 „Tall Order“; Duck-Kapsel bleibt 0,65 m (Kriech-Clips in Generator 1.16), Augenhöhe für die Ego-Kamera in `robot_config.json` › `eyeHeight`
 - [x] **Kriech-Clips Crawl und CrawlIdle** unter 0,65 m für Lüftungsschächte – umgesetzt in Generator 1.16 (≈ 0,57 m, ≈ 0,30 m/s, QA aller Typen und Formen grün)
 - [x] **Animationen nach Inhalt sortiert** (Hinweis 13.10.) – Generator 1.16: zehn Kategorien statt Bau-Phasen
 - [x] **Abnutzung je Skin** statt für alle Skins gleicher Schmutz und Kratzer (Konzeptvergleich 12.10.) – umgesetzt in Generator 1.11 (`wear` je Skin)

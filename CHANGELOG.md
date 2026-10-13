@@ -8,8 +8,9 @@ Versionen des Roboter-Generators (zählen getrennt von Cube Escape und Cubegen).
 **Kriechen unter der Duck-Kapsel** (Entscheidung 13.10.: die Kapsel bleibt 0,65 m): zwei neue Clips in Bauchlage.
 
 * **CrawlIdle** (liegen und atmen) und **Crawl** (robben: Unterarme ziehen im Wechsel per Arm-IK, Ellbogen außen
-  neben dem großen Kopf, Fußspitzen schieben), Oberkante ≈ 0,57 m, Grundtempo ≈ 0,30 m/s. Die Grundgeschwindigkeit
-  kommt bei Crawl aus den aufliegenden Händen (`HAND_GAITS`), gehaltene Gegenstände sind ausgeblendet.
+  neben dem großen Kopf, Fußspitzen schieben), Oberkante ≈ 0,57 m, Grundtempo ≈ 0,30 m/s. Neues Clip-Feld `gait`
+  („feet“ oder „hands“): bei Crawl kommen Bodenkontakt, Schritt-Frames (`footsteps` = Handzüge `Hand_L`/`Hand_R`, Kontaktschwelle 3,5 cm) und Grundtempo von
+  den aufliegenden Händen; gehaltene Gegenstände sind ausgeblendet.
 * QA aller 24 Typen und der Formen gegen beide Clips ohne Befund (Jetpack, Flügel und Linsenauge brauchten einen
   flacheren Kopf und weiter außen liegende Hände).
 
@@ -20,7 +21,12 @@ jeder Clip genau einmal (der Generator bricht sonst ab), Feld `category` in den 
 `robot_config.json`; Viewer und `ANIMATIONS.md` nach Kategorien. Die Bau-Phasen bleiben für Kontaktbögen und QA.
 
 * Viewer: „Oberfläche“ als Auswahlmenü (sechs Segmente ragten rechts aus der Spalte).
+* `robot_config.json` › `eyeHeight` (1,161 m): Augenhöhe für die Ego-Kamera im Spiel (Wunsch aus Cube Escape 0.52,
+  Kapsel dort jetzt 1,40 m).
 * Behoben: `--groups` brach ab, wenn ein Typ-Emote herausgefiltert war.
+* Code-Review vor dem Release: Kontakte und Schritte von Crawl kamen zuerst von den schleifenden Zehen (jetzt die
+  Hände, über `gait` am Clip statt einer eigenen Namensliste), Prüfungen der Kriech-Clips überspringen Läufe mit
+  `--groups`.
 
 ## 1.15.0 „Pack Rat“ – 2026-10-13
 

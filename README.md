@@ -361,6 +361,8 @@ Charakterraum `[rechts, oben, vorn]` in Metern (= Unity-Local-Space), Winkel in 
 | `naturalSpeed` | Grundtempo eines In-place-Clips. Animator-Tempo = Spielgeschwindigkeit / `naturalSpeed` |
 | `footsteps`, `feet` | Frames mit Fußaufsatz (für Schritt-Sounds/Staub) und Bodenkontakt-Bereiche je Fuß |
 | `events` | Ereignisse wie `TakeOff` (Jump 10), `Press` (Interact 19), `Thud` (Death 37), `Clap`, `Grab`, `Arrive` |
+| `eyeHeight` (oberste Ebene) | Augenhöhe in der Ruhepose (1.16: 1,161 m) für die Ego-Kamera |
+| `gait` | Gangart (1.16): `feet`, bei Crawl `hands` – dann beschreiben Kontakte, `footsteps` und `naturalSpeed` die Hände |
 | `servo` | Servo-Geräusche (1.13): `[Frame, Gruppe, Stärke 0–1, Dauer]` je Bewegungsansatz von Kopf, Rumpf, Armen, Beinen – aus der Gelenkgeschwindigkeit gemessen |
 | `rootMotion` | Weg (`move`) und Drehung (`turnRight`) vom ersten zum letzten Frame |
 | `height` | kleinste/größte Körperhöhe im Clip (Kapselhöhe beim Ducken, Sitzen, Hängen) |
@@ -436,8 +438,8 @@ Ausdrücke im Spiel umschalten = `material.mainTextureOffset` setzen (Werte in `
 bleiben bewusst eigene Materialien: so reichen Standard-Shader mit Tiling/Offset, der Gewinn eines gemeinsamen
 Materials wäre ein einziger Draw Call.
 
-**Spieler-Prefab:** CharacterController Height 1,40, Radius 0,30, Center (0, 0,70, 0) – entschieden am 13.10. (der
-Roboter ist seit 1.14 1,38 m hoch; das Spiel hat heute 1,20 m). Ducken: Kapsel 0,65 m mit den Kriech-Clips (1.16). Animator-Parameter aus
+**Spieler-Prefab:** CharacterController Height 1,40, Radius 0,30, Center (0, 0,70, 0) – seit Cube Escape 0.52 (der
+Roboter ist seit 1.14 1,38 m hoch); Ego-Kamera auf `eyeHeight`. Ducken: Kapsel 0,65 m mit den Kriech-Clips (1.16). Animator-Parameter aus
 `IRobotMotion` (`Speed`, `Grounded`, `Crouch`, Trigger `Land`) plus `Push`, `Interact`, `Dead`; Lauf-Blend-Tree
 CrouchWalk/Walk/Run/RunFast/Sprint nach `naturalSpeed`. Als neue Variante neben dem bestehenden code-basierten
 `RobotAnimator` einführen (Golden Rule). Für einen festen Robotertyp die FBX aus `output/Types/` nehmen (1 Mesh statt
@@ -459,7 +461,7 @@ ersetzt, neuere Versionen abgelehnt – dieselben Regeln gehören in die Spielst
 |---|---|---|
 | Unity-Integration | nicht begonnen, nicht im Spiel getestet (Spielprojekt bewusst unverändert) | FBX importieren, Materialien/Animator nach diesem README aufbauen, als neue Variante neben `RobotAnimator` |
 | Tempo Laufen | Clips bis Sprint ≈ 4,2 m/s; Spiel: 5 bzw. 8 m/s | Animator-Tempo = Geschwindigkeit / `naturalSpeed` (Sprint bei 8 m/s ≈ 1,9-fach) oder Spieltempo senken (Design-Entscheidung) |
-| Standhöhe | Roboter seit 1.14 1,38 m, Spiel-Kapsel 1,20 m (`Player.prefab`). Entschieden (13.10.): Kapsel 1,40 m | in Cube Escape umsetzen (eigene Version) |
+| Standhöhe | Roboter 1,38 m; Spiel-Kapsel seit Cube Escape 0.52 1,40 m (`PlayerController.CapsuleHeight`), Ego-Augenhöhe dort noch 1,0 m | beim Roboter-Import die Ego-Kamera auf `eyeHeight` setzen |
 | Ducken | Duck-Kapsel 0,65 m bleibt (Entscheidung 13.10.); Ducken bis ≈ 1,05 m, darunter Kriechen (CrawlIdle, Crawl ≤ 0,57 m, seit 1.16) | im Spiel: unter niedriger Decke vom Ducken ins Kriechen wechseln |
 | Formen im Spiel | Mesh-Formen als eigene FBX, Lochung als Formel, Kabel als Teil | Spielversion „Spektrum“: Formen als Meshes bzw. Shader-Variante (Cull Off) mit Fallback |
 | Kapselbreite | Rumpf + Schultern 0,70 m (Runner) bis 0,77 m, mit Armen 0,73–0,87 m (`typeBounds`); Kapsel 0,6 m | Überstand akzeptieren (üblich) oder Radius 0,35 |

@@ -630,12 +630,14 @@ def verify_crawlspace():
                                                      for cat in cats)]
     check("categories: clip data names its category", not wrong, wrong)
     crawl = {n: clips.get(n) for n in ("CrawlIdle", "Crawl")}
+    if not all(crawl.values()):                 # a --groups run without the crawl clips
+        return
     ok = all(c and c["height"]["max"] < 0.62 for c in crawl.values())
     check("crawl: CrawlIdle and Crawl stay below 0.62 m (crouch capsule 0.65 m)", ok,
           {n: c["height"] if c else None for n, c in crawl.items()})
     sp = (crawl["Crawl"] or {}).get("naturalSpeed", 0)
     check("crawl: Crawl loops with a natural speed from the hands (0.2-0.5 m/s), items hidden",
-          bool(crawl["Crawl"]) and crawl["Crawl"]["loop"] and 0.2 <= sp <= 0.5 and
+          crawl["Crawl"]["loop"] and crawl["Crawl"].get("gait") == "hands" and 0.2 <= sp <= 0.5 and
           all(c and c["hideHeldItem"] for c in crawl.values()), sp)
 
 

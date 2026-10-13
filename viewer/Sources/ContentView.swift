@@ -509,15 +509,22 @@ struct Sidebar: View {
 
     private func label(_ id: String) -> String { Sidebar.labels[id] ?? id }
 
+    // Bindings look the entry up when they are read: SwiftUI may still read a row's binding after the list shrank
+    // (a skin with fewer layers or badges, a layer set to 0), and a captured index then traps.
     private func layerRow(_ info: LayerInfo) -> some View {
-        let i = model.look.layers.firstIndex { $0.id == info.id }
+        let layer = { model.look.layers.first { $0.id == info.id } }
         return HStack {
             Text(label(info.id)).frame(width: 70, alignment: .leading)
-            Slider(value: Binding(get: { i.map { model.look.layers[$0].amount } ?? 0 },
+            Slider(value: Binding(get: { layer()?.amount ?? 0 },
                                   set: { model.setLayer(info, amount: $0) }), in: 0...1)
-            if let i = i {
-                ColorPicker("", selection: Binding(get: { model.look.layers[i].color.color },
-                                                   set: { model.look.layers[i].color = RGB(color: $0) })).labelsHidden()
+            if layer() != nil {
+                ColorPicker("", selection: Binding(
+                    get: { layer()?.color.color ?? .gray },
+                    set: { c in
+                        if let i = model.look.layers.firstIndex(where: { $0.id == info.id }) {
+                            model.look.layers[i].color = RGB(color: c)
+                        }
+                    })).labelsHidden()
             }
         }
     }
@@ -532,8 +539,9 @@ struct Sidebar: View {
             }
             if i < model.look.badges.count {
                 ColorPicker("", selection: Binding(
-                    get: { model.look.badges[i].color.color },
-                    set: { model.look.badges[i].color = RGB(color: $0) })).labelsHidden()
+                    get: { i < model.look.badges.count ? model.look.badges[i].color.color : .gray },
+                    set: { if i < model.look.badges.count { model.look.badges[i].color = RGB(color: $0) } }))
+                    .labelsHidden()
             }
         }
         .disabled(i > model.look.badges.count)

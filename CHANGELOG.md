@@ -3,6 +3,14 @@
 Versionen des Roboter-Generators (zählen getrennt von Cube Escape und Cubegen). Jede Version hat einen Tag
 `v<Version>` und einen Release-Branch `release/<Version>`.
 
+## 1.12.1 „Bolt-On“ – 2026-10-13
+
+* **Behoben: Viewer stürzte ab** (`Sidebar.badgeRow`), wenn die Liste der Abzeichen kürzer wurde – Skin mit weniger
+  Abzeichen, Abzeichen auf „Keins“. SwiftUI liest die Bindung des Farbwählers danach noch einmal, der gemerkte Index
+  lag außerhalb der Liste. Dasselbe Muster bei den Schichten (Regler auf 0) ist mit behoben: die Bindungen suchen
+  den Eintrag beim Lesen (Schichten per ID, Abzeichen mit Bereichsprüfung).
+* Der aktuelle Viewer liegt nach jedem Release unter `output/RobotViewer.app` im Haupt-Checkout.
+
 ## 1.12.0 „Bolt-On“ – 2026-10-13
 
 Aufsätze an den Sockets, Nachschwingen, Typ-Emotes; 62 Skins (15 neue: Miner, Samurai, Steam, Signal, Wood, Celest –

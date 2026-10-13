@@ -69,6 +69,13 @@ assert json.load(open(sys.argv[1]))["form"] == "None"
 PY
 case "$msg6" in *Form*) ok "form warning reported" ;; *) bad "form warning reported" ;; esac
 
+# sidebar layout (1.14.1): the panel's content must fit the 440 pt column for the default look and a type with
+# accessories, else it is pushed out of the window and clipped on both sides
+for t in Classic Astronaut; do
+  if msg="$("$BIN" --sidebar-check "$TMP/sidebar_$t.png" --type "$t")"; then ok "sidebar fits its column ($t: ${msg##*width })"
+  else bad "sidebar fits its column ($t: ${msg##*width })"; fi
+done
+
 # 1.14 body forms: each form skin renders differently from the same skin in the base form (geometry, holes, cables)
 for skin in Pixel Origami Bone Wire; do
   "$BIN" --snapshot "$TMP/form_$skin.png" --skin "$skin" --size 300x300 >/dev/null

@@ -3,6 +3,18 @@
 Versionen des Roboter-Generators (zählen getrennt von Cube Escape und Cubegen). Jede Version hat einen Tag
 `v<Version>` und einen Release-Branch `release/<Version>`.
 
+## 1.14.1 „Reshape“ – 2026-10-13
+
+Viewer: In einem bildschirmbreiten Fenster wurde die Seitenleiste in ihrer Wunschbreite (≈ 525 pt) statt in der
+Spaltenbreite (440 pt) gezeichnet, über den Fensterrand geschoben und beidseitig abgeschnitten; über ihr fehlte die
+Titelleiste, weil die Scroll-Ansicht unter die Titelleiste lief (macOS 26+).
+
+* Der Inhalt nimmt jetzt genau die Breite der Spalte, die Kopfzeile („Cube Escape Roboter“, Zufall) steht fest über
+  der Scroll-Ansicht, die Titelleiste geht über das ganze Fenster.
+* „Oberfläche“: Beschriftung über den sechs Segmenten (daneben wurde sie senkrecht gequetscht).
+* Neue Layout-Prüfung `--sidebar-check out.png [--type …] [--skin …]` (Mindestbreite des Inhalts gegen die Spalte,
+  in `viewer/test_viewer.sh`), Startoption `--window 1710x1000` für Layout-Prüfungen in großen Fenstern.
+
 ## 1.14.0 „Reshape“ – 2026-10-13
 
 **Proportionen wie auf den Konzeptbildern:** eine Proportions-Stufe nach dem Bauen formt die Teile je Knochen um

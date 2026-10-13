@@ -251,7 +251,8 @@ output/RobotViewer.app/Contents/MacOS/RobotViewer --snapshot /tmp/robot.png --ty
 Weitere Schalter: `--look datei.json`, `--save-look out.json` (schreibt den geladenen, ggf. migrierten Look),
 `--skin` (mit `--skin-parts` samt Teilen), `--form` (1.14), `--expression`, `--display`, `--finish`, `--variant Slot=Variante`,
 `--size 1000x1000`, `--no-floor`, `--no-props`, mit `--anim` auch `--gif clip.gif` oder `--video clip.mp4` (ganzer
-Clip). `viewer/test_viewer.sh` nutzt das für Migrations-, Form-, Round-Trip- und Export-Tests.
+Clip). `viewer/test_viewer.sh` nutzt das für Migrations-, Form-, Round-Trip- und Export-Tests. `--sidebar-check out.png [--type …]` prüft, ob
+der Inhalt der Seitenleiste in seine Spalte passt; `--window 1710x1000` öffnet das Fenster in dieser Größe.
 
 ## Kennzahlen
 

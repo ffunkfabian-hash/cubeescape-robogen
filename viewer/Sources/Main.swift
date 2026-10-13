@@ -6,12 +6,17 @@ import SwiftUI
 ///               [--display Heart] [--variant Head=TV ...] [--anim DanceRobot --frame 30] [--view Iso|Front|Side|Back|Face]
 ///               [--size 1000x1000] [--no-floor] [--no-props] [--save-look out.json] [--data <ViewerData dir>]
 ///               [--gif clip.gif | --video clip.mp4]   (with --anim: the whole clip instead of one frame)
+///   RobotViewer --sidebar-check out.png [--type Astronaut] [--skin Bone]   lays the sidebar out in its column without a window, writes
+///               a picture and fails when its content needs more than the column's maximum width
 @main
 enum Main {
     static func main() {
         let args = CommandLine.arguments
         if let i = args.firstIndex(of: "--snapshot"), i + 1 < args.count {
             exit(Snapshot.run(out: args[i + 1], args: args))
+        }
+        if let i = args.firstIndex(of: "--sidebar-check"), i + 1 < args.count {
+            exit(SidebarCheck.run(out: args[i + 1], args: args))
         }
         RobotViewerApp.main()
     }
@@ -38,6 +43,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
+        // layout checks: `--window 1710x1000` opens the window at that size (e.g. as wide as the screen)
+        if let v = Snapshot.value(CommandLine.arguments, "--window"), let x = v.firstIndex(of: "x"),
+           let w = Double(v[..<x]), let h = Double(v[v.index(after: x)...]) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                NSApp.windows.first?.setFrame(NSRect(x: 0, y: 40, width: w, height: h), display: true)
+            }
+        }
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
@@ -115,5 +127,38 @@ enum Snapshot {
             FileHandle.standardError.write("snapshot failed: \(error)\n".data(using: .utf8)!)
             return 1
         }
+    }
+}
+
+/// Layout test of the sidebar: its content (inside the ScrollView) must fit the column's maximum width (ContentView) -
+/// a wider minimum width pushes the panel out of the window and clips it on both sides (1.14 finish picker).
+enum SidebarCheck {
+    static let columnWidth: CGFloat = 440
+
+    @MainActor static func run(out: String, args: [String]) -> Int32 {
+        guard let url = RobotData.locate(), let data = try? RobotData(root: url) else {
+            FileHandle.standardError.write("ViewerData not found\n".data(using: .utf8)!)
+            return 2
+        }
+        _ = NSApplication.shared
+        let model = ViewerModel(data: data)
+        if let t = Snapshot.value(args, "--type"), let type = data.config.robotTypes.first(where: { $0.name == t }) {
+            model.applyType(type)
+        }
+        if let s = Snapshot.value(args, "--skin"), let skin = data.config.skins.first(where: { $0.name == s }) {
+            model.look.apply(skin: skin)
+        }
+        let view = Sidebar(model: model).content.environment(\.colorScheme, .dark)
+        // offered almost no width, the content reports the width it cannot go below (adaptive grids just reflow)
+        let natural = NSHostingController(rootView: view).sizeThatFits(in: CGSize(width: 1, height: 100_000)).width
+        let host = NSHostingView(rootView: view)
+        host.frame = NSRect(x: 0, y: 0, width: columnWidth, height: 2400)
+        host.layoutSubtreeIfNeeded()
+        if let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds) {
+            host.cacheDisplay(in: host.bounds, to: rep)
+            try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: out))
+        }
+        print(String(format: "sidebar minimum width %.0f pt (column %.0f pt)", natural, columnWidth))
+        return natural <= columnWidth + 0.5 ? 0 : 1
     }
 }

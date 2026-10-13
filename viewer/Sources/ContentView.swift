@@ -321,185 +321,201 @@ struct Sidebar: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack {
-                    Text("Cube Escape Roboter").font(.title2.bold())
-                    Spacer()
-                    Button("Zufall") { model.randomize() }
-                }
-                section("Robotertyp") {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 90))], spacing: 6) {
-                        ForEach(model.config.robotTypes) { t in
-                            Button(t.name) { model.applyType(t) }
-                                .buttonStyle(.bordered)
-                                .tint(model.look.name == t.name ? .accentColor : .gray)
-                        }
-                    }
-                }
-                section("Bauteile") {
-                    ForEach(model.config.slots.filter { !$0.accessory }) { slot in variantPicker(slot) }
-                }
-                section("Accessoires") {
-                    ForEach(model.config.slots.filter { $0.accessory }) { slot in variantPicker(slot) }
-                }
-                section("Farben") {
-                    Picker("Skin", selection: Binding(get: { model.selectedSkin }, set: { model.applySkin($0) })) {
-                        ForEach(model.config.skins) { s in
-                            Text((s.startSet ?? false) ? "\(s.name) ★" : s.name).tag(s.name)
-                        }
-                    }
-                    if let s = model.currentSkin, let theme = s.theme, !theme.isEmpty {
-                        Text(theme + (model.look.skin == "Custom" ? " · angepasst" : ""))
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
-                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], alignment: .leading) {
-                        ColorPicker("Panzerung", selection: colorBinding(\.armor))
-                        ColorPicker("Mechanik", selection: colorBinding(\.mech))
-                        ColorPicker("Metall", selection: colorBinding(\.metal))
-                        ColorPicker("Lichter", selection: colorBinding(\.lights))
-                        ColorPicker("Augen", selection: colorBinding(\.eyes))
-                        ColorPicker("Display", selection: colorBinding(\.screen))
-                        ColorPicker("Visier", selection: colorBinding(\.visor))
-                        ColorPicker("Stoff", selection: colorBinding(\.fabric))
-                    }
-                    Picker("Oberfläche", selection: $model.look.finish) {
-                        ForEach(Finish.allCases) { Text($0.rawValue).tag($0) }
-                    }.pickerStyle(.segmented)
-                }
-                section("Werkstoff") {
-                    Picker("Werkstoff", selection: Binding(get: { model.look.material.id },
-                                                           set: { model.setMaterial($0) })) {
-                        Text("Keiner").tag("None")
-                        ForEach(model.config.materials ?? []) { Text(label($0.id)).tag($0.id) }
-                    }
-                    if model.look.material.id != "None" {
-                        ColorPicker("Musterfarbe", selection: Binding(get: { model.look.material.color.color },
-                                                                      set: { model.look.material.color = RGB(color: $0) }))
-                    }
-                }
-                section("Schichten") {
-                    ForEach((model.config.layers ?? []).filter { $0.color != nil }) { info in layerRow(info) }
-                    HStack {
-                        Text("Abnutzung")
-                        Slider(value: $model.look.wear, in: 0...1)
-                        Text(model.look.wear < 0.25 ? "sauber" : model.look.wear > 0.75 ? "verbeult" : "normal")
-                            .font(.caption).frame(width: 56)
-                    }
-                }
-                if !(model.config.specials ?? []).isEmpty {
-                    section("Spezialmaterial") { specialSection }
-                }
-                if !(model.config.forms ?? []).isEmpty {
-                    section("Form") { formSection }
-                }
-                section("Zweitfarbe") {
-                    ColorPicker("Farbe", selection: colorBinding(\.armor2))
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4), spacing: 4) {
-                        ForEach(model.config.zones ?? []) { z in
-                            Toggle(label(z.id), isOn: Binding(
-                                get: { model.look.zones2.contains(z.id) },
-                                set: { on in
-                                    model.look.zones2.removeAll { $0 == z.id }
-                                    if on { model.look.zones2.append(z.id) }
-                                    model.look.skin = "Custom"
-                                }))
-                            .toggleStyle(.button).controlSize(.small)
-                        }
-                    }
-                }
-                section("Abzeichen") {
-                    ForEach(0..<Look.maxBadges, id: \.self) { i in badgeRow(i) }
-                }
-                section("Leuchtlinien") {
-                    Picker("Muster", selection: Binding(get: { model.look.lines.pattern },
-                                                        set: { model.look.lines.pattern = $0; model.look.skin = "Custom" })) {
-                        Text("Keine").tag("None")
-                        ForEach(model.config.linePatterns ?? []) { Text(label($0.id)).tag($0.id) }
-                    }
-                    if model.look.lines.pattern != "None" {
-                        HStack {
-                            ColorPicker("Farbe", selection: Binding(get: { model.look.lines.color.color },
-                                                                    set: { model.look.lines.color = RGB(color: $0) }))
-                            Text("Stärke")
-                            Slider(value: $model.look.lines.strength, in: 0...2)
-                        }
-                    }
-                }
-                section("Augen") {
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 3), spacing: 4) {
-                        ForEach(model.config.expressions, id: \.self) { e in
-                            Button(e) { model.look.expression = e }
-                                .buttonStyle(.bordered)
-                                .controlSize(.small)
-                                .tint(model.look.expression == e ? .accentColor : .gray)
-                        }
-                    }
-                    HStack {
-                        Text("Leuchtkraft")
-                        Slider(value: $model.look.glow, in: 0.2...2.5)
-                    }
-                    Toggle("Ausdruck passend zur Animation", isOn: $model.look.autoExpression)
-                }
-                section("Brust-Display") {
-                    Picker("Motiv", selection: $model.look.display) {
-                        ForEach(model.config.displays, id: \.self) { Text($0).tag($0) }
-                        ForEach((model.config.displayAnimations ?? []).map(\.name), id: \.self) {
-                            Text("\($0) (animiert)").tag($0)
-                        }
-                    }
-                    Toggle("Motiv passend zur Animation", isOn: Binding(
-                        get: { model.look.autoDisplay ?? true }, set: { model.look.autoDisplay = $0 }))
-                }
-                section("Animation") {
-                    HStack {
-                        Toggle("Wiederholen", isOn: $model.loop)
-                        Spacer()
-                        Button("Grundpose") { model.clip = nil }
-                    }
-                    ForEach(groups, id: \.self) { g in
-                        DisclosureGroup(groupLabel(g)) {
-                            ForEach(model.data.doc.animations.filter { $0.group == g }) { a in
-                                Button {
-                                    model.clip = a
-                                    model.playing = true
-                                } label: {
-                                    HStack {
-                                        Text(a.name).fontWeight(model.clip == a ? .bold : .regular)
-                                        Spacer()
-                                        Text(a.loop ? "Loop" : "\(a.frames) F").font(.caption).foregroundStyle(.secondary)
-                                    }
-                                }
-                                .buttonStyle(.plain)
-                                .help(a.description)
-                            }
-                        }
-                    }
-                }
-                section("Look") {
-                    HStack {
-                        Button("Laden …") { model.loadLook() }
-                        Button("Speichern …") { model.saveLook() }
-                        Button("Screenshot …") { model.screenshot() }
-                    }
-                    HStack {
-                        Button("GIF …") { model.export(.gif) }
-                            .help("Die laufende Animation als GIF (15 fps, 600 px)")
-                        Button("Video …") { model.export(.mp4) }
-                            .help("Die laufende Animation als MP4 (30 fps, 1080 px)")
-                    }
-                }
-                section("Vergleich A/B") {
-                    HStack {
-                        Button("Als B merken") { model.rememberAsB() }
-                            .help("Den aktuellen Look rechts daneben stellen; danach links weiter ändern")
-                        Toggle("Nebeneinander", isOn: $model.compare)
-                        Button("Tauschen") { model.swapAB() }.disabled(model.lookB == nil)
+        // the content takes exactly the column's width: left to itself it grows to its ideal width (adaptive grids,
+        // ~525 pt) in a wide window and gets clipped on both sides of the 440 pt column
+        // and the header stays fixed above the scroll view: a scroll view at the window's top edge runs under the
+        // title bar (macOS 26+), which cut the title bar off above the panel
+        VStack(spacing: 0) {
+            HStack {
+                Text("Cube Escape Roboter").font(.title2.bold())
+                Spacer()
+                Button("Zufall") { model.randomize() }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            Divider()
+            GeometryReader { geo in
+                ScrollView { content.frame(width: geo.size.width, alignment: .leading) }
+            }
+        }
+    }
+
+    /// Everything in the panel; `--sidebar-check` measures its minimum width against the column.
+    var content: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            section("Robotertyp") {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 90))], spacing: 6) {
+                    ForEach(model.config.robotTypes) { t in
+                        Button(t.name) { model.applyType(t) }
+                            .buttonStyle(.bordered)
+                            .tint(model.look.name == t.name ? .accentColor : .gray)
                     }
                 }
             }
-            .padding(14)
+            section("Bauteile") {
+                ForEach(model.config.slots.filter { !$0.accessory }) { slot in variantPicker(slot) }
+            }
+            section("Accessoires") {
+                ForEach(model.config.slots.filter { $0.accessory }) { slot in variantPicker(slot) }
+            }
+            section("Farben") {
+                Picker("Skin", selection: Binding(get: { model.selectedSkin }, set: { model.applySkin($0) })) {
+                    ForEach(model.config.skins) { s in
+                        Text((s.startSet ?? false) ? "\(s.name) ★" : s.name).tag(s.name)
+                    }
+                }
+                if let s = model.currentSkin, let theme = s.theme, !theme.isEmpty {
+                    Text(theme + (model.look.skin == "Custom" ? " · angepasst" : ""))
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], alignment: .leading) {
+                    ColorPicker("Panzerung", selection: colorBinding(\.armor))
+                    ColorPicker("Mechanik", selection: colorBinding(\.mech))
+                    ColorPicker("Metall", selection: colorBinding(\.metal))
+                    ColorPicker("Lichter", selection: colorBinding(\.lights))
+                    ColorPicker("Augen", selection: colorBinding(\.eyes))
+                    ColorPicker("Display", selection: colorBinding(\.screen))
+                    ColorPicker("Visier", selection: colorBinding(\.visor))
+                    ColorPicker("Stoff", selection: colorBinding(\.fabric))
+                }
+                // label above: six segments next to it are wider than the column (pushed the panel out of the window)
+                Text("Oberfläche").font(.caption).foregroundStyle(.secondary)
+                Picker("Oberfläche", selection: $model.look.finish) {
+                    ForEach(Finish.allCases) { Text($0.rawValue).tag($0) }
+                }.pickerStyle(.segmented).labelsHidden()
+            }
+            section("Werkstoff") {
+                Picker("Werkstoff", selection: Binding(get: { model.look.material.id },
+                                                       set: { model.setMaterial($0) })) {
+                    Text("Keiner").tag("None")
+                    ForEach(model.config.materials ?? []) { Text(label($0.id)).tag($0.id) }
+                }
+                if model.look.material.id != "None" {
+                    ColorPicker("Musterfarbe", selection: Binding(get: { model.look.material.color.color },
+                                                                  set: { model.look.material.color = RGB(color: $0) }))
+                }
+            }
+            section("Schichten") {
+                ForEach((model.config.layers ?? []).filter { $0.color != nil }) { info in layerRow(info) }
+                HStack {
+                    Text("Abnutzung")
+                    Slider(value: $model.look.wear, in: 0...1)
+                    Text(model.look.wear < 0.25 ? "sauber" : model.look.wear > 0.75 ? "verbeult" : "normal")
+                        .font(.caption).frame(width: 56)
+                }
+            }
+            if !(model.config.specials ?? []).isEmpty {
+                section("Spezialmaterial") { specialSection }
+            }
+            if !(model.config.forms ?? []).isEmpty {
+                section("Form") { formSection }
+            }
+            section("Zweitfarbe") {
+                ColorPicker("Farbe", selection: colorBinding(\.armor2))
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4), spacing: 4) {
+                    ForEach(model.config.zones ?? []) { z in
+                        Toggle(label(z.id), isOn: Binding(
+                            get: { model.look.zones2.contains(z.id) },
+                            set: { on in
+                                model.look.zones2.removeAll { $0 == z.id }
+                                if on { model.look.zones2.append(z.id) }
+                                model.look.skin = "Custom"
+                            }))
+                        .toggleStyle(.button).controlSize(.small)
+                    }
+                }
+            }
+            section("Abzeichen") {
+                ForEach(0..<Look.maxBadges, id: \.self) { i in badgeRow(i) }
+            }
+            section("Leuchtlinien") {
+                Picker("Muster", selection: Binding(get: { model.look.lines.pattern },
+                                                    set: { model.look.lines.pattern = $0; model.look.skin = "Custom" })) {
+                    Text("Keine").tag("None")
+                    ForEach(model.config.linePatterns ?? []) { Text(label($0.id)).tag($0.id) }
+                }
+                if model.look.lines.pattern != "None" {
+                    HStack {
+                        ColorPicker("Farbe", selection: Binding(get: { model.look.lines.color.color },
+                                                                set: { model.look.lines.color = RGB(color: $0) }))
+                        Text("Stärke")
+                        Slider(value: $model.look.lines.strength, in: 0...2)
+                    }
+                }
+            }
+            section("Augen") {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 3), spacing: 4) {
+                    ForEach(model.config.expressions, id: \.self) { e in
+                        Button(e) { model.look.expression = e }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                            .tint(model.look.expression == e ? .accentColor : .gray)
+                    }
+                }
+                HStack {
+                    Text("Leuchtkraft")
+                    Slider(value: $model.look.glow, in: 0.2...2.5)
+                }
+                Toggle("Ausdruck passend zur Animation", isOn: $model.look.autoExpression)
+            }
+            section("Brust-Display") {
+                Picker("Motiv", selection: $model.look.display) {
+                    ForEach(model.config.displays, id: \.self) { Text($0).tag($0) }
+                    ForEach((model.config.displayAnimations ?? []).map(\.name), id: \.self) {
+                        Text("\($0) (animiert)").tag($0)
+                    }
+                }
+                Toggle("Motiv passend zur Animation", isOn: Binding(
+                    get: { model.look.autoDisplay ?? true }, set: { model.look.autoDisplay = $0 }))
+            }
+            section("Animation") {
+                HStack {
+                    Toggle("Wiederholen", isOn: $model.loop)
+                    Spacer()
+                    Button("Grundpose") { model.clip = nil }
+                }
+                ForEach(groups, id: \.self) { g in
+                    DisclosureGroup(groupLabel(g)) {
+                        ForEach(model.data.doc.animations.filter { $0.group == g }) { a in
+                            Button {
+                                model.clip = a
+                                model.playing = true
+                            } label: {
+                                HStack {
+                                    Text(a.name).fontWeight(model.clip == a ? .bold : .regular)
+                                    Spacer()
+                                    Text(a.loop ? "Loop" : "\(a.frames) F").font(.caption).foregroundStyle(.secondary)
+                                }
+                            }
+                            .buttonStyle(.plain)
+                            .help(a.description)
+                        }
+                    }
+                }
+            }
+            section("Look") {
+                HStack {
+                    Button("Laden …") { model.loadLook() }
+                    Button("Speichern …") { model.saveLook() }
+                    Button("Screenshot …") { model.screenshot() }
+                }
+                HStack {
+                    Button("GIF …") { model.export(.gif) }
+                        .help("Die laufende Animation als GIF (15 fps, 600 px)")
+                    Button("Video …") { model.export(.mp4) }
+                        .help("Die laufende Animation als MP4 (30 fps, 1080 px)")
+                }
+            }
+            section("Vergleich A/B") {
+                HStack {
+                    Button("Als B merken") { model.rememberAsB() }
+                        .help("Den aktuellen Look rechts daneben stellen; danach links weiter ändern")
+                    Toggle("Nebeneinander", isOn: $model.compare)
+                    Button("Tauschen") { model.swapAB() }.disabled(model.lookB == nil)
+                }
+            }
         }
+        .padding(14)
     }
 
     private static let labels = ["HazardStripes": "Warnstreifen", "Cross": "Kreuz", "Cloud": "Wolke",

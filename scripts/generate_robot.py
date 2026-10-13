@@ -3095,7 +3095,9 @@ def preview_special_nodes(mat, bsdf, armor):
             metal = k.math("ADD", metal, k.math("MULTIPLY", w, k.math("SUBTRACT", emetal, metal)))
     k.link(col, bsdf.inputs["Base Color"])
     k.link(_add_rgb(k, emit, em_add), bsdf.inputs["Emission Color"])
-    k.link(alpha, bsdf.inputs["Alpha"])
+    keep = k.node("NodeReroute")         # alpha is linked only while a see-through special is on (set_special)
+    keep.name = "SpecialAlpha"
+    k.link(alpha, keep.inputs[0])
     k.link(rough, bsdf.inputs["Roughness"])
     k.link(metal, bsdf.inputs["Metallic"])
 
@@ -5822,10 +5824,19 @@ def montage_sheet(tiles, sheet, pointsize):
     LOG.info("  sheet %s", sheet)
 
 
+SEE_THROUGH_SPECIALS = ("Glass", "Hologram")
+
+
 def set_special(nt, sp):
     """Preview: switch the special-material nodes (preview_special_nodes) to a skin's special (None = off)."""
     for sid in SPECIALS:
         nt.nodes["SpecialW_" + sid].outputs[0].default_value = float(bool(sp) and sp["id"] == sid)
+    bsdf = next(n for n in nt.nodes if n.type == "BSDF_PRINCIPLED")
+    for link in list(bsdf.inputs["Alpha"].links):
+        nt.links.remove(link)
+    bsdf.inputs["Alpha"].default_value = 1.0
+    if sp and sp["id"] in SEE_THROUGH_SPECIALS:      # opaque materials stay on EEVEE's opaque path
+        nt.links.new(nt.nodes["SpecialAlpha"].outputs[0], bsdf.inputs["Alpha"])
     if sp:
         nt.nodes["SpecialA"].outputs[0].default_value = (*sp["color"], 1.0)
         nt.nodes["SpecialB"].outputs[0].default_value = (*sp["color2"], 1.0)
@@ -6361,6 +6372,8 @@ def make_lod(ob, target, name, coll, arm_ob):
         o.select_set(o == lod)
     bpy.context.view_layer.objects.active = lod
     with bpy.context.temp_override(object=lod, active_object=lod, selected_objects=[lod]):
+        if lod.data.has_custom_normals:          # the weighted normals of LOD0 would not fit the collapsed faces
+            bpy.ops.mesh.customdata_custom_splitnormals_clear()
         bpy.ops.object.modifier_apply(modifier=mod.name)
         bpy.ops.object.shade_smooth_by_angle(angle=math.radians(38))      # the custom normals are gone
     bind_mesh(lod, arm_ob)

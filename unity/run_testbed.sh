@@ -26,8 +26,6 @@ code=0
 ROBOT_OUTPUT="$OUT" ROBOT_REPORT="$REPORT" "$UNITY" -batchmode -quit -projectPath "$PROJ" \
   -executeMethod RobotTestbed.Editor.TestbedPipeline.Run -logFile "$REPORT/pipeline.log" || code=$?
 t1=$(date +%s)
-tcode=0
-t2=$t1
 
 if command -v magick >/dev/null && [ -d "$REPORT/shots" ]; then
   export MAGICK_THREAD_LIMIT=1
@@ -47,9 +45,9 @@ if grep -h "error CS" "$REPORT/pipeline.log" 2>/dev/null | sort -u | head -5 | g
   code=3
 fi
 
-python3 - "$REPORT" "$code" "$tcode" "$((t1 - t0))" "$((t2 - t1))" <<'PY'
+python3 - "$REPORT" "$code" "$((t1 - t0))" <<'PY'
 import json, os, sys, xml.etree.ElementTree as ET
-report, code, tcode, tp, tt = sys.argv[1], int(sys.argv[2]), int(sys.argv[3]), sys.argv[4], sys.argv[5]
+report, code, tp = sys.argv[1], int(sys.argv[2]), sys.argv[3]
 path = os.path.join(report, "report.json")
 if os.path.exists(path):
     r = json.load(open(path))
@@ -69,4 +67,4 @@ if os.path.exists(xml):
 else:
     print("tests: no results - see pipeline.log")
 PY
-[ "$code" -eq 0 ] && [ "$tcode" -eq 0 ]
+[ "$code" -eq 0 ]

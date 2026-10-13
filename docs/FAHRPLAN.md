@@ -94,7 +94,13 @@ Zahnrädern, Zifferblatt; Linsenringe, Helmring; Rucksack mit Taschen), 10 neue 
 Aufsatz tragen – so prüft die QA jeden in allen 71 Clips, ohne Durchdringung. 62 Skins (15 neue, Forest mit Moos und
 Spross), Abzeichen Stern, Zahnrad, Blatt (dritte Maske; der Viewer packt die gewählten Abzeichen je Look).
 Nachschwingen für Umhang und Antenne als gebackene Federknochen, Typ-Emotes HatTip (Gentleman) und FlagWave (King),
-Schornsteinrauch als Emitter-Daten. Kletter-Ausblendung um HatTip ergänzt.
+Schornsteinrauch als Emitter-Daten. Kletter-Ausblendung um HatTip ergänzt. 1.12.1/1.12.2: Viewer-Absturz bei
+Abzeichen und Ruckeln behoben.
+
+**1.13 Spectral veröffentlicht** (13.10., v1.13.0): Spezialmaterialien Glas/Kristall, Hologramm, Glitch, Schillern,
+Skizze, Regenbogen, Galaxie als Laufzeit-Effekte (Vorschau und Viewer, je eine URP-Beschreibung), 71 Skins (9 neue),
+Look-Format 5. Dazu: LOD1/LOD2, Treffer-Kapseln, Servo-Ereignisse, Masken für Unity gepackt, Unity-Testpaket in einem
+Start (12 s), Skills `rg-unity-testbed` und `rg-unity-integration`.
 
 ## Spiel-Versionen
 
@@ -113,15 +119,15 @@ Fünf Spielversionen holen den Roboter ins Spiel; jede ist für sich spielbar. D
 Neunzehn weitere Punkte (zwei Vorschläge vom 12. Oktober 2026 wurden in Generator 1.9.2 geprüft und verworfen; fünf kamen aus dem Konzeptvergleich in 1.10 dazu), jeweils der Stufe zugeordnet, in der sie am besten mitlaufen.
 
 - [x] **UI-Icons per ImageMagick** je Accessoire, Skin und Ausdruck, direkt verwendbar für ein Anpassungsmenü im Spiel – umgesetzt in Generator 1.10 (113 Icons, dazu Display-Motive und Abzeichen), genutzt in Spiel 0.45
-- [ ] **Detailstufen (LOD):** vereinfachte Meshes mit etwa 6 000 und 2 500 Dreiecken für Entfernung und Menge – vor Spiel 0.44
-- [ ] **Treffer-Kapseln pro Knochen** als Daten für Treffererkennung und eine spätere Ragdoll – vor Spiel 0.44 (Daten), genutzt ab 0.48
+- [x] **Detailstufen (LOD):** vereinfachte Meshes mit etwa 6 000 und 2 500 Dreiecken für Entfernung und Menge – umgesetzt in Generator 1.13 (`LOD/`, je Typ)
+- [x] **Treffer-Kapseln pro Knochen** als Daten für Treffererkennung und eine spätere Ragdoll – umgesetzt in Generator 1.13 (`hitCapsules`, im Unity-Testpaket geprüft), genutzt ab 0.48
 - [x] **Animierte Display-Motive** wie Herzschlag, Ladekreisel, Sprechen als Flipbook-Atlas – umgesetzt in Generator 1.10 (Heartbeat, Spinner, Talk)
 - [x] **Abnutzungsstufen** von sauber bis verbeult als Masken-Kanal – umgesetzt in Generator 1.11 (Regler 0 sauber, 0,5 gebacken, 1 verbeult)
 - [x] **Typ-eigene Emotes:** Gentleman lüftet den Hut, King schwenkt die Fahne – umgesetzt in Generator 1.12 (HatTip:
   der Hut reitet auf der Hand; FlagWave; je Typ in `robotTypes[].emote`, QA nur mit dem eigenen Typ)
 - [x] **Nachschwingen** für Umhang und Antenne – umgesetzt in Generator 1.12 (gebackene Federknochen `Cape`,
   `Antenna`, Fahrtwind in den Lauf-Clips)
-- [ ] **Servo-Geräusch-Ereignisse** aus der Gelenkgeschwindigkeit berechnet (in die Clip-Daten wie die Fußschritte) – vor Spiel 0.44
+- [x] **Servo-Geräusch-Ereignisse** aus der Gelenkgeschwindigkeit berechnet (in die Clip-Daten wie die Fußschritte) – umgesetzt in Generator 1.13 (`clips.<Name>.servo`)
 - [x] **Viewer:** GIF- oder Video-Export und A/B-Vergleich zweier Looks – umgesetzt in Generator 1.10 (GIF und MP4, auch per Kommandozeile)
 - [x] **Unity-Testpaket** in einem separaten, leeren Unity-Projekt; das Spiel bleibt unberührt – umgesetzt in Generator 1.10.1 (`unity/run_testbed.sh`: 20 Prüfungen, 8 EditMode-Tests, Screenshots aller Skins und Typen); fand gleich einen Fehler: der Roboter schaute in Unity nach −Z
 - [ ] **Vorschlag: Visuelle Prüfung aller Kombinationen auf der Neural Engine:** Typ × Skin × Ausdruck per `RobotViewer --snapshot` rendern und mit Apples Bilderkennung (Vision, Merkmalsvergleich) gegen Referenzbilder prüfen; verzeiht kleine Pixelabweichungen aus nicht reproduzierbarem UV-Packing, findet echte Ausreißer in Millisekunden je Bild – ab der Stufe Paintjob, zusammen mit dem Skin-Bogen-Render. Geprüft in 1.9.2: kein Mehrwert – die Renders sind über Prozesse hinweg bitnah gleich (Pixel-RMSE 1e-5), ein exakter Pixelvergleich genügt; Feature Prints trennen eine fehlende Hand (0,106) kaum von 12 statt 24 Samples (0,061) und liefern je Gerät andere Abstände (Neural Engine 0,0026, CPU 0,0003), taugen also nicht als Prüfschranke
@@ -130,7 +136,7 @@ Neunzehn weitere Punkte (zwei Vorschläge vom 12. Oktober 2026 wurden in Generat
 - [x] **Icon-Lesbarkeit prüfen:** umgesetzt in Generator 1.10 ohne Neural Engine – Füllgrad und Lage des Motivs je Icon per ImageMagick (unter 1 s, nur Hinweis im Bericht); ein Saliency-Modell war nicht nötig
 - [ ] **Proportionen des Basismodells** (Konzeptvergleich 12.10.): gedrungener, größerer Kopf, klobigere Platten, Fugen und Schrauben wie auf den Konzeptbildern – betrifft alle 69 Clips und die QA, eigene Entscheidung des Nutzers, spätestens vor Generator 2.0
 - [x] **Abnutzung je Skin** statt für alle Skins gleicher Schmutz und Kratzer (Konzeptvergleich 12.10.) – umgesetzt in Generator 1.11 (`wear` je Skin)
-- [ ] **Masken für Unity packen:** Lackzonen und Gelenke als ID-Kanal, Masken in 1024² (der Viewer packt schon beim Laden) – vor Spiel-Roboter
+- [x] **Masken für Unity packen:** Lackzonen und Gelenke als ID-Kanal, Masken in 1024² (der Viewer packt schon beim Laden) – umgesetzt in Generator 1.13 (`Textures/Unity`, Testbett-Shader nutzt sie)
 - [ ] **Bloom im Spiel:** URP-Bloom so, dass nur Emission strahlt (wie auf den Skin-Karten) – Spiel-Roboter
 - [ ] **Cubegen übernimmt die Techniken** aus `docs/TECHNIK.md` im Robogen-Repo (Checkliste dort: Looks als Daten, Masken, Zonen, Decal-Anker, Präsentationskarten, Icons, Vorschau-App) – vorerst nur in Robogen verzeichnet, Übertrag bei einer späteren Cubegen-Version
 

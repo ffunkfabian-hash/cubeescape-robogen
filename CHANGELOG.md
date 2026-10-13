@@ -3,6 +3,35 @@
 Versionen des Roboter-Generators (zählen getrennt von Cube Escape und Cubegen). Jede Version hat einen Tag
 `v<Version>` und einen Release-Branch `release/<Version>`.
 
+## 1.13.0 „Spectral“ – 2026-10-13
+
+Spezialmaterialien, 71 Skins (9 neue: Glass, Ghost, Aurora, Rainbow – Startset –, Prism, Ice, Void, Nebula,
+Scribble), Look-Format 5 – dazu die offenen Punkte vor dem Spiel-Roboter: Detailstufen, Treffer-Kapseln,
+Servo-Ereignisse, Masken für Unity, Emote-QA im Schnelllauf, ein schnelleres Unity-Testpaket und Skills.
+
+* **Spezialmaterialien** (`specials`, Skin-Feld `special`): Glas/Kristall, Hologramm, Glitch, Schillern, Skizze,
+  Regenbogen und Galaxie (animiert) – Laufzeit-Effekte über dem Skin mit zwei Farben, Stärke und Tempo; gleiche
+  Formeln in der Blender-Vorschau (Skin-Karten) und im Viewer-Shader; Visier und Lichter bleiben. Je Material eine
+  Beschreibung fürs spätere URP-Material (`urp`). Skin-Karten nennen „Spezial: …“.
+* **Look-Format 5** (`special`) mit Migration aus 1–4 in Viewer und Unity; Fixtures `look_v4.json`,
+  `look_v5_unknown_special.json`; fehlende Felder des Spezialmaterials bekommen ihren Standard.
+* **Viewer:** Abschnitt „Spezialmaterial“ (Auswahl, Beschreibung, Farben, Stärke, Tempo); Glas/Hologramm durchsichtig.
+* **Detailstufen:** `LOD/…_LOD1/2.fbx` für den Roboter und jeden Typ (≈ 6 000 / 2 500 Dreiecke, gleiches Rig).
+* **Treffer-Kapseln** (`hitCapsules`): 15 Kapseln im Charakterraum, je 95–100 % Abdeckung ihres Bauteils; im
+  Unity-Testpaket über die Bindposes an die Knochen gehängt (Run-Frame 10: 97 % der Vertices innen).
+* **Servo-Ereignisse** (`clips.<Name>.servo`): Bewegungsansätze von Kopf, Rumpf, Armen und Beinen mit Stärke und Dauer.
+* **Masken für Unity gepackt** (`Textures/Unity`, `unityTextures`): 10 statt 14 Texturen, ≤ 1024², Lackzonen als
+  ID-Kanal – der Testbett-Shader nutzt sie.
+* **Schnelllauf prüft Typ-Emotes** mit ihrem Typ (Gentleman, King) statt sie auszulassen.
+* **Unity-Testpaket in einem Unity-Start:** die EditMode-Tests laufen im Pipeline-Prozess (`TestbedTestRun`), der
+  Import parallel; ein Lauf ohne Änderungen 25–30 → 12 s. Neue Prüfungen: gepackte Masken, LOD, Kapseln.
+* **Skills** `rg-unity-testbed` und `rg-unity-integration` (`.agents/skills`, `.claude/skills`), Wegweiser in AGENTS.
+* Code-Review: LOD ohne die Custom-Normalen von LOD0 (sonst verschmierte Schattierung), Alpha in der Vorschau nur
+  bei Glas/Hologramm verbunden, Unity-Prüfung „Spezialmaterial gelesen, als Palette gezeichnet“, Aufräumen im
+  Testbett-Skript. Viewer: Spezialmaterial-Felder dürfen im Look fehlen; „kein Spezialmaterial“ wird wie im
+  Generator als `{"id": "None"}` geschrieben.
+* Doku: README, AGENTS, TECHNIK.md › 11, Fahrplan.
+
 ## 1.12.2 „Bolt-On“ – 2026-10-13
 
 * **Behoben: Viewer ruckelte.** Die Abspielposition war ein veröffentlichter Wert des Hauptmodells und wurde jedes

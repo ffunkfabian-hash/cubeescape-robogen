@@ -593,13 +593,22 @@ namespace RobotTestbed.Editor
             {
                 var app = go.GetComponent<RobotAppearance>();
                 var skins = p.Config.Objects("skins").ToList();
+                int withSpecial = 0, specialRead = 0;
                 foreach (var s in skins)
                 {
                     var look = new RobotLook();
                     look.ApplySkin(s, true);
                     app.Apply(look);
+                    if (s.TryGetValue("special", out var sp) && sp is Dictionary<string, object> sd)
+                    {
+                        withSpecial++;
+                        if (look.Special == (string)sd["id"]) specialRead++;
+                    }
                 }
                 Check("looks: every skin applies (" + skins.Count + ")", true, skins.Count);
+                // RobotBody draws no special material yet (game version "Spektrum"): those skins show their palette
+                Check("specials: special material read for " + withSpecial + " skins (drawn as palette until the URP material)",
+                      withSpecial > 0 && specialRead == withSpecial, specialRead + "/" + withSpecial);
             }
             finally
             {

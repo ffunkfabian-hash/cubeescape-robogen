@@ -1,6 +1,6 @@
 # Techniken des Roboter-Generators – Übertrag auf Cubegen
 
-Stand: Generator 1.13.1 „Spectral“. Diese Datei sammelt, **wie** der Generator arbeitet und was sich dabei bewährt
+Stand: Generator 1.13.3 „Spectral“. Diese Datei sammelt, **wie** der Generator arbeitet und was sich dabei bewährt
 oder als Falle erwiesen hat. Ziel: Der Modell-Editor von Cubegen soll genauso leistungsfähig werden. Jede Technik
 nennt die Fundstelle im Generator und was Cubegen davon übernehmen sollte. Pflegen bei jeder Generator-Version
 (neue Technik → neuer Abschnitt, geänderte Messwerte → hier ändern).
@@ -35,6 +35,7 @@ nennt die Fundstelle im Generator und was Cubegen davon übernehmen sollte. Pfle
 | Ein Unity-Start | `TestbedTestRun` | Testbett 25–30 → 12 s | Tests im selben Batch-Prozess wie der Import |
 | QA-Ergebnis-Cache | `JobContext.cached_qa()` | Standardlauf 121 → 51 s | Prüfergebnisse nach Eingaben + Prüfcode cachen |
 | Prüfkette parallel | `scripts/check_output.sh` | Prüfungen nach dem Lauf ≈ 55 → 35 s | Unabhängige Prüfer gleichzeitig starten |
+| Render-Cache per Szenen-Abdruck | `render_still()`, `scene_digest()` | 405 von 405 Vorschaubildern aus dem Cache; eine Skin-Farbe rendert nur ihre 3 Bilder neu | Bilder nach dem cachen, was die Kamera sieht – nicht nach dem Code |
 
 ## 1. Skin = Daten
 
@@ -297,8 +298,26 @@ automatisch messen und prüfen; Unity-Prüfungen in einem Prozess bündeln.
   sechs Prozessen. Mehrere Unity-Instanzen lohnen nicht: ein Projekt ist für eine Instanz gesperrt, und der Start
   dauert länger als die Arbeit.
 
-**Für Cubegen:** Generator- und Prüfergebnisse nach ihren Eingaben cachen (inklusive Prüfcode), Hashes über kanonische
-Daten, Engine-Prüfungen gebündelt in einem Prozess, unabhängige Prüfer parallel.
+- **Render-Cache über den Szenen-Abdruck (1.13.3):** Der Schlüssel eines Bildes ist, was der Renderer sieht: sichtbare
+  Objekte (Mesh, Matrix, Pose des Rigs), ihre Materialien als Knotengraph mit allen Werten, Bilddateien nach Inhalt,
+  aktive Kamera, Lichter, Welt, Compositor, Render-Einstellungen. So trifft der Cache auch nach Code-Änderungen, die
+  das Bild nicht berühren, und eine geänderte Skin-Farbe rendert nur deren drei Bilder neu. Gefundene Fallen:
+  - Alle eingebetteten Materialbäume heißen „Shader Nodetree“ – ein Schutz gegen Doppelzählung über den Namen
+    übersprang alle Materialien außer dem ersten und gab vier verschiedenen Bildern denselben Schlüssel (falsche
+    Treffer). Bäume nach Identität (`as_pointer()`) unterscheiden.
+  - `matrix_world` frisch bewegter Lichter und Kameras ist veraltet, bis der Depsgraph läuft
+    (`view_layer.update()` vor dem Abdruck).
+  - Nur wirksame Werte aufnehmen: eine Ortho-Kamera behält die Brennweite des vorigen Perspektiv-Renders, die
+    Bildnummer bleibt vom letzten Paket stehen, der Hauptprozess rendert mit 10 Threads, die Worker mit 2 – nichts
+    davon ändert das Bild, alles änderte den Schlüssel (welcher Prozess ein Bild rendert, entscheidet sich je Lauf).
+  - Posen über ihre Eingaben schlüsseln (Aktion + Bildnummer), nicht über die ausgewerteten Matrizen: die
+    unterscheiden sich zwischen Prozessen um ~1e-7 und kippen ab und zu eine Rundung.
+  - Messbar machen statt raten: nach den Korrekturen trifft der zweite Volllauf 1 460 von 1 461 Bildern, der dritte alle.
+  - Fehlersuche: `ROBOT_KEEP_WORKER_LOGS=1` behält die Worker-Logs (Treffer/Fehltreffer je Bild),
+    `ROBOT_RENDER_DIGEST_DUMP=<Teil des Dateinamens>` schreibt die Bestandteile des Abdrucks – zwei Läufe vergleichen.
+
+**Für Cubegen:** Generator- und Prüfergebnisse nach ihren Eingaben cachen (inklusive Prüfcode), Bilder nach dem
+Szenen-Abdruck, Hashes über kanonische Daten, Engine-Prüfungen gebündelt in einem Prozess, unabhängige Prüfer parallel.
 
 ## 13. Prüfen
 
@@ -327,4 +346,4 @@ Daten, Engine-Prüfungen gebündelt in einem Prozess, unabhängige Prüfer paral
 - [ ] Nachschwingen gebacken (Feder je Knochen, Loops geschlossen), Requisiten per Matrix-Kette
 - [ ] Effektmaterialien (Glas, Hologramm …) als Laufzeit-Effekt mit Zielbeschreibung; Masken für die Engine packen
 - [ ] LOD-Stufen und Kollisionsformen automatisch erzeugen und in der Engine prüfen
-- [ ] Prüfergebnisse cachen (Eingaben + Prüfcode im Schlüssel), Prüfer parallel, Engine-Prüfung in einem Prozess
+- [ ] Prüfergebnisse cachen (Eingaben + Prüfcode im Schlüssel), Bilder nach Szenen-Abdruck, Prüfer parallel, Engine-Prüfung in einem Prozess

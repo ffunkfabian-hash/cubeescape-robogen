@@ -72,6 +72,8 @@ Unity- oder Blender-Läufe anderer Agenten verfälschen sie um ein Vielfaches).
 4. `quick` zweimal: Beim zweiten Lauf müssen UV-Cache und Bake-Cache treffen (Log: „UV cache hit“, „bake cache hit“).
    QA-Ergebnisse kommen aus `cache/qa`, solange Mesh, Rig, Clip und QA-Code gleich sind („QA cache: N clip results
    reused“); nach Änderungen an der QA selbst reicht das (der Code steckt im Schlüssel), `--no-cache` prüft alles neu.
+   Vorschaubilder kommen aus `cache/render`, solange die Szene beim Rendern gleich aussieht („render cache: N images
+   reused“); Fehlersuche mit `ROBOT_KEEP_WORKER_LOGS=1` und `ROBOT_RENDER_DIGEST_DUMP` (`docs/TECHNIK.md` › 12).
 5. Sichtbare Änderungen ansehen: `Previews/skins.png`, `Previews/hero.png`, bei Animationen die Kontaktbögen.
 6. Bei Viewer-Änderungen `viewer/build.sh` und `viewer/test_viewer.sh`.
 7. Bei Änderungen an Export, Clips, Texturen, Masken oder Looks: `unity/run_testbed.sh` (eigenes Unity-Projekt, nie das

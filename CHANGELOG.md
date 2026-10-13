@@ -3,6 +3,22 @@
 Versionen des Roboter-Generators (zählen getrennt von Cube Escape und Cubegen). Jede Version hat einen Tag
 `v<Version>` und einen Release-Branch `release/<Version>`.
 
+## 1.13.3 „Spectral“ – 2026-10-13
+
+**Render-Cache:** jedes Vorschaubild (Ansichten, Skins, Karten, Typen, Ausdrücke, Icons, Gegenüberstellung,
+Kontaktbögen, GIFs) wird unter einem Abdruck der Szene beim Rendern gespeichert – sichtbare Objekte mit Geometrie,
+Matrix und Pose, Materialien als Knotengraph mit Werten, Bilddateien nach Inhalt, Kamera, Lichter, Welt, Compositor,
+Render-Einstellungen. Ohne sichtbare Änderung kommen alle 405 Bilder des Standardlaufs aus dem Cache (Standardlauf
+44 s); eine geänderte Skin-Farbe rendert genau deren drei Bilder neu.
+
+* Gefunden und behoben beim Bau: gleichnamige eingebettete Materialbäume (falsche Treffer), veraltete Weltmatrizen
+  bewegter Lichter/Kameras, unwirksame Restwerte (Brennweite einer Ortho-Kamera, Bildnummer, Thread-Zahl) im
+  Schlüssel, Posen über Aktion + Bild statt gerundeter Matrizen. Volllauf mit warmem Cache 257 → 108–115 s (bei
+  Fremdlast 21), alle 1 461 Bilder aus dem Cache.
+* Fehlersuche: `ROBOT_KEEP_WORKER_LOGS=1`, `ROBOT_RENDER_DIGEST_DUMP=<Dateiname>`; Statistik im Bericht
+  (`timings.render_cached`, `timings.rendered`), Aufräumen nach 7 Tagen wie beim QA-Cache.
+* Doku: README, AGENTS, TECHNIK.md › 12.
+
 ## 1.13.2 „Spectral“ – 2026-10-13
 
 Befunde aus dem nachgeholten Code-Review von 1.13.1 (das Review vor dem Release war ausgelassen worden):

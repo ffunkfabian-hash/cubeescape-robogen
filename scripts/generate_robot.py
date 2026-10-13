@@ -51,7 +51,7 @@ import make_textures  # noqa: E402 - ImageMagick source textures
 import export_viewer  # noqa: E402 - data for the RobotViewer app
 
 LOG = logging.getLogger("robot")
-VERSION = "1.13.2"
+VERSION = "1.13.3"
 
 # ----------------------------------------------------------------------------------------------
 # Arguments and logging
@@ -5705,10 +5705,198 @@ def rest_pose(arm_ob):
         pb.scale = (1, 1, 1)
 
 
+# Render cache (1.13.3): every preview image goes through render_still(). Its key is a fingerprint of what the render
+# sees - visible objects (mesh, transform, pose), their materials as node graphs with all values, image files by
+# content, camera, lights, world, compositor and render settings. Unchanged scene = the stored image, whatever code
+# produced the scene; a changed skin colour re-renders only its own images. --no-cache renders everything.
+RENDER_CACHE = {"dir": None, "hits": 0, "renders": 0}
+_FILE_DIGESTS = {}
+_MESH_DIGESTS = {}
+_SKIP_PROPS = {"rna_type", "filepath", "frame_path", "gi_cache_info", "name_full", "session_uid", "is_evaluated",
+               "original", "users", "use_fake_user", "is_dirty", "is_missing", "is_embedded_data", "tag",
+               "is_runtime_data", "is_editmode", "is_library_indirect", "library_weak_reference", "id_type",
+               # performance only - the main process renders with all threads, the workers with two
+               "threads", "threads_mode", "use_persistent_data", "use_lock_interface", "preview_pixel_size"}
+
+
+def _rna_values(obj, out):
+    """Plain properties (numbers, flags, enums, strings) of an RNA struct, in a stable order."""
+    for p in obj.bl_rna.properties:
+        ident = p.identifier
+        if ident in _SKIP_PROPS or p.type not in {"BOOLEAN", "INT", "FLOAT", "STRING", "ENUM"}:
+            continue
+        try:
+            v = getattr(obj, ident)
+        except AttributeError:
+            continue
+        if p.type == "FLOAT":
+            v = tuple(round(float(x), 5) for x in v) if getattr(p, "array_length", 0) else round(float(v), 5)
+        elif p.type in {"BOOLEAN", "INT"} and getattr(p, "array_length", 0):
+            v = tuple(v)
+        elif p.type == "ENUM" and p.is_enum_flag:
+            v = tuple(sorted(v))
+        out.append((ident, v))
+    return out
+
+
+def _file_digest(path):
+    path = bpy.path.abspath(path)
+    try:
+        st = os.stat(path)
+    except OSError:
+        return "missing:" + path
+    key = (path, st.st_mtime_ns, st.st_size)
+    if key not in _FILE_DIGESTS:
+        with open(path, "rb") as fh:
+            _FILE_DIGESTS[key] = hashlib.sha1(fh.read()).hexdigest()
+    return _FILE_DIGESTS[key]
+
+
+def _tree_digest(tree, h, seen):
+    # by identity: every material's embedded tree is called "Shader Nodetree" - a name would skip all but the first
+    if tree is None or tree.as_pointer() in seen:
+        return
+    seen.add(tree.as_pointer())
+    for nd in sorted(tree.nodes, key=lambda n: n.name):
+        h.update(repr((nd.bl_idname, nd.name, _rna_values(nd, []))).encode())
+        for sock in list(nd.inputs) + list(nd.outputs):
+            if not sock.is_linked and hasattr(sock, "default_value"):
+                v = sock.default_value
+                if isinstance(v, float):
+                    v = round(v, 5)
+                elif hasattr(v, "__len__") and not isinstance(v, str):      # vectors, colours (menus are strings)
+                    v = tuple(round(float(x), 5) for x in v)
+                h.update(repr((sock.identifier, v)).encode())
+        img = getattr(nd, "image", None)
+        if img is not None:
+            h.update(repr((img.name, img.colorspace_settings.name, img.alpha_mode,
+                           _file_digest(img.filepath) if img.filepath else img.name)).encode())
+        _tree_digest(getattr(nd, "node_tree", None), h, seen)
+    for ln in tree.links:
+        h.update(repr((ln.from_node.name, ln.from_socket.identifier, ln.to_node.name, ln.to_socket.identifier,
+                       ln.is_muted)).encode())
+
+
+def _mesh_digest(me):
+    key = (me.name, len(me.vertices), len(me.polygons))
+    if key not in _MESH_DIGESTS:           # meshes do not change after the build; memo per process
+        co = np.empty(len(me.vertices) * 3, dtype=np.float32)
+        me.vertices.foreach_get("co", co)
+        h = hashlib.sha1(co.tobytes())
+        h.update(repr(sorted(tuple(sorted(p.vertices)) for p in me.polygons)).encode())
+        _MESH_DIGESTS[key] = h.hexdigest()
+    return _MESH_DIGESTS[key]
+
+
+class _DumpHash:
+    lines = []
+
+    def update(self, b):
+        _DumpHash.lines.append(b.decode(errors="replace"))
+
+
+_ACTION_DIGESTS = {}
+
+
+def _pose_key(arm, scene):
+    """The pose by its inputs: action keys + frame (evaluated matrices differ by ~1e-7 between processes and flip
+    roundings); without an action the pose values themselves (rest pose: exact)."""
+    ad = arm.animation_data
+    if ad and ad.action:
+        act = ad.action
+        if act.name not in _ACTION_DIGESTS:
+            _ACTION_DIGESTS[act.name] = action_digest(act)
+        manual = [(pb.name, tuple(pb.location), tuple(pb.rotation_quaternion), tuple(pb.scale))
+                  for pb in arm.pose.bones if not _bone_animated(act, pb.name)]
+        return repr((act.name, _ACTION_DIGESTS[act.name], scene.frame_current, round(scene.frame_subframe, 3),
+                     hashlib.sha1(repr(manual).encode()).hexdigest()))
+    return repr([(pb.name, tuple(round(x, 5) for x in (*pb.location, *pb.rotation_quaternion, *pb.scale)))
+                 for pb in arm.pose.bones])
+
+
+_ANIMATED_BONES = {}
+
+
+def _bone_animated(act, bone):
+    if act.name not in _ANIMATED_BONES:
+        names = set()
+        for slot in act.slots:
+            cb = anim_utils.action_get_channelbag_for_slot(act, slot)
+            for fc in (cb.fcurves if cb else []):
+                if fc.data_path.startswith('pose.bones["'):
+                    names.add(fc.data_path.split('"')[1])
+        _ANIMATED_BONES[act.name] = names
+    return bone in _ANIMATED_BONES[act.name]
+
+
+def scene_digest(scene, h=None):
+    h = h or hashlib.sha1()
+    bpy.context.view_layer.update()        # matrix_world of moved lights/cameras is stale until the depsgraph runs
+    for part in (scene.render, scene.render.image_settings, scene.eevee, scene.view_settings, scene.display_settings):
+        h.update(repr(_rna_values(part, [])).encode())
+    # no frame number: what a frame shows is the pose (below); stills keep whatever frame the last package left
+    h.update(repr(scene.camera.name if scene.camera else None).encode())
+    seen = set()
+    _tree_digest(scene.world.node_tree if scene.world else None, h, seen)
+    if scene.render.use_compositing:
+        _tree_digest(getattr(scene, "compositing_node_group", None), h, seen)
+    poses = {}
+    for ob in sorted(scene.objects, key=lambda o: o.name):
+        hidden = ob.hide_render or any(c.hide_render for c in ob.users_collection)
+        h.update(repr((ob.name, hidden)).encode())
+        if hidden:
+            continue
+        h.update(repr((ob.type, tuple(round(x, 5) for row in ob.matrix_world for x in row))).encode())
+        if ob.type == "MESH":
+            h.update(_mesh_digest(ob.data).encode())
+            h.update(repr([(m.type, getattr(m, "object", None) and m.object.name) for m in ob.modifiers]).encode())
+            arm = next((m.object for m in ob.modifiers if m.type == "ARMATURE" and m.object), None)
+            if arm is not None:
+                if arm.name not in poses:
+                    poses[arm.name] = _pose_key(arm, scene)
+                h.update(poses[arm.name].encode())
+            for slot in ob.material_slots:
+                if slot.material:
+                    _tree_digest(slot.material.node_tree, h, seen)
+                    h.update(repr(_rna_values(slot.material, [])).encode())
+        elif ob.type == "LIGHT":
+            h.update(repr(_rna_values(ob.data, [])).encode())
+        elif ob.type == "CAMERA" and ob == scene.camera:    # only what the camera type uses (ortho keeps a stale lens)
+            c = ob.data
+            optics = (round(c.ortho_scale, 5),) if c.type == "ORTHO" else \
+                (round(c.lens, 5), round(c.sensor_width, 5), round(c.sensor_height, 5), c.sensor_fit)
+            h.update(repr((c.type, optics, round(c.shift_x, 5), round(c.shift_y, 5), round(c.clip_start, 5),
+                           round(c.clip_end, 5), c.dof.use_dof)).encode())
+    return h.hexdigest() if hasattr(h, "hexdigest") else None
+
+
 def render_still(path):
     scene = bpy.context.scene
     scene.render.filepath = path
+    folder = RENDER_CACHE["dir"]
+    if folder:
+        key = scene_digest(scene) + os.path.splitext(path)[1]
+        cached = os.path.join(folder, key)
+        hit = os.path.exists(cached)
+        dump = os.environ.get("ROBOT_RENDER_DIGEST_DUMP")      # debugging: write the fingerprint parts of one image
+        if dump and dump in os.path.basename(path):
+            _DumpHash.lines = []
+            scene_digest(scene, _DumpHash())
+            with open(os.path.join(folder, "dump_%s_%d.txt" % (os.path.basename(path), os.getpid())), "w") as fh:
+                fh.write("\n".join(_DumpHash.lines))
+        LOG.debug("render cache %s %s %s", "hit" if hit else "miss", key[:12], os.path.basename(path))
+        if hit:
+            shutil.copyfile(cached, path)
+            os.utime(cached)
+            RENDER_CACHE["hits"] += 1
+            return path
     bpy.ops.render.render(write_still=True)
+    RENDER_CACHE["renders"] += 1
+    if folder:
+        os.makedirs(folder, exist_ok=True)
+        tmp = "%s.%d.tmp" % (cached, os.getpid())
+        shutil.copyfile(path, tmp)
+        os.replace(tmp, cached)
     return path
 
 
@@ -6805,7 +6993,8 @@ def wait_workers(procs):
             raise RuntimeError("worker %d failed (exit %s), log: %s" % (i, code, log))
         with open(os.path.join(wdir, "worker.json"), encoding="utf-8") as fh:
             stats["worker_%d" % i] = json.load(fh)
-        shutil.rmtree(wdir, ignore_errors=True)
+        if not os.environ.get("ROBOT_KEEP_WORKER_LOGS"):        # debugging: keep logs/worker_<n>
+            shutil.rmtree(wdir, ignore_errors=True)
     return stats
 
 
@@ -6949,10 +7138,13 @@ def main():
             unwrap(list(part_objs.values()), cache_dir, read=not args.no_cache)
 
     queue, procs = None, []
+    if not args.no_cache:
+        RENDER_CACHE["dir"] = os.path.join(args.src_dir or out, "cache", "render")
     if not worker and args.stage == "full" and not args.no_cache:
-        pruned = prune_qa_cache(os.path.join(out, "cache", "qa"))
-        if pruned:
-            LOG.info("  QA cache: removed %d results unused for %d days", pruned, QA_CACHE_DAYS)
+        for kind in ("qa", "render"):
+            pruned = prune_qa_cache(os.path.join(out, "cache", kind))
+            if pruned:
+                LOG.info("  %s cache: removed %d entries unused for %d days", kind, pruned, QA_CACHE_DAYS)
     if not worker and args.stage == "full":
         only = set(filter(None, args.qa_types.split(",")))
         type_names = [t for t in ROBOT_TYPES if t != "Classic" and (not only or t in only)]
@@ -7026,7 +7218,8 @@ def main():
         count, busy = JobQueue(args.worker_queue).work(ctx, args.worker_lanes.split(","), "w%s" % args.worker_id)
         with open(os.path.join(out, "worker.json"), "w", encoding="utf-8") as fh:
             json.dump({"lanes": args.worker_lanes, "ready": round(ready, 1), "packages": count, "busy": round(busy, 1),
-                       "total": round(time.time() - t_start, 1), "qa_cached": ctx.qa_hits}, fh)
+                       "total": round(time.time() - t_start, 1), "qa_cached": ctx.qa_hits,
+                       "render_cached": RENDER_CACHE["hits"], "rendered": RENDER_CACHE["renders"]}, fh)
         LOG.info("worker done: %d packages in %.1f s", count, busy)
         return 0
     write_animation_table(out)
@@ -7078,7 +7271,8 @@ def main():
         LOG.info("  main process: %d packages in %.1f s", count, busy)
     with Step("wait for workers"):
         worker_stats = wait_workers(procs)
-        worker_stats["main"] = {"packages": count, "busy": round(busy, 1), "qa_cached": ctx.qa_hits}
+        worker_stats["main"] = {"packages": count, "busy": round(busy, 1), "qa_cached": ctx.qa_hits,
+                                "render_cached": RENDER_CACHE["hits"], "rendered": RENDER_CACHE["renders"]}
         results = queue.results()
     exported = {}
     for job, res in results:
@@ -7122,7 +7316,9 @@ def main():
     report["timings"] = {"steps": dict(STEP_TIMES), "total": round(total, 1), "budget": args.budget,
                          "load": {"start": load[0], "end": load[1], "cores": os.cpu_count()},
                          "packages": {k: round(v, 1) for k, v in kinds.items()}, "workers": worker_stats,
-                         "qa_cached": sum(w.get("qa_cached", 0) for w in worker_stats.values())}
+                         "qa_cached": sum(w.get("qa_cached", 0) for w in worker_stats.values()),
+                         "render_cached": sum(w.get("render_cached", 0) for w in worker_stats.values()),
+                         "rendered": sum(w.get("rendered", 0) for w in worker_stats.values())}
     write_report(out, report)
     slow = sorted(STEP_TIMES.items(), key=lambda kv: -kv[1])[:4]
     LOG.log(logging.WARNING if total > args.budget else logging.INFO, "time: %.0f s (tier %s, budget %d s)%s - "
@@ -7132,6 +7328,9 @@ def main():
     LOG.log(logging.WARNING if busy else logging.INFO, "  system load %.1f at the start (%.1f at the end) on %d cores%s",
             load[0], load[1], os.cpu_count(), " - other processes were running, times are not comparable" if busy else "")
     LOG.info("  work packages (process seconds): %s", ", ".join("%s %.0f" % kv for kv in sorted(kinds.items())))
+    if report["timings"]["render_cached"]:
+        LOG.info("  render cache: %d images reused, %d rendered (cache/render)", report["timings"]["render_cached"],
+                 report["timings"]["rendered"])
     if report["timings"]["qa_cached"]:
         LOG.info("  QA cache: %d clip results reused (cache/qa; --no-cache checks everything again)",
                  report["timings"]["qa_cached"])

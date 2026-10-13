@@ -99,6 +99,10 @@ Hauptprozess (gleiches Ergebnis).
   Gegenüberstellung, Kontaktbögen) in einem Thread-Pool; `scripts/check_output.sh` prüft Verify, Viewer und Unity
   gleichzeitig; der Viewer kompiliert nur bei geänderten Quellen (beide Architekturen parallel), die Round-Trip-Tests
   laufen zu sechst; das Unity-Testpaket braucht einen Unity-Start (siehe Unity-Testpaket).
+- **Render-Cache (1.13.3):** jedes Vorschaubild wird unter einem Abdruck dessen gespeichert, was die Kamera sieht
+  (Objekte, Pose, Materialwerte, Texturinhalte, Licht, Kamera, Einstellungen) – unveränderte Bilder kommen aus
+  `cache/render`, auch wenn sich Generator-Code geändert hat; eine geänderte Skin-Farbe rendert nur deren Bilder neu.
+  Ungenutzte Einträge (QA wie Render) werden nach 7 Tagen gelöscht, `--no-cache` rendert alles.
 
 - **Skins werden nicht einzeln gebacken.** Jede Körperfarbe hängt linear von der Palette ab: eine Konstante plus
   eine Graustufen-Gewichtskarte je Palettenfarbe. Sechs Backs liefern diese Ebenen, jeder Skin entsteht daraus per

@@ -5716,7 +5716,9 @@ _SKIP_PROPS = {"rna_type", "filepath", "frame_path", "gi_cache_info", "name_full
                "original", "users", "use_fake_user", "is_dirty", "is_missing", "is_embedded_data", "tag",
                "is_runtime_data", "is_editmode", "is_library_indirect", "library_weak_reference", "id_type",
                # performance only - the main process renders with all threads, the workers with two
-               "threads", "threads_mode", "use_persistent_data", "use_lock_interface", "preview_pixel_size"}
+               "threads", "threads_mode", "use_persistent_data", "use_lock_interface", "preview_pixel_size",
+               # per-process identifiers and UI state of modifiers/nodes
+               "persistent_uid", "is_active", "show_expanded", "is_override_data", "use_pin_to_last", "select"}
 
 
 def _rna_values(obj, out):
@@ -5769,8 +5771,13 @@ def _tree_digest(tree, h, seen):
                 h.update(repr((sock.identifier, v)).encode())
         img = getattr(nd, "image", None)
         if img is not None:
-            h.update(repr((img.name, img.colorspace_settings.name, img.alpha_mode,
-                           _file_digest(img.filepath) if img.filepath else img.name)).encode())
+            if img.filepath:
+                content = _file_digest(img.filepath)
+            else:                               # generated in memory: its pixels are the content
+                px = np.empty(img.size[0] * img.size[1] * img.channels, dtype=np.float32)
+                img.pixels.foreach_get(px)
+                content = hashlib.sha1(px.tobytes()).hexdigest()
+            h.update(repr((img.colorspace_settings.name, img.alpha_mode, tuple(img.size), content)).encode())
         _tree_digest(getattr(nd, "node_tree", None), h, seen)
     for ln in tree.links:
         h.update(repr((ln.from_node.name, ln.from_socket.identifier, ln.to_node.name, ln.to_socket.identifier,
@@ -5778,14 +5785,15 @@ def _tree_digest(tree, h, seen):
 
 
 def _mesh_digest(me):
-    key = (me.name, len(me.vertices), len(me.polygons))
-    if key not in _MESH_DIGESTS:           # meshes do not change after the build; memo per process
-        co = np.empty(len(me.vertices) * 3, dtype=np.float32)
-        me.vertices.foreach_get("co", co)
-        h = hashlib.sha1(co.tobytes())
-        h.update(repr(sorted(tuple(sorted(p.vertices)) for p in me.polygons)).encode())
-        _MESH_DIGESTS[key] = h.hexdigest()
-    return _MESH_DIGESTS[key]
+    """Coordinates every time (cheap, catches in-place edits); the canonical face list memoised per datablock."""
+    key = (me.as_pointer(), len(me.vertices), len(me.polygons))
+    if key not in _MESH_DIGESTS:
+        _MESH_DIGESTS[key] = hashlib.sha1(repr(sorted(tuple(sorted(p.vertices)) for p in me.polygons)).encode())
+    co = np.empty(len(me.vertices) * 3, dtype=np.float32)
+    me.vertices.foreach_get("co", co)
+    h = _MESH_DIGESTS[key].copy()
+    h.update(co.tobytes())
+    return h.hexdigest()
 
 
 class _DumpHash:
@@ -5849,7 +5857,8 @@ def scene_digest(scene, h=None):
         h.update(repr((ob.type, tuple(round(x, 5) for row in ob.matrix_world for x in row))).encode())
         if ob.type == "MESH":
             h.update(_mesh_digest(ob.data).encode())
-            h.update(repr([(m.type, getattr(m, "object", None) and m.object.name) for m in ob.modifiers]).encode())
+            h.update(repr([(m.type, getattr(m, "object", None) and m.object.name, _rna_values(m, []))
+                           for m in ob.modifiers]).encode())
             arm = next((m.object for m in ob.modifiers if m.type == "ARMATURE" and m.object), None)
             if arm is not None:
                 if arm.name not in poses:
@@ -5866,7 +5875,9 @@ def scene_digest(scene, h=None):
             optics = (round(c.ortho_scale, 5),) if c.type == "ORTHO" else \
                 (round(c.lens, 5), round(c.sensor_width, 5), round(c.sensor_height, 5), c.sensor_fit)
             h.update(repr((c.type, optics, round(c.shift_x, 5), round(c.shift_y, 5), round(c.clip_start, 5),
-                           round(c.clip_end, 5), c.dof.use_dof)).encode())
+                           round(c.clip_end, 5), c.dof.use_dof,
+                           (round(c.dof.focus_distance, 5), round(c.dof.aperture_fstop, 5),
+                            c.dof.focus_object.name if c.dof.focus_object else None) if c.dof.use_dof else None)).encode())
     return h.hexdigest() if hasattr(h, "hexdigest") else None
 
 
@@ -6949,6 +6960,7 @@ def run_job(ctx, job):
     if kind == "cards":
         return render_cards(cam, ctx.part_objs, ctx.robot_mesh, ctx.preview_dir, ctx.tex_dir, job["items"])
     if kind == "icons":
+        rest_pose(ctx.arm_ob)      # the antenna rides on a spring bone: no leftover clip pose of an earlier package
         return render_accessory_icons(cam, ctx.part_objs, ctx.preview_dir, ctx.tex_dir)
     if kind == "compare":
         tiles = render_compare(cam, ctx.robot_mesh, ctx.preview_dir, os.path.join(ctx.preview_dir, ".compare"))
@@ -6974,6 +6986,8 @@ def start_workers(first, n, lanes, args, out, queue, textures=None):
                "--python", os.path.abspath(__file__), "--", "--tier", args.tier, "--out", wdir, "--src-dir", out,
                "--worker-queue", queue.path, "--worker-lanes", ",".join(lanes), "--worker-id", str(i)]
         cmd += ["--use-textures", textures, "--uv-cache", os.path.join(out, "cache")] if textures else ["--skip-bake"]
+        if args.no_cache:
+            cmd += ["--no-cache"]           # the workers would otherwise reuse cache/qa and cache/render
         if args.groups:
             cmd += ["--groups", args.groups]
         # niced: the main process's own steps (clip data, export) are the critical path while the workers run

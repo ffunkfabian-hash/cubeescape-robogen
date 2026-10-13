@@ -15,6 +15,11 @@ Render-Einstellungen. Ohne sichtbare Änderung kommen alle 405 Bilder des Standa
   bewegter Lichter/Kameras, unwirksame Restwerte (Brennweite einer Ortho-Kamera, Bildnummer, Thread-Zahl) im
   Schlüssel, Posen über Aktion + Bild statt gerundeter Matrizen. Volllauf mit warmem Cache 257 → 108–115 s (bei
   Fremdlast 21), alle 1 461 Bilder aus dem Cache.
+* Code-Review vor dem Release: Worker beachten `--no-cache`, Geometrie wird bei jedem Abdruck neu gelesen (keine
+  veralteten Netze), Modifikatoren mit allen Einstellungen, Bilder ohne Datei nach Pixelinhalt, Schärfentiefe der
+  Kamera, flüchtige Editor-Werte (Auswahl, aufgeklappt, Pin) nicht mehr im Schlüssel.
+* Der Cache deckte eine echte Unschärfe auf: das Icon der Antenne zeigte die Federpose des Clips, den der Worker
+  zuvor bearbeitet hatte. Icons entstehen jetzt in der Ruhepose und sind damit reproduzierbar.
 * Fehlersuche: `ROBOT_KEEP_WORKER_LOGS=1`, `ROBOT_RENDER_DIGEST_DUMP=<Dateiname>`; Statistik im Bericht
   (`timings.render_cached`, `timings.rendered`), Aufräumen nach 7 Tagen wie beim QA-Cache.
 * Doku: README, AGENTS, TECHNIK.md › 12.

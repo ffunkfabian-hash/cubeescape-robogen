@@ -101,6 +101,8 @@ Abzeichen und Ruckeln behoben.
 Skizze, Regenbogen, Galaxie als Laufzeit-Effekte (Vorschau und Viewer, je eine URP-Beschreibung), 71 Skins (9 neue),
 Look-Format 5. Dazu: LOD1/LOD2, Treffer-Kapseln, Servo-Ereignisse, Masken für Unity gepackt, Unity-Testpaket in einem
 Start (12 s), Skills `rg-unity-testbed` und `rg-unity-integration`.
+1.13.1–1.13.3: Prüfungen parallel (`check_output.sh`), QA-Cache und Render-Cache – mit warmem Cache Standardlauf
+etwa 45 s, Volllauf 90–115 s statt rund 7 Minuten; eine sichtbare Änderung rendert nur ihre eigenen Bilder neu.
 
 ## Spiel-Versionen
 

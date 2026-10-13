@@ -16,7 +16,7 @@ mkdir -p "$BUILD"
 
 MIN_MACOS=13.0
 # unchanged sources and compiler = no compile (the binary does not depend on the generator data)
-STAMP="$(cat "$HERE"/Sources/*.swift | shasum | cut -c1-16)-$(swiftc --version 2>&1 | shasum | cut -c1-8)-$MIN_MACOS"
+STAMP="$(cat "$HERE"/Sources/*.swift "$0" | shasum | cut -c1-16)-$(swiftc --version 2>&1 | shasum | cut -c1-8)-$MIN_MACOS"   # sources + this script (flags)
 if [ -f "$BUILD/RobotViewer" ] && [ "$(cat "$BUILD/sources.stamp" 2>/dev/null)" = "$STAMP" ]; then
   echo "> sources unchanged - reusing the compiled viewer"
 else

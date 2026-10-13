@@ -24,7 +24,8 @@ wait
 
 fail=0
 for name in verify viewer unity; do
-  read -r code secs < "$LOGS/$name.status"
+  code=99; secs="?"
+  [ -f "$LOGS/$name.status" ] && read -r code secs < "$LOGS/$name.status"     # missing = the process died
   case $name in
     verify) summary=$(grep -E "checks passed" "$LOGS/$name.log" | tail -1) ;;
     viewer) summary="$(grep -c '^PASS' "$LOGS/$name.log") PASS, $(grep -c '^FAIL' "$LOGS/$name.log") FAIL" ;;

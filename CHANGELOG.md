@@ -3,6 +3,16 @@
 Versionen des Roboter-Generators (zählen getrennt von Cube Escape und Cubegen). Jede Version hat einen Tag
 `v<Version>` und einen Release-Branch `release/<Version>`.
 
+## 1.13.2 „Spectral“ – 2026-10-13
+
+Befunde aus dem nachgeholten Code-Review von 1.13.1 (das Review vor dem Release war ausgelassen worden):
+
+* Viewer-Tests: Round-Trip-Pfade mit Leerzeichen (z. B. unter „Cube Escape“) werden nicht mehr zerlegt.
+* Viewer-Build: der Stempel enthält `build.sh` selbst – geänderte Compiler-Schalter kompilieren neu.
+* QA-Cache: genutzte Ergebnisse werden aufgefrischt, seit 7 Tagen ungenutzte gelöscht (jede Modelländerung legte
+  bisher dauerhaft ~1 700 neue Dateien an).
+* `check_output.sh`: stirbt ein Prüfprozess ohne Status, meldet die Zusammenfassung FAIL statt abzubrechen.
+
 ## 1.13.1 „Spectral“ – 2026-10-13
 
 Testzeit: Standardlauf 121 → 51 s, Prüfungen danach parallel (≈ 55 → 35 s). Modell, QA-Werte und Ausgaben unverändert.

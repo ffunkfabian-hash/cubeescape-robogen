@@ -51,7 +51,7 @@ import make_textures  # noqa: E402 - ImageMagick source textures
 import export_viewer  # noqa: E402 - data for the RobotViewer app
 
 LOG = logging.getLogger("robot")
-VERSION = "1.13.1"
+VERSION = "1.13.2"
 
 # ----------------------------------------------------------------------------------------------
 # Arguments and logging
@@ -6617,6 +6617,20 @@ def action_digest(act):
     return h.hexdigest()
 
 
+QA_CACHE_DAYS = 7
+
+
+def prune_qa_cache(folder):
+    """Removes cached QA results nobody used for QA_CACHE_DAYS (every model change starts a new generation)."""
+    if not os.path.isdir(folder):
+        return 0
+    limit = time.time() - QA_CACHE_DAYS * 86400
+    old = [f for f in os.scandir(folder) if f.is_file() and f.stat().st_mtime < limit]
+    for f in old:
+        os.remove(f.path)
+    return len(old)
+
+
 def write_json_atomic(path, data):
     tmp = "%s.%d.tmp" % (path, os.getpid())
     with open(tmp, "w", encoding="utf-8") as fh:
@@ -6662,6 +6676,7 @@ class JobContext:
             if os.path.exists(paths[c]):
                 with open(paths[c], encoding="utf-8") as fh:
                     found[c] = json.load(fh)
+                os.utime(paths[c])          # used: survives prune_qa_cache
         missing = [c for c in clips if c not in found]
         if not missing and os.path.exists(rest_path):
             with open(rest_path, encoding="utf-8") as fh:
@@ -6934,6 +6949,10 @@ def main():
             unwrap(list(part_objs.values()), cache_dir, read=not args.no_cache)
 
     queue, procs = None, []
+    if not worker and args.stage == "full" and not args.no_cache:
+        pruned = prune_qa_cache(os.path.join(out, "cache", "qa"))
+        if pruned:
+            LOG.info("  QA cache: removed %d results unused for %d days", pruned, QA_CACHE_DAYS)
     if not worker and args.stage == "full":
         only = set(filter(None, args.qa_types.split(",")))
         type_names = [t for t in ROBOT_TYPES if t != "Classic" and (not only or t in only)]

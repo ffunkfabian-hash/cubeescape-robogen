@@ -95,7 +95,7 @@ look="$1"; name="$(basename "$look" .robotlook.json)"
 python3 -c "import json,sys; a=json.load(open(sys.argv[1])); b=json.load(open(sys.argv[2])); assert a==b, set(k for k in a if a[k]!=b.get(k))" "$look" "$TMP/$name.json" > "$TMP/$name.err" 2>&1
 echo $? > "$TMP/$name.rt"
 SH
-ls "$OUT"/Looks/*.robotlook.json | xargs -P 6 -n 1 bash "$TMP/roundtrip.sh"
+printf '%s\0' "$OUT"/Looks/*.robotlook.json | xargs -0 -P 6 -n 1 bash "$TMP/roundtrip.sh"   # paths may hold spaces
 for look in "$OUT"/Looks/*.robotlook.json; do
   name="$(basename "$look" .robotlook.json)"
   if [ "$(cat "$TMP/$name.rt" 2>/dev/null)" = 0 ]; then ok "round trip $name"; else cat "$TMP/$name.err" 2>/dev/null; bad "round trip $name"; fi

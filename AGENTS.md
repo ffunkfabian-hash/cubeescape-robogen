@@ -67,9 +67,11 @@ Unity- oder Blender-Läufe anderer Agenten verfälschen sie um ein Vielfaches).
 1. Vor der Änderung den `robot_report.json` der betroffenen Stufe sichern.
 2. Stufe(n) laufen lassen; `qa` (und `clips`, `type_bounds`) gegen den gesicherten Bericht vergleichen. Ohne
    gewollte Modelländerung müssen sie **identisch** sein; gewollte Änderungen im Bericht benennen.
-3. Auf dem Volllauf: `Blender -b output/CubeEscape_Robot.blend --python-exit-code 1 --python scripts/verify_robot.py -- --out output`
-   (alle Prüfungen grün).
+3. Auf dem Volllauf: `scripts/check_output.sh` (Ausgabe als Argument, Standard `output`) – `verify_robot.py`,
+   Viewer-Build und -Tests und Unity-Testpaket **gleichzeitig**; alle grün. Einzeln wie in 6 und 7.
 4. `quick` zweimal: Beim zweiten Lauf müssen UV-Cache und Bake-Cache treffen (Log: „UV cache hit“, „bake cache hit“).
+   QA-Ergebnisse kommen aus `cache/qa`, solange Mesh, Rig, Clip und QA-Code gleich sind („QA cache: N clip results
+   reused“); nach Änderungen an der QA selbst reicht das (der Code steckt im Schlüssel), `--no-cache` prüft alles neu.
 5. Sichtbare Änderungen ansehen: `Previews/skins.png`, `Previews/hero.png`, bei Animationen die Kontaktbögen.
 6. Bei Viewer-Änderungen `viewer/build.sh` und `viewer/test_viewer.sh`.
 7. Bei Änderungen an Export, Clips, Texturen, Masken oder Looks: `unity/run_testbed.sh` (eigenes Unity-Projekt, nie das

@@ -3,6 +3,20 @@
 Versionen des Roboter-Generators (zählen getrennt von Cube Escape und Cubegen). Jede Version hat einen Tag
 `v<Version>` und einen Release-Branch `release/<Version>`.
 
+## 1.13.1 „Spectral“ – 2026-10-13
+
+Testzeit: Standardlauf 121 → 51 s, Prüfungen danach parallel (≈ 55 → 35 s). Modell, QA-Werte und Ausgaben unverändert.
+
+* **QA-Cache** (`cache/qa`): Ergebnisse je Typ und Clip werden wiederverwendet, solange Mesh, Rig, Clip-Schlüssel und
+  QA-Code gleich sind (Quelltext der QA-Funktionen im Schlüssel); `--no-cache` prüft alles neu. Mesh-Hash über eine
+  kanonische Topologie (die Schleifen-Startpunkte der Flächen unterscheiden sich zwischen Blender-Prozessen).
+* **Typ-FBX und LODs** als parallele Arbeitspakete der Render-Worker statt nacheinander im Hauptprozess.
+* **Bögen** (Icons, Skin-Bogen, Gegenüberstellung, Kontaktbögen) in einem gemeinsamen Thread-Pool.
+* **`scripts/check_output.sh`:** `verify_robot.py`, Viewer-Build und -Tests und Unity-Testpaket gleichzeitig.
+* **Viewer:** kompiliert nur bei geänderten Quellen (beide Architekturen parallel, 16 → 9 s kalt, 0,2 s ohne
+  Änderung), App-Icon nur bei geändertem Kopf-Bild; Round-Trip-Tests mit sechs Prozessen (Tests 14,5 → 8,4 s).
+* Doku: README, AGENTS (Prüfablauf), Skill `rg-unity-testbed`, TECHNIK.md › 12.
+
 ## 1.13.0 „Spectral“ – 2026-10-13
 
 Spezialmaterialien, 71 Skins (9 neue: Glass, Ghost, Aurora, Rainbow – Startset –, Prism, Ice, Void, Nebula,

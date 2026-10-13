@@ -87,14 +87,18 @@ else
   ok "future look version rejected"
 fi
 
+# round trips: six viewer processes at a time (each start costs about half a second), reported in name order
+export BIN TMP
+cat > "$TMP/roundtrip.sh" <<'SH'
+look="$1"; name="$(basename "$look" .robotlook.json)"
+"$BIN" --snapshot "$TMP/$name.png" --look "$look" --save-look "$TMP/$name.json" --size 300x300 >/dev/null 2>&1 &&
+python3 -c "import json,sys; a=json.load(open(sys.argv[1])); b=json.load(open(sys.argv[2])); assert a==b, set(k for k in a if a[k]!=b.get(k))" "$look" "$TMP/$name.json" > "$TMP/$name.err" 2>&1
+echo $? > "$TMP/$name.rt"
+SH
+ls "$OUT"/Looks/*.robotlook.json | xargs -P 6 -n 1 bash "$TMP/roundtrip.sh"
 for look in "$OUT"/Looks/*.robotlook.json; do
   name="$(basename "$look" .robotlook.json)"
-  if "$BIN" --snapshot "$TMP/$name.png" --look "$look" --save-look "$TMP/$name.json" --size 300x300 >/dev/null &&
-     python3 -c "import json,sys; a=json.load(open(sys.argv[1])); b=json.load(open(sys.argv[2])); assert a==b, set(k for k in a if a[k]!=b.get(k))" "$look" "$TMP/$name.json"; then
-    ok "round trip $name"
-  else
-    bad "round trip $name"
-  fi
+  if [ "$(cat "$TMP/$name.rt" 2>/dev/null)" = 0 ]; then ok "round trip $name"; else cat "$TMP/$name.err" 2>/dev/null; bad "round trip $name"; fi
 done
 if "$BIN" --snapshot "$TMP/x.png" --anim Wave --gif "$TMP/wave.gif" --size 200x200 >/dev/null &&
    "$BIN" --snapshot "$TMP/x.png" --anim Wave --video "$TMP/wave.mp4" --size 200x200 >/dev/null &&

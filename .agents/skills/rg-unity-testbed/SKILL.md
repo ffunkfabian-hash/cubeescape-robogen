@@ -12,6 +12,7 @@ Repo verändert es nicht (`AGENTS.md`). Langform: `README.md` › Unity-Testpake
 
 ```bash
 unity/run_testbed.sh output/_standard     # Ausgabe einer Stufe; ohne Argument: output (Volllauf)
+scripts/check_output.sh output/_standard  # zusammen mit verify_robot.py und den Viewer-Tests, gleichzeitig
 ```
 
 - Unity-Version und Pfad: `unity/RobotTestbed/ProjectSettings/ProjectVersion.txt`, sonst `UNITY_EDITOR=…`.

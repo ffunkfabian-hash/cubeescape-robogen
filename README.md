@@ -50,14 +50,16 @@ raucht), 24 Robotertypen, Skin-Bogen im Stil der Konzeptbilder und UI-Icons.
 ## Neu erzeugen
 
 ```bash
-# Teststufe: quick (≈ 10 s) beim Arbeiten, standard (≈ 1 min) vor dem Commit, full (≈ 3,5 min) für den Lieferstand
+# Teststufe: quick (≈ 15 s) beim Arbeiten, standard (≈ 1 min) vor dem Commit, full (≈ 3–4 min) für den Lieferstand
 /Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup --python-exit-code 1 --python scripts/generate_robot.py -- --tier quick
+# danach alle Prüfungen gleichzeitig: verify_robot.py, Viewer bauen und testen, Unity-Testpaket (≈ 35 s)
+scripts/check_output.sh output/_quick
 ```
 
 | Stufe | Texturen | QA | Renders | Ausgabe | 1.8.0 | 1.9.0 |
 |---|---|---|---|---|---|---|
 | `quick` | 512, AO 16 Samples | Standard-Roboter, alle Clips, parallel | keine | `output/_quick` | 25 s | **10–11 s** (15 s neben laufendem Unity-Editor) |
-| `standard` | 1024, AO 32 Samples | alle 24 Typen, alle Clips, parallel | Ansichten, Skins, Ausdrücke, Typen (¼ Samples) | `output/_standard` | 133 s | **54–68 s** |
+| `standard` | 1024, AO 32 Samples | alle 24 Typen, alle Clips, parallel | Ansichten, Skins, Ausdrücke, Typen (¼ Samples) | `output/_standard` | 133 s | **54–68 s**; 1.13.1 mit QA-Cache 51 s (vorher 121 s) |
 | `full` | 2048, AO 64 Samples | alle 24 Typen, alle Clips, parallel | alles inkl. Animationsbögen und GIFs | `output` | 655 s | **211 s** |
 
 Gemessen am 12.10.2026 auf dem Apple M5 (4 Performance- + 6 Effizienzkerne, 8 GPU-Kerne), ruhige Maschine, warmer
@@ -90,6 +92,13 @@ von 2 s mehr, als er spart). QA-Worker laufen mit `-t 1`, Render-Worker mit `-t 
 Hauptprozess (gleiches Ergebnis).
 
 ### Was die Zeit spart
+
+- **Testzeit (1.13.1):** QA-Ergebnisse je Typ und Clip im Cache (`cache/qa`; Schlüssel = Mesh mit kanonischer
+  Topologie, Rig, Clip-Schlüssel, Quelltext der QA-Funktionen) – ohne Geometrie- oder Animationsänderung entfällt die
+  QA fast ganz; Typ-FBX und ihre LODs als parallele Arbeitspakete der Render-Worker; alle Bögen (Icons, Skin-Bogen,
+  Gegenüberstellung, Kontaktbögen) in einem Thread-Pool; `scripts/check_output.sh` prüft Verify, Viewer und Unity
+  gleichzeitig; der Viewer kompiliert nur bei geänderten Quellen (beide Architekturen parallel), die Round-Trip-Tests
+  laufen zu sechst; das Unity-Testpaket braucht einen Unity-Start (siehe Unity-Testpaket).
 
 - **Skins werden nicht einzeln gebacken.** Jede Körperfarbe hängt linear von der Palette ab: eine Konstante plus
   eine Graustufen-Gewichtskarte je Palettenfarbe. Sechs Backs liefern diese Ebenen, jeder Skin entsteht daraus per

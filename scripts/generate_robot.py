@@ -51,7 +51,7 @@ import make_textures  # noqa: E402 - ImageMagick source textures
 import export_viewer  # noqa: E402 - data for the RobotViewer app
 
 LOG = logging.getLogger("robot")
-VERSION = "1.13.0"
+VERSION = "1.13.1"
 
 # ----------------------------------------------------------------------------------------------
 # Arguments and logging
@@ -6505,6 +6505,10 @@ def make_jobs(type_names, actions_available, args, n_proc):
                 if name in actions_available:
                     frames = next(a.frames for a in ANIMS if a.name == name)
                     render("gif", name, -(-frames // step) * 12, clip=name, step=step)
+    # type FBX and their detail levels: packages of the render lane (those workers have the baked materials)
+    for i, names in enumerate(chunks(list(ROBOT_TYPES), 3)):
+        jobs.append({"id": "fbx:%d" % i, "lane": "render", "kind": "fbx", "types": names, "lods": args.lods,
+                     "cost": len(names) * (300 if args.lods else 100)})
     jobs.sort(key=lambda j: -j["cost"])
     return jobs
 
@@ -6564,14 +6568,113 @@ class JobQueue:
         return out
 
 
+# QA cache (1.13.1): a clip's QA result only depends on the robot type's mesh, the rig, the clip's keys and the QA code.
+# Unchanged inputs = reused result (cache/qa, one small JSON per type and clip). The key holds the source code of the
+# QA functions, so a changed check invalidates the cache by itself; --no-cache ignores it.
+QA_CODE_PARTS = ("run_qa", "qa_problem", "group_faces", "evaluated_coords", "Topology", "GroupTrees")
+
+
+def qa_code_digest():
+    h = hashlib.sha1()
+    for name in QA_CODE_PARTS:
+        h.update(inspect.getsource(globals()[name]).encode())
+    for rule in (ACCEPTED_OVERLAPS, ACCEPTED_DETACH, HIDE_HELD_ITEM):
+        h.update(repr(sorted(rule)).encode())
+    return h.hexdigest()
+
+
+def mesh_digest(ob):
+    me = ob.data
+    h = hashlib.sha1()
+    co = np.empty(len(me.vertices) * 3, dtype=np.float32)
+    me.vertices.foreach_get("co", co)
+    h.update(co.tobytes())
+    # faces as sorted vertex sets: the start of a face's loop differs between Blender processes (same surface)
+    faces = sorted(tuple(sorted(p.vertices)) for p in me.polygons)
+    h.update(repr(faces).encode())
+    h.update(repr([g.name for g in ob.vertex_groups]).encode())
+    h.update(np.array([v.groups[0].group if v.groups else -1 for v in me.vertices], dtype=np.int32).tobytes())
+    return h.hexdigest()
+
+
+def rig_digest(arm_ob):
+    h = hashlib.sha1()
+    for b in arm_ob.data.bones:
+        h.update(repr((b.name, b.parent.name if b.parent else None, tuple(b.head_local), tuple(b.tail_local),
+                       tuple(map(tuple, b.matrix_local)))).encode())
+    return h.hexdigest()
+
+
+def action_digest(act):
+    h = hashlib.sha1(repr((tuple(act.frame_range), act.use_cyclic)).encode())
+    for slot in act.slots:
+        cb = anim_utils.action_get_channelbag_for_slot(act, slot)
+        for fc in (cb.fcurves if cb else []):
+            co = np.empty(len(fc.keyframe_points) * 2, dtype=np.float32)
+            fc.keyframe_points.foreach_get("co", co)
+            h.update(("%s[%d]" % (fc.data_path, fc.array_index)).encode())
+            h.update(co.tobytes())
+    return h.hexdigest()
+
+
+def write_json_atomic(path, data):
+    tmp = "%s.%d.tmp" % (path, os.getpid())
+    with open(tmp, "w", encoding="utf-8") as fh:
+        json.dump(data, fh)
+    os.replace(tmp, path)
+
+
 class JobContext:
     """What a package needs from the built model; QA meshes and the preview scene are made on first use."""
 
-    def __init__(self, part_objs, coll, preview_coll, arm_ob, actions, robot_mesh, preview_dir, tex_dir):
+    def __init__(self, part_objs, coll, preview_coll, arm_ob, actions, robot_mesh, preview_dir, tex_dir,
+                 qa_cache=None, export_dir=None):
         self.part_objs, self.coll, self.preview_coll = part_objs, coll, preview_coll
         self.arm_ob, self.actions, self.robot_mesh = arm_ob, actions, robot_mesh
         self.preview_dir, self.tex_dir = preview_dir, tex_dir
         self.qa_meshes = {}
+        self.qa_cache = qa_cache            # folder or None
+        self.qa_keys = {}                   # type -> digest of QA code, rig and type mesh
+        self.action_keys = {}               # clip -> digest of its keys
+        self.qa_hits = 0
+        self.export_dir = export_dir        # the main output folder (type FBX packages)
+
+    def qa_key(self, tname):
+        if tname not in self.qa_keys:
+            if "code" not in self.qa_keys:
+                self.qa_keys["code"] = qa_code_digest() + rig_digest(self.arm_ob)
+            ob = self.qa_mesh(tname)
+            self.qa_keys[tname] = hashlib.sha1((self.qa_keys["code"] + mesh_digest(ob)).encode()).hexdigest()[:20]
+        return self.qa_keys[tname]
+
+    def cached_qa(self, tname, clips):
+        """QA of clips with the cache: only the clips without a stored result are run."""
+        if not self.qa_cache:
+            return run_qa(self.qa_mesh(tname), self.arm_ob, self.actions, tname, quiet=True, clips=clips)
+        os.makedirs(self.qa_cache, exist_ok=True)
+        key = self.qa_key(tname)
+        rest_path = os.path.join(self.qa_cache, "%s_rest.json" % key)
+        paths, found = {}, {}
+        for c in clips:
+            if c not in self.action_keys:
+                self.action_keys[c] = action_digest(self.actions[c])[:16]
+            paths[c] = os.path.join(self.qa_cache, "%s_%s_%s.json" % (key, c, self.action_keys[c]))
+            if os.path.exists(paths[c]):
+                with open(paths[c], encoding="utf-8") as fh:
+                    found[c] = json.load(fh)
+        missing = [c for c in clips if c not in found]
+        if not missing and os.path.exists(rest_path):
+            with open(rest_path, encoding="utf-8") as fh:
+                res = json.load(fh)
+        else:
+            res = run_qa(self.qa_mesh(tname), self.arm_ob, self.actions, tname, quiet=True, clips=missing)
+            write_json_atomic(rest_path, {"rest_min_z": res["rest_min_z"], "rest_height": res["rest_height"]})
+            for c in missing:
+                write_json_atomic(paths[c], res["actions"][c])
+        self.qa_hits += len(found)
+        actions = dict(found)
+        actions.update(res.get("actions", {}))
+        return {"rest_min_z": res["rest_min_z"], "rest_height": res["rest_height"], "actions": actions}
 
     def camera(self):
         cam = bpy.data.objects.get("Preview_Camera") or setup_render_scene(self.preview_coll)
@@ -6602,10 +6705,31 @@ class JobContext:
         show_tool(False)
 
 
+def export_type_fbx(ctx, names, lods):
+    """Types/CubeEscape_Robot_<Type>.fbx (+ LOD) for some robot types; returns their triangle and material counts."""
+    type_dir = os.path.join(ctx.export_dir, "Types")
+    os.makedirs(type_dir, exist_ok=True)
+    out = {}
+    for tname in names:
+        cfg = default_config()
+        cfg.update(ROBOT_TYPES[tname]["variants"])
+        tmp = combine_objects([ctx.part_objs[g] for g in config_groups(cfg)], "Robot_Mesh_" + tname, ctx.coll)
+        bind_mesh(tmp, ctx.arm_ob)
+        set_look(tmp, ctx.tex_dir)          # render packages may have left another skin on the shared materials
+        path = os.path.join(type_dir, "CubeEscape_Robot_%s.fbx" % tname)
+        export_fbx(path, [tmp], ctx.arm_ob, animations=False)
+        out[tname] = {"triangles": tri_count(tmp.data), "materials": len(tmp.data.materials),
+                      "lods": export_lods(path, tmp, ctx.coll, ctx.arm_ob) if lods else None}
+        bpy.data.objects.remove(tmp, do_unlink=True)
+    return out
+
+
 def run_job(ctx, job):
     kind = job["kind"]
     if kind == "qa":
-        return run_qa(ctx.qa_mesh(job["type"]), ctx.arm_ob, ctx.actions, job["type"], quiet=True, clips=job["clips"])
+        return ctx.cached_qa(job["type"], job["clips"])
+    if kind == "fbx":
+        return export_type_fbx(ctx, job["types"], job["lods"])
     cam = ctx.camera()
     preview_quality(kind in EXACT_JOBS)
     show_tool(kind == "sheet" and job["clip"] in TOOL_CLIPS)
@@ -6719,8 +6843,9 @@ def finish_previews(results, preview_dir, report, tex_dir):
             name = {"skins": "skins", "types": "types", "expressions": "expressions"}[kind]
             sheet = os.path.join(preview_dir, "%s%s.png" % (name, "" if view == "front" else "_iso"))
             sheets.append(([(n, tiles[(kind, view)][n]) for n in names], sheet, 18 if kind == "expressions" else 22))
-    with concurrent.futures.ThreadPoolExecutor(max_workers=len(sheets) or 1) as pool:
-        list(pool.map(lambda t: montage_sheet(*t), sheets))
+    # every sheet is independent ImageMagick work (MAGICK_THREAD_LIMIT=1): one pool runs them side by side
+    tasks = [(montage_sheet, t) for t in sheets]
+    icons = None
     if by_kind["cards"]:
         cards = {}
         for _, res in by_kind["cards"]:
@@ -6728,13 +6853,22 @@ def finish_previews(results, preview_dir, report, tex_dir):
         acc = {}
         for _, res in by_kind["icons"]:
             acc.update(res)
-        report["icons"], report["icon_hints"] = build_icons(cards, acc, os.path.dirname(preview_dir), tex_dir)
-        build_skin_sheet(cards, preview_dir)
+        def icons_then_sheet():         # the skin sheet deletes the card renders the icons are cut from
+            res = build_icons(cards, acc, os.path.dirname(preview_dir), tex_dir)
+            build_skin_sheet(cards, preview_dir)
+            return res
+        icons = (icons_then_sheet, ())
+        tasks.append(icons)
     for _, res in by_kind["compare"]:          # the weathering comparison: 5 layers x 3 amounts, materials, wear
-        montage_sheet([tuple(t) for t in res], os.path.join(preview_dir, "weathering.png"), 18)
-        shutil.rmtree(os.path.join(preview_dir, ".compare"), ignore_errors=True)
+        tasks.append((montage_sheet, ([tuple(t) for t in res], os.path.join(preview_dir, "weathering.png"), 18)))
     if by_kind["sheet"]:
-        build_contact_sheets({job["clip"]: rows for job, rows in by_kind["sheet"]}, preview_dir)
+        tasks.append((build_contact_sheets, ({job["clip"]: rows for job, rows in by_kind["sheet"]}, preview_dir)))
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, min(8, len(tasks)))) as pool:
+        futures = [pool.submit(fn, *a) for fn, a in tasks]
+        done = [f.result() for f in futures]            # re-raises the first error
+    if icons is not None:
+        report["icons"], report["icon_hints"] = done[tasks.index(icons)]
+    shutil.rmtree(os.path.join(preview_dir, ".compare"), ignore_errors=True)
     frames_dir = os.path.join(preview_dir, "anim_frames")
     if os.path.isdir(frames_dir):
         shutil.rmtree(frames_dir)
@@ -6806,7 +6940,8 @@ def main():
         jobs = make_jobs(type_names, {a.name for a in ANIMS}, args, args.workers + 1)
         queue = JobQueue.create(os.path.join(out, "logs", "jobs"), jobs)
         n_qa_jobs = sum(j["lane"] == "qa" for j in jobs)
-        has_render = any(j["lane"] == "render" for j in jobs)
+        # type FBX alone do not justify render workers (quick: the main process exports them, they are small)
+        has_render = any(j["lane"] == "render" and j["kind"] != "fbx" for j in jobs)
         n_render = min(args.render_workers, args.workers if args.workers < 2 else args.workers - 1) if has_render else 0
         # about 600 QA frames (2-3 s) per worker at least: a worker costs 2 s to start and slows the main process
         qa_frames = sum(j["cost"] for j in jobs if j["lane"] == "qa")
@@ -6864,14 +6999,15 @@ def main():
         actions = build_animations(arm_ob, quiet=worker)
         report["animations"] = {a.name: {"frames": a.frames, "loop": a.loop, "description": a.desc, "group": a.group,
                                          "unity": a.unity} for a in ANIMS}
-    ctx = JobContext(part_objs, coll, preview_coll, arm_ob, actions, robot_mesh, preview_dir, tex_dir)
+    ctx = JobContext(part_objs, coll, preview_coll, arm_ob, actions, robot_mesh, preview_dir, tex_dir,
+                     None if args.no_cache else os.path.join(args.src_dir or out, "cache", "qa"), args.src_dir or out)
     if worker:
         ready = time.time() - t_start
         LOG.info("worker ready after %.1f s", ready)
         count, busy = JobQueue(args.worker_queue).work(ctx, args.worker_lanes.split(","), "w%s" % args.worker_id)
         with open(os.path.join(out, "worker.json"), "w", encoding="utf-8") as fh:
             json.dump({"lanes": args.worker_lanes, "ready": round(ready, 1), "packages": count, "busy": round(busy, 1),
-                       "total": round(time.time() - t_start, 1)}, fh)
+                       "total": round(time.time() - t_start, 1), "qa_cached": ctx.qa_hits}, fh)
         LOG.info("worker done: %d packages in %.1f s", count, busy)
         return 0
     write_animation_table(out)
@@ -6905,20 +7041,7 @@ def main():
                                                        arm_ob)
         export_fbx(os.path.join(out, "CubeEscape_Robot_Modular.fbx"), list(part_objs.values()), arm_ob,
                    animations=False)
-        type_dir = os.path.join(out, "Types")
-        os.makedirs(type_dir, exist_ok=True)
-        report["type_fbx"] = {}
-        for tname, spec in ROBOT_TYPES.items():
-            cfg = default_config()
-            cfg.update(spec["variants"])
-            tmp = combine_objects([part_objs[g] for g in config_groups(cfg)], "Robot_Mesh_" + tname, coll)
-            bind_mesh(tmp, arm_ob)
-            export_fbx(os.path.join(type_dir, "CubeEscape_Robot_%s.fbx" % tname), [tmp], arm_ob, animations=False)
-            if args.lods:
-                report["lods"][tname] = export_lods(os.path.join(type_dir, "CubeEscape_Robot_%s.fbx" % tname), tmp,
-                                                    coll, arm_ob)
-            report["type_fbx"][tname] = {"triangles": tri_count(tmp.data), "materials": len(tmp.data.materials)}
-            bpy.data.objects.remove(tmp, do_unlink=True)
+        # the robot types are exported by "fbx" work packages in parallel (export_type_fbx)
         capsules = hit_capsules(robot_mesh, arm_ob)
         report["hit_capsules"] = {c["bone"]: c["coverage"] for c in capsules}
         LOG.info("  hit capsules: %s", ", ".join("%s %.0f%%" % (c["bone"], c["coverage"] * 100) for c in capsules))
@@ -6936,8 +7059,22 @@ def main():
         LOG.info("  main process: %d packages in %.1f s", count, busy)
     with Step("wait for workers"):
         worker_stats = wait_workers(procs)
-        worker_stats["main"] = {"packages": count, "busy": round(busy, 1)}
+        worker_stats["main"] = {"packages": count, "busy": round(busy, 1), "qa_cached": ctx.qa_hits}
         results = queue.results()
+    exported = {}
+    for job, res in results:
+        if job["kind"] == "fbx":
+            exported.update(res["result"])
+    missing = [t for t in ROBOT_TYPES if t not in exported]
+    if missing:
+        raise RuntimeError("type FBX missing: %s" % missing)
+    report["type_fbx"] = {}
+    for tname in ROBOT_TYPES:               # report in type order, whichever process exported it
+        info = dict(exported[tname])
+        lods = info.pop("lods", None)
+        if lods:
+            report["lods"][tname] = lods
+        report["type_fbx"][tname] = info
     with Step("qa results"):
         report["qa"] = merge_qa(results, type_names)
         for name, entry in report["qa"]["Classic"]["actions"].items():
@@ -6965,7 +7102,8 @@ def main():
     load = (round(load_start, 1), round(os.getloadavg()[0], 1))
     report["timings"] = {"steps": dict(STEP_TIMES), "total": round(total, 1), "budget": args.budget,
                          "load": {"start": load[0], "end": load[1], "cores": os.cpu_count()},
-                         "packages": {k: round(v, 1) for k, v in kinds.items()}, "workers": worker_stats}
+                         "packages": {k: round(v, 1) for k, v in kinds.items()}, "workers": worker_stats,
+                         "qa_cached": sum(w.get("qa_cached", 0) for w in worker_stats.values())}
     write_report(out, report)
     slow = sorted(STEP_TIMES.items(), key=lambda kv: -kv[1])[:4]
     LOG.log(logging.WARNING if total > args.budget else logging.INFO, "time: %.0f s (tier %s, budget %d s)%s - "
@@ -6975,6 +7113,9 @@ def main():
     LOG.log(logging.WARNING if busy else logging.INFO, "  system load %.1f at the start (%.1f at the end) on %d cores%s",
             load[0], load[1], os.cpu_count(), " - other processes were running, times are not comparable" if busy else "")
     LOG.info("  work packages (process seconds): %s", ", ".join("%s %.0f" % kv for kv in sorted(kinds.items())))
+    if report["timings"]["qa_cached"]:
+        LOG.info("  QA cache: %d clip results reused (cache/qa; --no-cache checks everything again)",
+                 report["timings"]["qa_cached"])
     problems = bool(floating)
     for label, qa in report.get("qa", {}).items():
         for name, entry in qa["actions"].items():

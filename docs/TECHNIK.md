@@ -1,6 +1,6 @@
 # Techniken des Roboter-Generators – Übertrag auf Cubegen
 
-Stand: Generator 1.13.0 „Spectral“. Diese Datei sammelt, **wie** der Generator arbeitet und was sich dabei bewährt
+Stand: Generator 1.13.1 „Spectral“. Diese Datei sammelt, **wie** der Generator arbeitet und was sich dabei bewährt
 oder als Falle erwiesen hat. Ziel: Der Modell-Editor von Cubegen soll genauso leistungsfähig werden. Jede Technik
 nennt die Fundstelle im Generator und was Cubegen davon übernehmen sollte. Pflegen bei jeder Generator-Version
 (neue Technik → neuer Abschnitt, geänderte Messwerte → hier ändern).
@@ -33,6 +33,8 @@ nennt die Fundstelle im Generator und was Cubegen davon übernehmen sollte. Pfle
 | Treffer-Kapseln gemessen | `hit_capsules()` | 15 Kapseln, 95–100 % Abdeckung | Kollisionsformen aus der Geometrie messen |
 | Servo-Ereignisse | `servo_events()` | Klang-Ereignisse aus Gelenkgeschwindigkeit | Ereignisse aus Bewegung ableiten statt setzen |
 | Ein Unity-Start | `TestbedTestRun` | Testbett 25–30 → 12 s | Tests im selben Batch-Prozess wie der Import |
+| QA-Ergebnis-Cache | `JobContext.cached_qa()` | Standardlauf 121 → 51 s | Prüfergebnisse nach Eingaben + Prüfcode cachen |
+| Prüfkette parallel | `scripts/check_output.sh` | Prüfungen nach dem Lauf ≈ 55 → 35 s | Unabhängige Prüfer gleichzeitig starten |
 
 ## 1. Skin = Daten
 
@@ -277,7 +279,28 @@ Teile (Kabel, Fahnen, Antennen) gebacken; Requisiten über Matrix-Ketten; Partik
 **Für Cubegen:** Effektmaterialien als Daten mit Zielbeschreibung; Laufzeit-Masken packen; LOD und Kollisionsformen
 automatisch messen und prüfen; Unity-Prüfungen in einem Prozess bündeln.
 
-## 12. Prüfen
+## 12. Testzeit (1.13.1)
+
+- **Ergebnisse cachen statt neu prüfen:** Ein QA-Ergebnis hängt nur am Mesh des Typs, am Rig, an den Schlüsseln des
+  Clips und am Prüfcode. Der Schlüssel enthält alle vier, den Prüfcode als Quelltext der QA-Funktionen
+  (`inspect.getsource`) samt Ausnahmelisten – ändert jemand die Prüfung, ist der Cache von selbst ungültig.
+- **Falle: nicht jede Datenreihenfolge ist stabil.** Der erste Cache traf nie: Koordinaten und Gruppen waren in jedem
+  Blender-Prozess bitgleich, aber der Startpunkt der Eckpunktschleife mancher Flächen nicht. Den Hash daher über eine
+  kanonische Form bilden (je Fläche die sortierten Eckpunkte), nicht über die rohe Speicherreihenfolge.
+- **Arbeit dorthin, wo die Voraussetzungen schon liegen:** Typ-FBX brauchen die gebackenen Materialien – also Pakete
+  der Render-Worker, nicht der QA-Worker (die bauen ohne Texturen). Vorher den Look auf den Standard setzen; Render-
+  Pakete hinterlassen sonst einen anderen Skin in den geteilten Materialien.
+- **Gemeinsame Pools mit echten Abhängigkeiten:** alle ImageMagick-Bögen in einem Thread-Pool – außer Icons und
+  Skin-Bogen, die bleiben eine Aufgabe, weil der Bogen danach die Kartenbilder löscht, aus denen die Icons stammen.
+- **Prüfer gleichzeitig:** Verify, Viewer und Unity lesen die Ausgabe nur; nebeneinander bestimmt der langsamste die
+  Zeit. Der Viewer kompiliert nur bei geändertem Quelltext (Hash), beide Architekturen parallel; Round-Trip-Tests mit
+  sechs Prozessen. Mehrere Unity-Instanzen lohnen nicht: ein Projekt ist für eine Instanz gesperrt, und der Start
+  dauert länger als die Arbeit.
+
+**Für Cubegen:** Generator- und Prüfergebnisse nach ihren Eingaben cachen (inklusive Prüfcode), Hashes über kanonische
+Daten, Engine-Prüfungen gebündelt in einem Prozess, unabhängige Prüfer parallel.
+
+## 13. Prüfen
 
 - Teststufen `quick` / `standard` / `full` mit Zeitbudget; Worker-Pakete für QA und Renders.
 - **Bericht als Gate:** `qa`, `clips`, `type_bounds`, Dreiecke, Bones vor und nach der Änderung vergleichen – ohne
@@ -286,7 +309,7 @@ automatisch messen und prüfen; Unity-Prüfungen in einem Prozess bündeln.
   überlappungsfrei, Gesichter, Flipbook, Icons, Bögen); `viewer/test_viewer.sh` prüft Migrationen, unbekannte IDs,
   Round Trip und Export.
 
-## 13. Checkliste für den Cubegen-Modell-Editor
+## 14. Checkliste für den Cubegen-Modell-Editor
 
 - [ ] Looks/Paletten als versionierte Datendatei mit Loader-Prüfung und Migration
 - [ ] Farbvarianten aus einmal gebackenen Gewichtskarten zusammensetzen, Gegenprobe im Volllauf
@@ -304,3 +327,4 @@ automatisch messen und prüfen; Unity-Prüfungen in einem Prozess bündeln.
 - [ ] Nachschwingen gebacken (Feder je Knochen, Loops geschlossen), Requisiten per Matrix-Kette
 - [ ] Effektmaterialien (Glas, Hologramm …) als Laufzeit-Effekt mit Zielbeschreibung; Masken für die Engine packen
 - [ ] LOD-Stufen und Kollisionsformen automatisch erzeugen und in der Engine prüfen
+- [ ] Prüfergebnisse cachen (Eingaben + Prüfcode im Schlüssel), Prüfer parallel, Engine-Prüfung in einem Prozess

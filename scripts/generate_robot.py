@@ -52,7 +52,7 @@ import make_textures  # noqa: E402 - ImageMagick source textures
 import export_viewer  # noqa: E402 - data for the RobotViewer app
 
 LOG = logging.getLogger("robot")
-VERSION = "1.15.0"
+VERSION = "1.16.0"
 
 # ----------------------------------------------------------------------------------------------
 # Arguments and logging
@@ -4185,9 +4185,47 @@ def blink(f, center, width=2.5):
 STAND = P()
 Anim = collections.namedtuple("Anim", "name frames loop fn desc group unity")
 ANIMS = []  # Anim records in registration order
-GROUPS = ["Basis", "Phase1", "Phase2", "Phase3", "Phase4", "Phase5", "Phase6", "Phase7"]
+GROUPS = ["Basis", "Phase1", "Phase2", "Phase3", "Phase4", "Phase5", "Phase6", "Phase7", "Phase8"]
 GROUP_LABELS = {"Basis": "Basis", "Phase1": "Spielsysteme", "Phase2": "Werkzeuge & Interaktion", "Phase3": "Charakter",
-                "Phase4": "Tänze", "Phase5": "Emotes", "Phase6": "Klettern & Hängen", "Phase7": "Tempo & Ducken"}
+                "Phase4": "Tänze", "Phase5": "Emotes", "Phase6": "Klettern & Hängen", "Phase7": "Tempo & Ducken",
+                "Phase8": "Kriechen"}
+
+
+# 1.16: categories by content for the viewer, ANIMATIONS.md and the game (the groups above are build phases and stay
+# for contact sheets, QA packages and --groups). Every clip in exactly one category, in display order; IDs permanent.
+CLIP_CATEGORIES = collections.OrderedDict([
+    ("Move", ("Gehen & Laufen", ["Idle", "Walk", "WalkStart", "WalkStop", "Run", "RunFast", "Sprint", "TurnLeft",
+                                 "TurnRight", "MudWalk", "SlopeSlide"])),
+    ("Air", ("Springen & Fallen", ["Jump", "DoubleJump", "Fall", "Land"])),
+    ("Crouch", ("Ducken & Kriechen", ["Crouch", "CrouchWalk", "CrouchDeep", "CrawlIdle", "Crawl"])),
+    ("Climb", ("Klettern & Hängen", ["LedgeGrab", "HangIdle", "ShimmyLeft", "ShimmyRight", "HangSwing", "ClimbUp",
+                                     "LadderUp", "LadderDown", "Vault"])),
+    ("Interact", ("Interaktion & Werkzeuge", ["Interact", "PickUp", "Push", "PushStart", "PushStep", "ToolAim",
+                                               "ToolUse", "Scan", "TerminalTyping", "PortalEnter"])),
+    ("Damage", ("Treffer & Gefahren", ["Hit", "HitHeavy", "Electrocuted", "GasCough", "Death", "Respawn"])),
+    ("Idle", ("Warten & Charakter", ["IdleScratch", "IdleFootTap", "IdleYawn", "Talk", "Listen", "EdgeBalance",
+                                     "Celebrate"])),
+    ("Emote", ("Gesten", ["Wave", "Bow", "Clap", "Think", "Point", "Shrug", "NodYes", "ShakeNo", "HatTip",
+                          "FlagWave"])),
+    ("Rest", ("Sitzen & Schlafen", ["SitDown", "SitIdle", "Sleep"])),
+    ("Dance", ("Tänze", ["DanceBob", "DanceRobot", "DanceWave", "DanceShuffle", "DanceDisco", "DanceSpin",
+                         "DanceMoonwalk", "DanceSway"])),
+])
+
+
+def clip_category(name):
+    return next(c for c, (_, clips) in CLIP_CATEGORIES.items() if name in clips)
+
+
+def check_categories():
+    """Every registered clip in exactly one category, no category entry without a clip."""
+    names = [a.name for a in ANIMS]
+    listed = [c for _, clips in CLIP_CATEGORIES.values() for c in clips]
+    missing = [n for n in names if n not in listed]
+    extra = [c for c in listed if c not in names]
+    twice = sorted({c for c in listed if listed.count(c) > 1})
+    if missing or extra or twice:
+        raise ValueError("CLIP_CATEGORIES: missing %s, unknown %s, twice %s" % (missing, extra, twice))
 
 
 def anim(name, frames, loop, desc, group="Basis", unity=""):
@@ -5489,6 +5527,60 @@ def crouch_walk(f):
     )
 
 
+# ================================ Phase 8 (1.16): crawling under the 0.65 m crouch capsule ================================
+# Belly crawl: the robot lies face down, forearms pull, toes push. The big head decides the height: chest close to the
+# ground, head tilted a little forward. Game: crouch capsule 0.65 m (decision 13.10.2026), clips stay below 0.62 m.
+CRAWL_BASE = dict(pelvis=(0, -0.12, -0.30), pelvis_rot=(84, 0, 0), spine=(4, 0, 0), head=(-26, 0, 0),
+                  shoulder_LR=(0, 6, 0), hand_LR=arm(-10), fing_LR=curl(55), thumb_LR=curl(35))
+CRAWL_HAND = (0.43, -0.72, 0.075)    # resting knuckle target beside the head (x out, y forward = minus, z)
+CRAWL_POLE = (1.0, 0.0, 1.0)         # elbows out and up
+CRAWL_FOOT = (0.03, 0.47, 0.004, 85)  # on the toes, legs stretched back
+CRAWL_FRAMES = 40
+CRAWL_REACH = 0.22                   # metres a hand pulls per stroke
+CRAWL_STANCE = 0.55                  # share of the cycle a hand lies on the ground
+
+
+def crawl_pose(**kw):
+    p = dict(CRAWL_BASE)
+    p.update(kw)
+    return P(**p)
+
+
+@anim("CrawlIdle", 60, True, "bäuchlings liegen und atmen (Kriechhaltung)", "Phase8")
+def crawl_idle(f):
+    t = f / 60.0
+    br = math.sin(2 * math.pi * t)
+    x, y, z = CRAWL_HAND
+    return crawl_pose(pelvis=(0, -0.12, -0.30 + 0.004 * br), handik_LR=(x, y, z, *CRAWL_POLE, 1.0),
+                      foot_LR=CRAWL_FOOT, eyes=(1.0, 0, 0.004))
+
+
+def crawl_hand(u):
+    """Knuckle target of one hand over the stroke (u = 0..1): pulls back on the ground, then reaches forward."""
+    x, y0, z0 = CRAWL_HAND
+    front = y0 - CRAWL_REACH / 2
+    if u < CRAWL_STANCE:
+        return (x, front + CRAWL_REACH * u / CRAWL_STANCE, z0)
+    s = (u - CRAWL_STANCE) / (1 - CRAWL_STANCE)
+    return (x, front + CRAWL_REACH * (1 - ease(s)), z0 + 0.07 * math.sin(math.pi * s))
+
+
+@anim("Crawl", CRAWL_FRAMES, True, "robben: Unterarme ziehen im Wechsel, Fußspitzen schieben (Grundtempo ca. 0,3 m/s)",
+      "Phase8", "in-place; Animator-Tempo = Geschwindigkeit / naturalSpeed (gemessen an den Händen)")
+def crawl(f):
+    t = f / CRAWL_FRAMES
+    c = math.cos(2 * math.pi * t)
+    hands = {s: crawl_hand((t + off) % 1.0) for s, off in (("L", 0.0), ("R", 0.5))}
+    ox, oy, lift, pitch = CRAWL_FOOT
+    # each foot pushes with the opposite hand (the left foot while the right hand pulls)
+    feet = {s: (ox, oy + 0.04 * math.cos(2 * math.pi * (t + off)), lift + 0.012 * max(0.0, math.sin(2 * math.pi * (t + off))),
+                pitch) for s, off in (("L", 0.5), ("R", 0.0))}
+    return crawl_pose(pelvis=(0.010 * c, -0.12, -0.30 + 0.004 * math.cos(4 * math.pi * t)),
+                      pelvis_rot=(84, 0, -4 * c), spine=(4, 0, 5 * c), head=(-26, 0, -4 * c),
+                      handik_L=(*hands["L"], *CRAWL_POLE, 1.0), handik_R=(*hands["R"], *CRAWL_POLE, 1.0),
+                      foot_L=feet["L"], foot_R=feet["R"], eyes=(1.0, 0.005 * c, 0.004))
+
+
 # ---------------------------------- 1.12 type emotes ----------------------------------
 
 @anim("HatTip", 56, False, "Hut lüften mit Verbeugung (Typ Gentleman; der Kopf-Sockel liegt in der Hand)", "Phase5")
@@ -5588,7 +5680,8 @@ def clip_meta(a):
             assert v == "$base" or v in valid, "unknown name %s in clip %s" % (v, a.name)
         return keys
     return {
-        "name": a.name, "group": a.group, "frames": a.frames, "fps": FPS, "loop": a.loop,
+        "name": a.name, "group": a.group, "category": clip_category(a.name), "frames": a.frames, "fps": FPS,
+        "loop": a.loop,
         "hideHeldItem": a.name in HIDE_HELD_ITEM,
         "expression": check(CLIP_EXPRESSIONS.get(a.name, []), make_textures.EXPRESSIONS),
         "display": check(CLIP_DISPLAYS.get(a.name, []), make_textures.DISPLAYS),
@@ -5655,11 +5748,12 @@ def write_animation_table(out, data=None):
              "Tempo = Grundtempo des In-place-Clips (Animator-Tempo = Spielgeschwindigkeit / Tempo), "
              "Höhe = kleinste/größte Körperhöhe im Clip, Schritte = Frames mit Fußaufsatz. "
              "Alle Werte maschinenlesbar in `robot_config.json` › `clips`.", ""]
-    for g in GROUPS:
-        clips = [a for a in ANIMS if a.group == g]
+    by_name = {a.name: a for a in ANIMS}
+    for cat, (label, names) in CLIP_CATEGORIES.items():
+        clips = [by_name[n] for n in names if n in by_name]
         if not clips:
             continue
-        lines += ["## %s – %s" % (g, GROUP_LABELS[g]), "",
+        lines += ["## %s (`%s`)" % (label, cat), "",
                   "| Clip | Frames | Loop | Tempo | Höhe | Schritte | Unity | Beschreibung |",
                   "|---|---|---|---|---|---|---|---|"]
         for a in clips:
@@ -5788,14 +5882,16 @@ ACCEPTED_OVERLAPS = {("*", "Head", "Socket_Neck"), ("*", "Eyes", "Socket_Neck"),
 
 # Clips in which a held item (Prop_R) is hidden by the game: climbing, hanging, thinking with the hand at the chin.
 HIDE_HELD_ITEM = {"Think", "LedgeGrab", "HangIdle", "ShimmyLeft", "ShimmyRight", "HangSwing", "ClimbUp", "LadderUp",
-                  "LadderDown", "Vault", "PickUp", "TerminalTyping", "Clap", "Wave", "EdgeBalance", "HatTip"}
+                  "LadderDown", "Vault", "PickUp", "TerminalTyping", "Clap", "Wave", "EdgeBalance", "HatTip", "CrawlIdle",
+                  "Crawl"}
 # Joints that open on purpose: the hat leaves the head in "HatTip".
 ACCEPTED_DETACH = {("HatTip", "Socket_Head", "Head")}
 
 
 def type_emotes():
     """Clips that belong to one robot type (ROBOT_TYPES[...]["emote"]): checked and played only with that type."""
-    return {spec["emote"]: name for name, spec in ROBOT_TYPES.items() if spec.get("emote")}
+    names = {a.name for a in ANIMS}         # a --groups filter may have dropped them
+    return {spec["emote"]: name for name, spec in ROBOT_TYPES.items() if spec.get("emote") in names}
 
 
 def run_qa(ob, arm_ob, actions, label="Classic", quiet=False, clips=None):
@@ -5988,11 +6084,16 @@ def servo_events(rotations, loop):
     return sorted(events)
 
 
+HAND_GAITS = {"Crawl"}      # in-place clips whose natural speed comes from the hands on the ground
+HAND_CONTACT = 0.02         # metres: a hand counts as lying on the ground (knuckles and palm are rounded)
+
+
 def measure_clips(ob, arm_ob, actions):
     """Measured game data per clip: root motion, foot contacts, footsteps, natural speed, height, hand grips."""
     scene = bpy.context.scene
     groups = group_faces(ob)
     foot_idx = {s: sorted({i for p in groups["Foot_" + s] for i in p}) for s in ("L", "R")}
+    hand_idx = {s: sorted({i for g in ("Hand_" + s, "Fingers_" + s) for p in groups[g] for i in p}) for s in ("L", "R")}
     root_pb = arm_ob.pose.bones["Root"]
     grip_pb = {s: arm_ob.pose.bones["Fingers_" + s] for s in ("L", "R")}
     mw = arm_ob.matrix_world
@@ -6015,8 +6116,13 @@ def measure_clips(ob, arm_ob, actions):
                 on = float(pts[:, 2].min()) < 0.006
                 contact[s].append(on)
                 cur[s] = (on, pts.mean(axis=0))
-                if prev and on and prev[s][0]:
+                if prev and on and prev[s][0] and a.name not in HAND_GAITS:
                     speeds.append(float(np.linalg.norm((cur[s][1] - prev[s][1])[:2])) * FPS)
+                if a.name in HAND_GAITS:        # crawling: the hands lying on the ground carry the body
+                    hp = co[hand_idx[s]]
+                    cur["h" + s] = (float(hp[:, 2].min()) < HAND_CONTACT, hp.mean(axis=0))
+                    if prev and cur["h" + s][0] and prev["h" + s][0]:
+                        speeds.append(float(np.linalg.norm((cur["h" + s][1] - prev["h" + s][1])[:2])) * FPS)
                 hands[s].append(char_space(mw @ grip_pb[s].head))
             prev = cur
             m = mw @ root_pb.matrix
@@ -7679,6 +7785,7 @@ def main():
         report["part_objects"] = {k: tri_count(o.data) for k, o in part_objs.items()}
         LOG.info("  %d parts in %d objects; slots: %s", report["parts"], len(part_objs),
                  ", ".join("%s=%s" % (k, "/".join(v)) for k, v in SLOTS.items()))
+    check_categories()              # on the full clip list, before a --groups filter
     if args.groups:
         keep = set(args.groups.split(",")) | {"Basis"}
         ANIMS[:] = [a for a in ANIMS if a.group in keep]
@@ -7795,11 +7902,11 @@ def main():
             cfg.update(spec["variants"])
             bounds[tname] = type_bounds(part_objs, cfg)
         report["type_bounds"] = bounds
-        for n in ("Walk", "Run", "RunFast", "Sprint", "CrouchWalk", "Push", "MudWalk"):
+        for n in ("Walk", "Run", "RunFast", "Sprint", "CrouchWalk", "Push", "MudWalk", "Crawl"):
             if n in clips:
                 LOG.info("  %-10s natural speed %.2f m/s, footsteps %s", n, clips[n]["naturalSpeed"],
                          [f for f, _ in clips[n]["footsteps"]])
-        for n in ("Idle", "Crouch", "CrouchDeep", "CrouchWalk", "SitIdle"):
+        for n in ("Idle", "Crouch", "CrouchDeep", "CrouchWalk", "SitIdle", "CrawlIdle", "Crawl"):
             if n in clips:
                 LOG.info("  %-10s height %.3f..%.3f m", n, clips[n]["height"]["min"], clips[n]["height"]["max"])
         LOG.info("  width/core width: %s", ", ".join("%s %.2f/%.2f" % (k, v["width"], v["coreWidth"])
@@ -7946,6 +8053,8 @@ def viewer_config():
         "spinParts": sorted(SPIN_PARTS),
         "lookVersion": LOOK_VERSION,
         "groupLabels": GROUP_LABELS,
+        "clipCategories": [{"id": c, "label": label, "clips": [n for n in names if any(a.name == n for a in ANIMS)]}
+                           for c, (label, names) in CLIP_CATEGORIES.items()],
     }
 
 

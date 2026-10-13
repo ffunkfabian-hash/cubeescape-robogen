@@ -3,6 +3,25 @@
 Versionen des Roboter-Generators (zählen getrennt von Cube Escape und Cubegen). Jede Version hat einen Tag
 `v<Version>` und einen Release-Branch `release/<Version>`.
 
+## 1.16.0 „Crawlspace“ – 2026-10-13
+
+**Kriechen unter der Duck-Kapsel** (Entscheidung 13.10.: die Kapsel bleibt 0,65 m): zwei neue Clips in Bauchlage.
+
+* **CrawlIdle** (liegen und atmen) und **Crawl** (robben: Unterarme ziehen im Wechsel per Arm-IK, Ellbogen außen
+  neben dem großen Kopf, Fußspitzen schieben), Oberkante ≈ 0,57 m, Grundtempo ≈ 0,30 m/s. Die Grundgeschwindigkeit
+  kommt bei Crawl aus den aufliegenden Händen (`HAND_GAITS`), gehaltene Gegenstände sind ausgeblendet.
+* QA aller 24 Typen und der Formen gegen beide Clips ohne Befund (Jetpack, Flügel und Linsenauge brauchten einen
+  flacheren Kopf und weiter außen liegende Hände).
+
+**Animationen nach Inhalt sortiert** (Hinweis des Nutzers: die Kategorien wirkten unsortiert – sie folgten der
+Entstehung in Phasen): zehn Kategorien `CLIP_CATEGORIES` (Gehen & Laufen, Springen & Fallen, Ducken & Kriechen,
+Klettern & Hängen, Interaktion & Werkzeuge, Treffer & Gefahren, Warten & Charakter, Gesten, Sitzen & Schlafen, Tänze),
+jeder Clip genau einmal (der Generator bricht sonst ab), Feld `category` in den Clip-Daten, `clipCategories` in
+`robot_config.json`; Viewer und `ANIMATIONS.md` nach Kategorien. Die Bau-Phasen bleiben für Kontaktbögen und QA.
+
+* Viewer: „Oberfläche“ als Auswahlmenü (sechs Segmente ragten rechts aus der Spalte).
+* Behoben: `--groups` brach ab, wenn ein Typ-Emote herausgefiltert war.
+
 ## 1.15.0 „Pack Rat“ – 2026-10-13
 
 **Textur-Atlas dichter gepackt:** Smart UV Project ließ große Lücken zwischen seinen Tausenden kleinen Inseln – nur

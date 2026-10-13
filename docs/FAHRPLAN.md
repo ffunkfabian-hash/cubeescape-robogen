@@ -107,7 +107,8 @@ Meshes mit demselben Rig, Lochung als Formel, Kabel als Teil), 76 Skins (Pixel, 
 6; QA aller Typen und Formen über alle Clips ohne Befund.
 
 1.14.1: Viewer-Seitenleiste bleibt in ihrer Spalte. **1.15 Pack Rat** (13.10., v1.15.0): Textur-Atlas dicht gepackt
-(18 % → 51 % belegt). Als Nächstes 1.16 mit den Kriech-Clips, danach 2.0 Bodyplan.
+(18 % → 51 % belegt). **1.16 Crawlspace** (13.10., v1.16.0): Kriech-Clips unter der Duck-Kapsel, Animationen
+nach Inhalt in zehn Kategorien. Als Nächstes 2.0 Bodyplan.
 
 1.13.1–1.13.3: Prüfungen parallel (`check_output.sh`), QA-Cache und Render-Cache – mit warmem Cache Standardlauf
 etwa 45 s, Volllauf 90–115 s statt rund 7 Minuten; eine sichtbare Änderung rendert nur ihre eigenen Bilder neu.
@@ -147,7 +148,8 @@ Neunzehn weitere Punkte (zwei Vorschläge vom 12. Oktober 2026 wurden in Generat
 - [x] **Proportionen des Basismodells** (Konzeptvergleich 12.10.): gedrungener, größerer Kopf, klobigere Platten, Fugen und Schrauben wie auf den Konzeptbildern – umgesetzt in Generator 1.14 (Umformung je Knochen nach dem Bauen, Gelenke und Clips unverändert, zehn Posen angepasst; Standhöhe 1,38 m statt 1,30 m – Spiel-Kapsel ist eine Design-Entscheidung)
 - [x] **Textur-Atlas besser nutzen:** die UV-Inseln belegten nur ≈ 18 % des 2048²-Atlas – umgesetzt in Generator 1.15 (dicht gepackt, ≈ 51 %, etwa 1,7-mal so viele Texel je cm)
 - [x] **Spielkapsel und Ducken** (Entscheidung 13.10.): Kapsel stehend 1,40 m statt 1,20 m (Cube Escape), Duck-Kapsel bleibt 0,65 m
-- [ ] **Kriech-Clips Crawl und CrawlIdle** unter 0,65 m für Lüftungsschächte, QA wie alle Clips – Generator 1.16
+- [x] **Kriech-Clips Crawl und CrawlIdle** unter 0,65 m für Lüftungsschächte – umgesetzt in Generator 1.16 (≈ 0,57 m, ≈ 0,30 m/s, QA aller Typen und Formen grün)
+- [x] **Animationen nach Inhalt sortiert** (Hinweis 13.10.) – Generator 1.16: zehn Kategorien statt Bau-Phasen
 - [x] **Abnutzung je Skin** statt für alle Skins gleicher Schmutz und Kratzer (Konzeptvergleich 12.10.) – umgesetzt in Generator 1.11 (`wear` je Skin)
 - [x] **Masken für Unity packen:** Lackzonen und Gelenke als ID-Kanal, Masken in 1024² (der Viewer packt schon beim Laden) – umgesetzt in Generator 1.13 (`Textures/Unity`, Testbett-Shader nutzt sie)
 - [ ] **Bloom im Spiel:** URP-Bloom so, dass nur Emission strahlt (wie auf den Skin-Karten) – Spiel-Roboter

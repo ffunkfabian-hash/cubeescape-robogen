@@ -140,7 +140,8 @@ def export(out_dir, part_objs, arm, anims, actions, tex_dir, config, log):
                 row += [loc.x, loc.y, loc.z, q.x, q.y, q.z, q.w, sc.x, sc.y, sc.z]
             frames.append(row)
         arr = np.array(frames, dtype=np.float32)
-        anim_info.append({"name": a.name, "group": a.group, "frames": a.frames, "loop": a.loop,
+        category = config.get("clips", {}).get(a.name, {}).get("category", "")
+        anim_info.append({"name": a.name, "group": a.group, "category": category, "frames": a.frames, "loop": a.loop,
                           "description": a.desc, "unity": a.unity, "offset": offset})
         anim_data.append(arr.reshape(-1))
         offset += arr.size

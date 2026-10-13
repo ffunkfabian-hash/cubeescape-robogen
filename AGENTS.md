@@ -44,6 +44,12 @@ Agenten lesen die passende `SKILL.md` vor der Arbeit):
   Vertex-Gruppen-Reihenfolge, Materialien und die UV-Ebene `UVMap`; jede Geometrie-Form läuft als `Form_<id>` durch die
   QA aller Clips. Die Lochformel ist in Vorschau, Viewer und Unity-Shader gleich zu halten.
 
+## Animationen
+
+- Jeder neue Clip bekommt eine Kategorie in `CLIP_CATEGORIES` (der Generator bricht sonst ab); die Bau-Phase
+  (`group`) ist nur für Kontaktbögen, QA-Pakete und `--groups`. Kategorie-IDs sind ewig.
+- Clips, die unter eine Spielkapsel passen müssen, prüft `verify_robot.py` an `clips.<Name>.height` (Kriechen < 0,62 m).
+
 ## Sprache
 
 Antworten an den Nutzer, README, CHANGELOG, Doku und Commit-Messages auf **Deutsch**. Code, Bezeichner,

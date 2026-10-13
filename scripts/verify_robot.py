@@ -618,6 +618,27 @@ def verify_reshape():
               {k: len(v) for k, v in bad.items()} or "missing")
 
 
+def verify_crawlspace():
+    """1.16: clip categories (every clip once, display order) and the crawl clips under the 0.65 m crouch capsule."""
+    cfg = json.load(open(os.path.join(OUT, "robot_config.json"), encoding="utf-8"))
+    cats = cfg.get("clipCategories", [])
+    listed = [c for cat in cats for c in cat["clips"]]
+    check("categories: every clip in exactly one category", sorted(listed) == sorted(ANIMS) and
+          len(listed) == len(set(listed)) and all(cat["label"] for cat in cats), (len(cats), len(listed)))
+    clips = cfg.get("clips", {})
+    wrong = [n for n, c in clips.items() if not any(n in cat["clips"] and cat["id"] == c.get("category")
+                                                     for cat in cats)]
+    check("categories: clip data names its category", not wrong, wrong)
+    crawl = {n: clips.get(n) for n in ("CrawlIdle", "Crawl")}
+    ok = all(c and c["height"]["max"] < 0.62 for c in crawl.values())
+    check("crawl: CrawlIdle and Crawl stay below 0.62 m (crouch capsule 0.65 m)", ok,
+          {n: c["height"] if c else None for n, c in crawl.items()})
+    sp = (crawl["Crawl"] or {}).get("naturalSpeed", 0)
+    check("crawl: Crawl loops with a natural speed from the hands (0.2-0.5 m/s), items hidden",
+          bool(crawl["Crawl"]) and crawl["Crawl"]["loop"] and 0.2 <= sp <= 0.5 and
+          all(c and c["hideHeldItem"] for c in crawl.values()), sp)
+
+
 def main():
     print("== verify %s" % bpy.data.filepath)
     ref = verify_blend()
@@ -632,6 +653,7 @@ def main():
     verify_bolton()
     verify_spectral()
     verify_reshape()
+    verify_crawlspace()
     ok = all(r["ok"] for r in results)
     os.makedirs(os.path.join(OUT, "logs"), exist_ok=True)
     with open(os.path.join(OUT, "logs", "verify_report.json"), "w", encoding="utf-8") as fh:

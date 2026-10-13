@@ -378,11 +378,10 @@ struct Sidebar: View {
                     ColorPicker("Visier", selection: colorBinding(\.visor))
                     ColorPicker("Stoff", selection: colorBinding(\.fabric))
                 }
-                // label above: six segments next to it are wider than the column (pushed the panel out of the window)
-                Text("Oberfläche").font(.caption).foregroundStyle(.secondary)
+                // a menu: six segments do not fit the column (they ran out of the panel on the right)
                 Picker("Oberfläche", selection: $model.look.finish) {
                     ForEach(Finish.allCases) { Text($0.rawValue).tag($0) }
-                }.pickerStyle(.segmented).labelsHidden()
+                }.pickerStyle(.menu).fixedSize()
             }
             section("Werkstoff") {
                 Picker("Werkstoff", selection: Binding(get: { model.look.material.id },
@@ -474,9 +473,9 @@ struct Sidebar: View {
                     Spacer()
                     Button("Grundpose") { model.clip = nil }
                 }
-                ForEach(groups, id: \.self) { g in
-                    DisclosureGroup(groupLabel(g)) {
-                        ForEach(model.data.doc.animations.filter { $0.group == g }) { a in
+                ForEach(clipGroups, id: \.label) { g in
+                    DisclosureGroup(g.label) {
+                        ForEach(g.clips) { a in
                             Button {
                                 model.clip = a
                                 model.playing = true
@@ -627,13 +626,17 @@ struct Sidebar: View {
         .disabled(i > model.look.badges.count)
     }
 
-    private var groups: [String] {
-        var seen: [String] = []
-        for a in model.data.doc.animations where !seen.contains(a.group) { seen.append(a.group) }
-        return seen
+    /// Clips by content category (1.16, robot_config.json > clipCategories), else by build phase (older data).
+    private var clipGroups: [(label: String, clips: [AnimInfo])] {
+        let anims = model.data.doc.animations
+        if let cats = model.config.clipCategories, !cats.isEmpty {
+            let byName = Dictionary(uniqueKeysWithValues: anims.map { ($0.name, $0) })
+            return cats.map { c in (c.label, c.clips.compactMap { byName[$0] }) }.filter { !$0.clips.isEmpty }
+        }
+        var phases: [String] = []
+        for a in anims where !phases.contains(a.group) { phases.append(a.group) }
+        return phases.map { g in (model.config.groupLabels?[g] ?? g, anims.filter { $0.group == g }) }
     }
-
-    private func groupLabel(_ g: String) -> String { model.config.groupLabels?[g] ?? g }
 
     private func variantPicker(_ slot: SlotInfo) -> some View {
         Picker(slot.label, selection: Binding(

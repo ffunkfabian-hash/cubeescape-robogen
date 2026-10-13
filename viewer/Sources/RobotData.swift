@@ -48,7 +48,8 @@ struct PartInfo: Decodable {
 
 struct AnimInfo: Decodable, Identifiable, Hashable {
     let name: String
-    let group: String
+    let group: String           // build phase (contact sheets, QA packages)
+    let category: String?       // content category (1.16), see RobotConfig.clipCategories
     let frames: Int
     let loop: Bool
     let description: String
@@ -170,6 +171,13 @@ struct SpecialInfo: Decodable, Identifiable {
     let color2: [Double]
     let strength: Double
     let speed: Double
+}
+
+/// A clip category (1.16): ID, label and its clips in display order.
+struct ClipCategory: Decodable, Identifiable {
+    let id: String
+    let label: String
+    let clips: [String]
 }
 
 /// Body form (1.14): "mesh" = own geometry chunks, "shader" = cut-out in the body shader, "parts" = extra parts.
@@ -294,6 +302,7 @@ struct RobotConfig: Decodable {
     let spinParts: [String]
     let lookVersion: Int?
     let groupLabels: [String: String]?
+    let clipCategories: [ClipCategory]?    // 1.16: display order of the clips by content
     let clips: [String: ClipMeta]?
     let typeBounds: [String: TypeBounds]?
     // since generator 1.10

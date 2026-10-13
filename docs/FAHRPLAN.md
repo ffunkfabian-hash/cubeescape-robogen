@@ -108,7 +108,10 @@ Meshes mit demselben Rig, Lochung als Formel, Kabel als Teil), 76 Skins (Pixel, 
 
 1.14.1: Viewer-Seitenleiste bleibt in ihrer Spalte. **1.15 Pack Rat** (13.10., v1.15.0): Textur-Atlas dicht gepackt
 (18 % → 51 % belegt). **1.16 Crawlspace** (13.10., v1.16.0): Kriech-Clips unter der Duck-Kapsel, Animationen
-nach Inhalt in zehn Kategorien. Als Nächstes 2.0 Bodyplan.
+nach Inhalt in zehn Kategorien. **1.17 Slimline** (13.10., v1.17.0): Optimierung ohne Modelländerung –
+Ausgaben-Cache (quick warm 22 → 9–12 s), Vorschau-Skins aus `Textures/` in den Cache, Viewer-Daten rund dreimal
+kleiner, Voxel-Form mit einem Drittel weniger Dreiecken, Zeitband statt festem Budget, Generator in 16 Module aufgeteilt.
+Als Nächstes 2.0 Bodyplan.
 
 1.13.1–1.13.3: Prüfungen parallel (`check_output.sh`), QA-Cache und Render-Cache – mit warmem Cache Standardlauf
 etwa 45 s, Volllauf 90–115 s statt rund 7 Minuten; eine sichtbare Änderung rendert nur ihre eigenen Bilder neu.

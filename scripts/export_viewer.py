@@ -100,8 +100,10 @@ def export(out_dir, part_objs, arm, anims, actions, tex_dir, config, log):
             p4 = np.c_[p, np.ones(len(p))] @ np.array(to_bone).T
             n3 = nrm[loops] @ np.array(rot).T
             n3 /= np.linalg.norm(n3, axis=1, keepdims=True) + 1e-12
-            data = np.c_[p4[:, :3], n3, uv[loops]].astype(np.float32)
-            idx = np.arange(len(data), dtype=np.uint32)
+            corners = np.c_[p4[:, :3], n3, uv[loops]].astype(np.float32)
+            # shared corners once (1.17): identical position, normal and UV become one vertex (indexed triangles)
+            data, inverse = np.unique(corners, axis=0, return_inverse=True)
+            idx = inverse.reshape(-1).astype(np.uint32)
             mat_name = me.materials[mi].name.split(".")[0]
             entry = {"object": ob.get("base", ob.name), "form": ob.get("form", ""), "slot": ob.get("slot", ""),
                      "variant": ob.get("variant", ""),

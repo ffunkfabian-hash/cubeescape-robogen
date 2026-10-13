@@ -36,6 +36,10 @@ nennt die Fundstelle im Generator und was Cubegen davon übernehmen sollte. Pfle
 | QA-Ergebnis-Cache | `JobContext.cached_qa()` | Standardlauf 121 → 51 s | Prüfergebnisse nach Eingaben + Prüfcode cachen |
 | Prüfkette parallel | `scripts/check_output.sh` | Prüfungen nach dem Lauf ≈ 55 → 35 s | Unabhängige Prüfer gleichzeitig starten |
 | Render-Cache per Szenen-Abdruck | `render_still()`, `scene_digest()` | 405 von 405 Vorschaubildern aus dem Cache; eine Skin-Farbe rendert nur ihre 3 Bilder neu | Bilder nach dem cachen, was die Kamera sieht – nicht nach dem Code |
+| Ausgaben-Cache | `OutputCache`, `export_digest()` | quick warm 22 → 9–12 s | Exporte nur schreiben, wenn sich ihr Inhalt geändert hat |
+| Kanonische Reihenfolge vor Decimate | `canonical_bm()` | Facetten-Form in jedem Prozess gleich | Vor jeder reihenfolgeabhängigen Operation sortieren |
+| Voxel-Rechtecke | `emit_voxel_quads()`, `voxel_appearance()` | ein Drittel weniger Dreiecke, gleiches Bild | Gleich aussehende Nachbarflächen zusammenfassen |
+| Zeitband statt festem Budget | `timing_band()` | Laufzeit unter Last nicht mehr falsch „zu langsam“ | Zeiten gegen ruhige Referenzläufe mit Lasttoleranz bewerten |
 
 ## 1. Skin = Daten
 
@@ -393,3 +397,41 @@ Voxel konservativ (innen) rastern, Gelenke/Kleinteile glatt lassen; Variantengeo
 
 **Für Cubegen:** Atlas-Belegung als Kennzahl im Bericht; nach Smart UV Project konkav nachpacken; Bake-Ränder aus
 dem Inselabstand ableiten.
+
+## 17. Schlank und reproduzierbar (1.17)
+
+- **Ausgaben nach Inhalt cachen:** FBX, Viewer-Daten und Clip-Daten hängen an einem Abdruck aus Meshes (kanonische
+  Reihenfolge, UVs je Ecke, Materialien, Bilder), Rig, Aktionen und dem Quelltext der schreibenden Funktionen. Ist er
+  gleich und liegen die Dateien in der erwarteten Größe vor, wird nichts geschrieben. Der Abdruck muss alles sehen,
+  was die Datei bestimmt – darum stehen die Funktionsnamen in einer Liste (`EXPORT_CODE_PARTS`, `CLIP_CODE_PARTS`).
+- **Falle: Decimate hängt an der Element-Reihenfolge.** Die Facetten-Form war in Haupt- und Worker-Prozess
+  verschieden, obwohl die Eingabe gleich aussah: Blender legte Ecken und Flächen je Prozess anders ab, „Collapse“
+  arbeitet sie der Reihe nach ab. Vor jeder solchen Operation eine kanonische Kopie bauen (Ecken nach Position und
+  Gewichten sortiert, Flächen nach ihren Ecken) – danach ist das Ergebnis bitgleich.
+- **Falle: neue BMesh-Elemente haben keinen gültigen Index.** Nach dem Neuaufbau trugen alle Flächen denselben
+  `index`; Inselsuche und Dreieckstabelle über `face.index` fassten ganze Objekte zusammen (beide Füße als eine
+  Insel mit der Gruppe `Foot_R`). In der Ruhepose unsichtbar, erst die QA der Clips fand es. Nach dem Aufbau
+  `index_update()` und `ensure_lookup_table()`.
+- **Innen-Test robust:** drei leicht schräge Strahlen mit Mehrheitsentscheid statt eines achsparallelen, der bei
+  rasterförmig gebauten Teilen genau Kanten und Ecken streifen kann.
+- **Vereinfachen ohne Herausragen:** Decimate „Collapse“ setzt zusammengefasste Punkte an das Quadrik-Optimum, auch
+  ein paar Millimeter außerhalb des Teils. Punkte, die mehr als 2 mm herausragen, auf diesen Abstand zur Oberfläche
+  ihres Teils (gleiche Knochengruppe) zurückziehen (ganz auf die Fläche gezogen, verlieren Gelenke ihren kleinen
+  Überlapp: die Hand löste sich vom Unterarm) – wie der Voxel-Einzug hält das die kollisionsfreien Clips der Grundform gültig. Auch die
+  Bezugsfläche dafür kanonisch aufbauen: Liegt ein Punkt genau über einer Kante, entscheidet sonst die
+  Flächenreihenfolge des Prozesses, welche Normale „außen“ bestimmt.
+- **Gleich Aussehendes zusammenfassen:** Voxel-Seiten gleicher Gruppe, gleichen Materials und gleicher Richtung
+  werden zu Rechtecken verschmolzen, wenn die Texel aller Karten (Farbe, Masken, Werkstoff, gestuft) gleich sind –
+  das Bild bleibt gleich, die Dreiecke sinken um ein Drittel (17 136 → 11 348).
+- **Lieferstand von Arbeitsdateien trennen:** Die 75 gemischten Skin-Karten brauchen nur die Vorschauen; sie liegen
+  im Cache und werden nur bei geänderter Palette neu geschrieben. `Textures/` enthält nur, was ein Spiel lädt.
+- **Zeiten im Band bewerten:** Last zu Beginn je Kern bestimmt die Toleranz (ruhig 30 %, leicht × 2,6, schwer gar
+  nicht), Referenz sind nur ruhige Läufe derselben Stufe und Cache-Lage. Ein festes Budget meldete unter Last ständig
+  „zu langsam“ und auf ruhiger Maschine echte Verlangsamungen zu spät.
+- **Große Skripte aufteilen, ohne Verhalten zu ändern:** Module mit einem gemeinsamen Namensraum in fester
+  Reihenfolge; eine Analyse der freien Namen je Modul (`symtable`) zeigt vorher jeden Verweis auf ein späteres Modul.
+  Prüfstein sind die Caches: Hängt der Code-Anteil der Schlüssel am Quelltext der Funktionen, müssen nach dem Umbau
+  alle Caches treffen – dann ist nichts verändert.
+
+**Für Cubegen:** Exporte nach Inhalt cachen; vor Decimate und ähnlichen Operationen kanonisch sortieren; Innen-Tests
+mit schrägen Strahlen; Voxel-Flächen verschmelzen; Laufzeiten im Lastband bewerten.

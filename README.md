@@ -1,4 +1,4 @@
-# Cube Escape – Roboter-Charakter (Generator 1.16.0)
+# Cube Escape – Roboter-Charakter (Generator 1.17.0)
 
 Der spielbare Roboter aus dem Cube-Escape-Keyart, vollständig per Skript erzeugt: Geometrie mit Bauteil-Varianten
 und Accessoires, Materialien, gebackene Texturen (Detail- und Ausdrucks-Texturen per ImageMagick), Rig mit Bein- und
@@ -32,11 +32,11 @@ raucht), 24 Robotertypen, Skin-Bogen im Stil der Konzeptbilder und UI-Icons.
 | `output/CubeEscape_Robot.blend` | Blender-Szene: Standard-Mesh, `Robot_Parts` (alle Teile), Rig, NLA-Spur je Animation |
 | `output/robot_config.json` | Slots, Varianten, Robotertypen (mit Maßen), Skins, Ausdrücke, Display-Motive, Atlas-Zellen und **Clip-Daten** (für Unity) |
 | `output/ANIMATIONS.md` | automatisch erzeugte Clip-Liste (Frames, Loop, Grundtempo, Höhe, Schritt-Frames, Unity-Hinweise) |
-| `output/Textures/` | 2048² PNGs: BaseColor/Emission je Skin, MetallicSmoothness, Normal, Occlusion, ColorMask, LightMask, **Masken** (Badge ×3, Line ×2, Zone ×2, Layer ×2, Material ×2), Eye-Atlas (2048 × 2560), Display-Atlas, Display-Flipbook; `Unity/T_Robot_U_*.png`: die Masken für Unity gepackt (10 statt 14 Texturen, ≤ 1024²) |
+| `output/Textures/` | 2048² PNGs: BaseColor/Emission des Standard-Skins (die übrigen Skins sind Daten in `data/skins.json`; ihre fertigen Karten für die Vorschauen liegen seit 1.17 in `cache/skin_textures`), MetallicSmoothness, Normal, Occlusion, ColorMask, LightMask, **Masken** (Badge ×3, Line ×2, Zone ×2, Layer ×2, Material ×2), Eye-Atlas (2048 × 2560), Display-Atlas, Display-Flipbook; `Unity/T_Robot_U_*.png`: die Masken für Unity gepackt (10 statt 14 Texturen, ≤ 1024²) |
 | `output/Icons/` | UI-Icons 256²: `Skins/`, `Expressions/`, `Displays/`, `Badges/`, `Accessories/` |
 | `output/ViewerData/` | Daten für den Viewer (Geometrie, Rig, Animationen, Texturen) |
 | `output/Previews/` | Ansichten, Typen, Skins, **Skin-Bogen** (`skin_sheet.png`), **Silhouetten**, **Gegenüberstellung** der Schichten, Werkstoffe und Abnutzung (`weathering.png`), Ausdrücke, Kontaktbögen je Phase, GIFs |
-| `scripts/generate_robot.py` | Generator (Blender 5.2 LTS) |
+| `scripts/generate_robot.py`, `scripts/robogen/` | Generator (Blender 5.2 LTS): Einstieg und `main()`, die Schritte als 16 Module (Reihenfolge und Regeln in `robogen/__init__.py`) |
 | `scripts/make_textures.py` | ImageMagick: Gebrauchsspuren, Metall, Kratzer, Decals, Abzeichen, Leiterbahnen, Blitze, 33 Augen-Ausdrücke, 16 Display-Motive, 3 animierte (Flipbook) |
 | `scripts/concept_palettes.py` | einmaliges Werkzeug: Farbpunkte der Konzeptbögen auslesen (nie im Generatorlauf) |
 | `scripts/export_viewer.py`, `scripts/reexport_viewer.py` | Datenexport für den Viewer (im Generator bzw. separat aus der `.blend`) |
@@ -52,7 +52,7 @@ raucht), 24 Robotertypen, Skin-Bogen im Stil der Konzeptbilder und UI-Icons.
 ## Neu erzeugen
 
 ```bash
-# Teststufe: quick (≈ 15 s) beim Arbeiten, standard (≈ 1 min) vor dem Commit, full (≈ 3–4 min) für den Lieferstand
+# Teststufe: quick (≈ 10 s mit warmem Cache) beim Arbeiten, standard (≈ 1 min) vor dem Commit, full (≈ 3–4 min) für den Lieferstand
 /Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup --python-exit-code 1 --python scripts/generate_robot.py -- --tier quick
 # danach alle Prüfungen gleichzeitig: verify_robot.py, Viewer bauen und testen, Unity-Testpaket (≈ 35 s)
 scripts/check_output.sh output/_quick
@@ -66,10 +66,15 @@ scripts/check_output.sh output/_quick
 
 Gemessen am 12.10.2026 auf dem Apple M5 (4 Performance- + 6 Effizienzkerne, 8 GPU-Kerne), ruhige Maschine, warmer
 Cache; 1.7.0 brauchte rund 40 min. Jeder Lauf schreibt Schrittzeiten, Systemlast zu Beginn und Ende, Prozess-Sekunden
-je Paketart und eine Statistik je Worker nach `logs/robot_report.json` (`timings`) und warnt, wenn das Budget der
-Stufe (`TIERS`: 20 / 90 / 300 s) überschritten ist oder schon beim Start andere Prozesse rechneten. **Zeiten nur auf
-ruhiger Maschine vergleichen:** Ein paralleler Unity- oder Blender-Lauf (z. B. eines anderen Agenten) macht jeden
-Schritt zwei- bis fünfmal langsamer.
+je Paketart und eine Statistik je Worker nach `logs/robot_report.json` (`timings`). **Zeitband (1.17):** Bewertet
+wird gegen den Median früherer ruhiger Läufe derselben Stufe und Cache-Lage (`cache/timings.json`, warm = Bake aus
+dem Cache, nichts gerendert, keine Clips gemessen): Last zu Beginn unter 0,3 je Kern = ruhig, Toleranz 30 %; unter
+0,8 je Kern = leicht, Toleranz × 2,6; darüber = schwer, „NOT JUDGED“. Nur ruhige Läufe werden Referenz, die ersten
+drei melden „NO REFERENCE YET“. Das Stufenbudget (`TIERS`: 20 / 90 / 300 s) bleibt als Ziel im Bericht. Ein
+paralleler Unity- oder Blender-Lauf (z. B. eines anderen Agenten) macht jeden Schritt zwei- bis fünfmal langsamer.
+
+**1.17 „Slimline“:** mit warmem Cache `quick` 22 s → 9–12 s, `full` 90–115 s → 54–59 s (FBX, Viewer-Daten und Clip-Daten werden nur bei
+geänderten Eingaben neu geschrieben, siehe unten).
 
 ### Ablauf und Worker
 
@@ -105,6 +110,14 @@ Hauptprozess (gleiches Ergebnis).
   (Objekte, Pose, Materialwerte, Texturinhalte, Licht, Kamera, Einstellungen) – unveränderte Bilder kommen aus
   `cache/render`, auch wenn sich Generator-Code geändert hat; eine geänderte Skin-Farbe rendert nur deren Bilder neu.
   Ungenutzte Einträge (QA wie Render) werden nach 7 Tagen gelöscht, `--no-cache` rendert alles.
+- **Ausgaben-Cache (1.17):** Haupt-FBX samt LODs, Modular-FBX, Form-FBX und Viewer-Daten bleiben liegen, wenn ihr
+  Abdruck gleich ist (`cache/outputs.json`: Meshes in kanonischer Reihenfolge mit UVs und Materialien, Rig, Clips,
+  Quelltext der Export-Funktionen; eine fehlende oder in der Größe geänderte Datei wird neu geschrieben). Clip-Daten
+  je Clip in `cache/clips`, gemischte Skin-Karten nur bei geänderter Palette (`cache/skin_textures/stamps.json`).
+  Log: „unchanged outputs kept: …“, „clip data: N clips from the cache“, „composed N of 76 skins“. Zur Fehlersuche
+  schreibt `ROBOT_OUTPUT_DIGEST_DUMP=<Datei>` die Abdrücke je Objekt.
+- **Viewer-Daten (1.17):** Ecken je Teil zusammengefasst (gleiche Position, Normale, UV, Gewichte → ein Vertex),
+  `vertices.bin` rund dreimal kleiner.
 
 - **Skins werden nicht einzeln gebacken.** Jede Körperfarbe hängt linear von der Palette ab: eine Konstante plus
   eine Graustufen-Gewichtskarte je Palettenfarbe. Sechs Backs liefern diese Ebenen, jeder Skin entsteht daraus per
@@ -272,7 +285,7 @@ der Inhalt der Seitenleiste in seine Spalte passt; `--window 1710x1000` öffnet 
   (Typ-Emotes nur mit ihrem Typ). Jeder Aufsatz steckt in mindestens einem Typ, so ist er in allen Clips geprüft.
 - **Farben ohne neue Texturen:** `T_Robot_ColorMask.png` – R Panzerung, G Mechanik, B Metall; `T_Robot_LightMask.png`
   – Lichter; Rest auf Körper-Flächen = Visier. Ein Shader färbt mit `Farbe × Helligkeit(Albedo) / Helligkeit(Classic-Farbe)` um; Schmutz,
-  Kratzer, AO und Decals bleiben erhalten. Alternativ fertige Texturen je Skin (`T_Robot_BaseColor_<Skin>.png`).
+  Kratzer, AO und Decals bleiben erhalten. Fertige Karten je Skin (`T_Robot_BaseColor_<Skin>.png`) entstehen für die Vorschauen in `cache/skin_textures`; geliefert wird nur der Standard-Skin.
 - **Schichten, Werkstoffe, Abnutzung (1.11):** gebackene Felder in `T_Robot_LayerMask*` (Rost, Moos, Frost,
   Glutrisse / Tarnung, Kratzer, Schmutz) und `T_Robot_MaterialMask*` (sieben Werkstoff-Muster), Zuordnung in
   `robot_config.json` › `layers`, `materials`, `weathering`. Die Schichtfelder sind auf die Lackfläche normiert
@@ -314,9 +327,11 @@ der Inhalt der Seitenleiste in seine Spalte passt; `--window 1710x1000` öffnet 
   stoßen sie an den Kopf bzw. den Oberschenkel). Fugen und Schrauben auf Beinen, Hüfte und Brust.
 - **Körperformen (1.14):** `robot_config.json` › `forms`, Skin- und Look-Feld `form`. *Mesh-Formen* sind eigene
   Teil-Objekte mit demselben Rig, denselben Materialien und dem Textur-Atlas (jeder Skin passt): Facettiert = Decimate
-  „Collapse“ auf 16 % mit flachen Facetten, Voxel = Würfel von 3 cm im Weltraster (eine Zelle zählt, wenn ihr
+  „Collapse“ auf 16 % mit flachen Facetten (seit 1.17 innerhalb der Grundform), Voxel = Würfel von 3 cm im Weltraster (eine Zelle zählt, wenn ihr
   Mittelpunkt mindestens eine halbe Zelle tief im Teil liegt – so ragt kein Würfel über die Grundform hinaus; jede
-  Würfelseite übernimmt UV und Material des nächsten Originalpunkts, ist also einfarbig). Gelenkkugeln, Finger und
+  Würfelseite übernimmt UV und Material des nächsten Originalpunkts, ist also einfarbig; seit 1.17 werden
+  gleich aussehende Nachbarseiten zu Rechtecken zusammengefasst – Farbe, Masken und Werkstoff am Texel gleich –,
+  ein Drittel weniger Dreiecke bei gleichem Bild). Gelenkkugeln, Finger und
   dünne Teile (Schrauben, Ringe) bleiben glatt, Visier und Bildschirme ebenfalls. *Shader-Form* Durchbrochen:
   runde Löcher in der Panzerung im UV-Raum (`perforation`: Abstand 4,5 cm, Radius 0,33 Zelle, jede zweite Reihe
   versetzt; im Viewer `discard`, in Unity `clip`, Innenseiten sichtbar). *Teile-Form* Kabel: Gruppe `Form_Wired`
@@ -488,11 +503,17 @@ ersetzt, neuere Versionen abgelehnt – dieselben Regeln gehören in die Spielst
 - **Export:** `verify_robot.py` öffnet die `.blend`, importiert alle FBX (Standard, modular, je Typ), vergleicht alle
   Takes mit dem Original und prüft Konfiguration, Clip-Daten (Tempo-Reihenfolge, Schritte, Root Motion, Griffpunkte,
   Strom bei Death), Beispiel-Looks und Viewer-Daten. `viewer/test_viewer.sh` prüft Look-Migration, unbekannte IDs,
-  Ablehnung neuerer Versionen und den Round Trip aller Typ-Looks.
+  Ablehnung neuerer Versionen und den Round Trip aller Typ-Looks. Seit 1.17 liegt jede Knochengruppe einer Mesh-Form
+  innerhalb derselben Gruppe ihres Grundteils (+ eine Voxel-Zelle).
 - IK-Meldungen „… IK clamped“ sind bei Death, SitDown, SitIdle (gestreckte Beine) sowie beim Loslassen der Kante in
   ClimbUp und bei den äußersten Griffen am Hängen erwartet.
 
 ## Aufbau des Generators (Kurzfassung)
+
+Code: `scripts/generate_robot.py` (Einstieg, `main()`) und das Paket `scripts/robogen/` mit einem Modul je Schritt
+(`core`, `layout`, `materials`, `parts`, `body`, `assembly`, `textures`, `rig`, `forms`, `motion`, `clips`, `qa`,
+`preview`, `export`, `pipeline`, `config`). Die Module teilen sich einen Namensraum in dieser Reihenfolge; ein Modul
+nutzt nur Namen aus sich selbst und früheren Modulen.
 
 1. **ImageMagick:** kachelbare Detailtexturen, Decal- und Abzeichen-Atlas, Leiterbahnen, Blitze, Augen- und
    Display-Atlas, Display-Flipbook.

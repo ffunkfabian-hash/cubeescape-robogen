@@ -9,7 +9,7 @@ OUT="${1:-$ROOT/output}"
 DATA="$OUT/ViewerData"
 APP="$OUT/RobotViewer.app"
 BUILD="$HERE/.build"
-VERSION="$(sed -n 's/^VERSION = "\(.*\)"/\1/p' "$ROOT/scripts/generate_robot.py")"
+VERSION="$(sed -n 's/^VERSION = "\(.*\)"/\1/p' "$ROOT/scripts/robogen/core.py")"
 
 [ -f "$DATA/robot.json" ] || { echo "missing $DATA/robot.json - run scripts/generate_robot.py first" >&2; exit 1; }
 mkdir -p "$BUILD"

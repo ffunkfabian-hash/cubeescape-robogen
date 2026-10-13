@@ -74,9 +74,11 @@ Kommentare und Log-Ausgaben auf **Englisch**.
 | `standard` | vor jedem Commit | `output/_standard` |
 | `full` | vor Release, für den Lieferstand | `output` |
 
-Jeder Lauf schreibt Schrittzeiten, Systemlast und Worker-Statistik nach `<out>/logs/robot_report.json` und warnt
-beim Überschreiten des Budgets (`TIERS`). Zeiten nur auf ruhiger Maschine vergleichen (`timings.load`; parallele
-Unity- oder Blender-Läufe anderer Agenten verfälschen sie um ein Vielfaches).
+Jeder Lauf schreibt Schrittzeiten, Systemlast und Worker-Statistik nach `<out>/logs/robot_report.json` und bewertet
+die Zeit im **Zeitband** (`timings.band`, `cache/timings.json`): gegen den Median ruhiger Läufe derselben Stufe und
+Cache-Lage, mit Toleranz je Last (ruhig 30 %, leicht × 2,6, schwer = nicht bewertet). Nur ruhige Läufe werden
+Referenz. Ein „SLOWER“ auf ruhiger Maschine ist ein Befund; unter Last nichts schließen, sondern ruhig nachmessen
+(Abschnitt unten). Das Budget (`TIERS`) bleibt Zielwert.
 
 ## Ganze Leistung des Geräts (gemeinsame Regel mit Cube Escape und Cubegen)
 
@@ -99,6 +101,9 @@ pausierter Befehl kann in die Zeitgrenze seines Werkzeugs laufen – dann führt
    reused“); nach Änderungen an der QA selbst reicht das (der Code steckt im Schlüssel), `--no-cache` prüft alles neu.
    Vorschaubilder kommen aus `cache/render`, solange die Szene beim Rendern gleich aussieht („render cache: N images
    reused“); Fehlersuche mit `ROBOT_KEEP_WORKER_LOGS=1` und `ROBOT_RENDER_DIGEST_DUMP` (`docs/TECHNIK.md` › 12).
+   Ohne Änderung an Modell, Rig, Clips und Export-Code schreibt der zweite Lauf keine FBX und keine Viewer-Daten
+   („unchanged outputs kept: main, modular, forms, viewer“) und misst keine Clips („73 clips from the cache“);
+   Fehlersuche mit `ROBOT_OUTPUT_DIGEST_DUMP=<Datei>`.
 5. Sichtbare Änderungen ansehen: `Previews/skins.png`, `Previews/hero.png`, bei Animationen die Kontaktbögen.
 6. Bei Viewer-Änderungen `viewer/build.sh` und `viewer/test_viewer.sh`.
 7. Bei Änderungen an Export, Clips, Texturen, Masken oder Looks: `unity/run_testbed.sh` (eigenes Unity-Projekt, nie das
@@ -134,7 +139,20 @@ Text. Gemeinsam mit Cube Escape und Cubegen (dort je eine eigene Tabelle in `AGE
 - Was der Schlüssel nicht sehen kann, braucht eine Schemaversion: `UV_SCHEMA` bei Änderungen an `unwrap()`,
   `BAKE_SCHEMA` bei Änderungen am Backen. Im Zweifel erhöhen – ein falscher Treffer ist schlimmer als ein Neu-Backen.
 - `--no-cache` liest keinen Cache, schreibt die UVs aber trotzdem (die Render-Worker brauchen sie).
+- Code im Schlüssel (QA, Clip-Daten, Export: `QA_CODE_PARTS`, `CLIP_CODE_PARTS`, `EXPORT_CODE_PARTS`) wird per
+  Funktionsname über alle `robogen`-Module gesucht (`code_source`). Schreibt eine neue Funktion an einer gecachten
+  Ausgabe mit, gehört ihr Name in die passende Liste – sonst bleibt eine veraltete Datei liegen.
+- Vorschau-Skins liegen in `cache/skin_textures`, in `Textures/` nur der Standard-Skin (Lieferstand).
 - ImageMagick-Texturen hängen am Skript-Hash von `make_textures.py` und an der ImageMagick-Version.
+
+## Code-Aufbau (1.17)
+
+`scripts/generate_robot.py` ist nur Einstieg und `main()`; die Schritte stehen in `scripts/robogen/` (Reihenfolge und
+Regeln in `robogen/__init__.py`). Die Module teilen einen Namensraum per `from robogen.<vorher> import *`: ein Modul
+nutzt nur Namen aus sich und früheren Modulen (sonst `NameError` zur Laufzeit). Gemeinsamer Zustand als Container
+(Listen, Dicts); ein einfacher Wert, der zur Laufzeit gesetzt wird, wird in seinem Modul gesetzt
+(`robogen.preview.PREVIEW_SAMPLE_SCALE`). Pfade über `SCRIPTS_DIR` und `GENERATOR` aus `core`, nie über `__file__`
+eines Moduls.
 
 ## Worker
 

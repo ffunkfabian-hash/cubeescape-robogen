@@ -406,9 +406,17 @@ def verify_paintjob():
     check("skins: start set of stage 1.11", start11 == START_SET_1_11, sorted(start11 ^ START_SET_1_11))
     start = {n for n, sk in skins.items() if sk["startSet"] and sk["stage"] == "1.10"}
     check("skins: start set of stage 1.10", start == START_SET_1_10, sorted(start ^ START_SET_1_10))
-    missing = [n for n in skins if not os.path.exists(os.path.join(tex_dir, "T_Robot_BaseColor%s.png" %
-                                                                    ("" if n == "Classic" else "_" + n)))]
-    check("skins: composed texture per skin", not missing, missing or len(skins))
+    # 1.17: the default skin is in Textures, the composed preview skins in cache/skin_textures - only where the cache
+    # came along (an output copied without its cache, like the main checkout's, is a complete deliverable)
+    skin_dir = os.path.join(OUT, "cache", "skin_textures")
+    previews = os.path.isdir(skin_dir)
+    missing = [n for n in skins if not os.path.exists(os.path.join(tex_dir, "T_Robot_BaseColor.png") if n == "Classic"
+                                                      else os.path.join(skin_dir, "T_Robot_BaseColor_%s.png" % n))
+               and (n == "Classic" or previews)]
+    check("skins: composed texture per skin (default in Textures, previews in cache%s)" %
+          ("" if previews else ": no cache, default only"), not missing, missing or len(skins))
+    stale = [f for f in os.listdir(tex_dir) if f.startswith(("T_Robot_BaseColor_", "T_Robot_Emission_"))]
+    check("textures: no preview skins among the deliverables", not stale, stale[:5])
     missing = [t for t in MASK_TEXTURES if not os.path.exists(os.path.join(tex_dir, t))]
     check("masks: textures present", not missing, missing)
     if not missing:
@@ -641,6 +649,39 @@ def verify_crawlspace():
           all(c and c["hideHeldItem"] for c in crawl.values()), sp)
 
 
+def group_boxes(ob):
+    """Bounds per main vertex group of a mesh object (rest shape, world space)."""
+    names = {g.index: g.name for g in ob.vertex_groups}
+    co = np.array([ob.matrix_world @ v.co for v in ob.data.vertices]) if len(ob.data.vertices) else np.zeros((0, 3))
+    grp = [names[max(v.groups, key=lambda g: g.weight).group] if v.groups else None for v in ob.data.vertices]
+    out = {}
+    for n in set(grp) - {None}:
+        pts = co[[i for i, g in enumerate(grp) if g == n]]
+        out[n] = (pts.min(axis=0), pts.max(axis=0))
+    return out
+
+
+def verify_slimline():
+    """1.17: every bone group of a mesh form stays inside the bounds of the same group of its base part (the voxel
+    inset and the faceted pull-back; a lost element index once voxelised both feet as Foot_R, 0.23 m outside)."""
+    bad, n = [], 0
+    for ob in bpy.data.objects:
+        base = bpy.data.objects.get(ob.name.rsplit("__", 1)[0]) if "__" in ob.name else None
+        if ob.type != "MESH" or base is None or not ob.name.endswith(("__Voxel", "__Faceted")):
+            continue
+        n += 1
+        src = group_boxes(base)
+        for g, (lo, hi) in group_boxes(ob).items():
+            if g not in src:
+                bad.append((ob.name, g, "group not in base"))
+                continue
+            out = float(max((src[g][0] - lo).max(), (hi - src[g][1]).max()))
+            if out > 0.03:     # one voxel cell: block corners on curved thin parts (cape) reach past the bounds
+                bad.append((ob.name, g, round(out, 3)))
+    check("forms: every bone group of a mesh form inside its base part (+ one voxel cell)", n >= 40 and not bad,
+          bad[:6] or n)
+
+
 def main():
     print("== verify %s" % bpy.data.filepath)
     ref = verify_blend()
@@ -656,6 +697,7 @@ def main():
     verify_spectral()
     verify_reshape()
     verify_crawlspace()
+    verify_slimline()
     ok = all(r["ok"] for r in results)
     os.makedirs(os.path.join(OUT, "logs"), exist_ok=True)
     with open(os.path.join(OUT, "logs", "verify_report.json"), "w", encoding="utf-8") as fh:

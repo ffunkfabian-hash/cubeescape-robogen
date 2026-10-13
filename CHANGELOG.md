@@ -3,6 +3,47 @@
 Versionen des Roboter-Generators (zählen getrennt von Cube Escape und Cubegen). Jede Version hat einen Tag
 `v<Version>` und einen Release-Branch `release/<Version>`.
 
+## 1.17.0 „Slimline“ – 2026-10-13
+
+**Optimierung ohne Modelländerung** (Vorschlag vom 13.10., Nutzer: „1–5 ausführen“). QA, Clip-Daten und Typ-Maße sind
+identisch mit 1.16; die Voxel-Form hat weniger Dreiecke bei gleichem Bild.
+
+1. **Schnelle Stufe unter 10–12 s:** Haupt-FBX samt LODs, Modular-FBX, Form-FBX und Viewer-Daten werden nur noch
+   geschrieben, wenn sich ihr Inhalt geändert hat (`cache/outputs.json`, Abdruck aus Meshes, Rig, Clips und
+   Export-Code), Clip-Daten je Clip aus `cache/clips`. `quick` mit warmem Cache 22 s → 9–12 s, `full` mit warmem
+   Cache 90–115 s → 54–59 s (alle 1 505 Bilder, 1 919 QA-Ergebnisse und alle Ausgaben aus dem Cache).
+2. **Generator in Module aufgeteilt:** `scripts/generate_robot.py` (Einstieg, `main()`) und 16 Module in
+   `scripts/robogen/` (`core` … `config`). Ohne Verhaltensänderung: nach dem Umbau trafen alle Caches (UV, Bake,
+   73 Clips, 73 QA-Ergebnisse, alle Ausgaben, Render-Cache), die am Quelltext der Funktionen hängen.
+3. **Schlanke Ausgaben:** In `Textures/` liegt nur noch der Standard-Skin; die 75 übrigen gemischten Skin-Karten für
+   die Vorschauen liegen in `cache/skin_textures` und werden nur bei geänderter Palette neu geschrieben
+   (`Textures/` im Volllauf 334 → 47 MB). Viewer-Daten: gleiche Ecken je Teil zusammengefasst, `vertices.bin`
+   rund dreimal kleiner.
+4. **Voxel-Form mit weniger Dreiecken:** gleich aussehende Nachbarseiten (Farbe, Masken und Werkstoff am Texel
+   gleich) werden zu Rechtecken verschmolzen – Standard-Look 17 136 → 11 348 Dreiecke (−34 %, Volllauf), im Bild kein Unterschied.
+5. **Zeitband statt festem Budget:** Laufzeiten werden gegen den Median ruhiger Läufe derselben Stufe und Cache-Lage
+   bewertet (`cache/timings.json`, `timings.band` im Bericht); Toleranz nach Last zu Beginn: ruhig 30 %, leicht
+   × 2,6, schwer = nicht bewertet. Das Stufenbudget bleibt als Ziel.
+
+* Behoben (beim Cachen gefunden): Die Facetten-Form war zwischen Prozessen verschieden (Decimate hängt an der
+  Element-Reihenfolge; jetzt kanonische Kopie vorher). Der Innen-Test der Voxel-Form nutzt drei leicht schräge
+  Strahlen mit Mehrheit statt eines achsparallelen, der auf dem Zellraster genau Kanten streifen kann.
+* Facetten-Form liegt jetzt innerhalb der Grundform: Decimate setzt zusammengefasste Punkte an die Quadrik-
+  Optimalstelle, die einige Millimeter außerhalb liegen kann; mit der kanonischen Reihenfolge berührte der Rumpf in
+  CrouchDeep den Oberschenkel. Solche Punkte werden bis auf 2 mm an die Oberfläche ihres Teils zurückgezogen
+  (`inside_surface`, `FACET_BULGE`; ganz auf die Fläche gezogen, löste sich in ClimbUp die Hand vom Unterarm).
+  Die Bezugsfläche ist kanonisch geordnet, damit das Ergebnis in jedem Prozess gleich ist.
+* Im Volllauf gefunden: Die kanonische Kopie trug keine gültigen Element-Indizes – die Inselsuche fasste ganze
+  Objekte zusammen (beide Füße als `Foot_R`), die QA meldete Durchdringungen in 59 Clips. Behoben, QA aller Typen und
+  Formen wieder ohne Befund. Neue Prüfung in `verify_robot.py`: jede Knochengruppe einer Mesh-Form liegt innerhalb
+  derselben Gruppe ihres Grundteils (+ eine Voxel-Zelle) – der Fehler lag 23 cm daneben.
+* Neu: `ROBOT_OUTPUT_DIGEST_DUMP=<Datei>` schreibt die Ausgaben-Abdrücke je Objekt (Fehlersuche).
+* Code-Review vor dem Release: Der Schlüssel der Clip-Daten enthielt die Eigenschaften des Clips selbst nicht
+  (Länge, Loop, `gait`, Requisit) und der Stempel der Skin-Karten nicht alle Funktionen und Konstanten der Mischung –
+  beides hätte nach einer Änderung veraltete Daten liegen lassen. `verify_robot.py` verlangt die Vorschau-Skins nur
+  noch, wo der Cache mitkommt (eine ohne Cache kopierte Ausgabe ist gültig). Modular- und Form-FBX hängen nicht mehr
+  an Clips und LOD-Einstellung.
+
 ## 1.16.0 „Crawlspace“ – 2026-10-13
 
 **Kriechen unter der Duck-Kapsel** (Entscheidung 13.10.: die Kapsel bleibt 0,65 m): zwei neue Clips in Bauchlage.

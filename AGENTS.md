@@ -62,6 +62,15 @@ Jeder Lauf schreibt Schrittzeiten, Systemlast und Worker-Statistik nach `<out>/l
 beim Überschreiten des Budgets (`TIERS`). Zeiten nur auf ruhiger Maschine vergleichen (`timings.load`; parallele
 Unity- oder Blender-Läufe anderer Agenten verfälschen sie um ein Vielfaches).
 
+## Ganze Leistung des Geräts (gemeinsame Regel mit Cube Escape und Cubegen)
+
+Braucht eine Sitzung den Rechner für sich (Messungen, Benchmarks, Zeitbudgets, Abnahmen), darf sie andere
+Sitzungen pausieren. Werkzeug: `pause_sessions.py` aus Cube Escape
+(`/Users/ffunk/Claude/Cube Escape/.agents/skills/ce-testing/scripts/pause_sessions.py run -- <Befehl>`): hält nur die
+Befehle anderer Claude-/Codex-Sitzungen an (SIGSTOP), setzt sie danach immer fort (SIGCONT), lässt die Sitzungen selbst,
+den Unity-Editor und Blender des Nutzers unberührt. Nur so lange wie nötig pausieren und es im Bericht nennen. Ein
+pausierter Befehl kann in die Zeitgrenze seines Werkzeugs laufen – dann führt die andere Sitzung ihn erneut aus.
+
 ## Prüfablauf vor dem Commit
 
 1. Vor der Änderung den `robot_report.json` der betroffenen Stufe sichern.

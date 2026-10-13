@@ -32,6 +32,7 @@ struct BoneInfo: Decodable {
 
 struct PartInfo: Decodable {
     let object: String
+    let form: String?          // body form of the chunk (1.14), "" or missing = base geometry
     let slot: String
     let variant: String
     let bone: String
@@ -99,6 +100,8 @@ struct Skin: Decodable, Identifiable {
     struct Special: Decodable { let id: String; let color: [Double]; let color2: [Double]; let strength: Double
                                 let speed: Double }
     let special: Special?
+    // since generator 1.14: body form ("None" or an ID of RobotConfig.forms)
+    let form: String?
     let parts: [String: String]?
     let expression: String?
     let display: String?
@@ -167,6 +170,22 @@ struct SpecialInfo: Decodable, Identifiable {
     let color2: [Double]
     let strength: Double
     let speed: Double
+}
+
+/// Body form (1.14): "mesh" = own geometry chunks, "shader" = cut-out in the body shader, "parts" = extra parts.
+struct FormInfo: Decodable, Identifiable {
+    let id: String
+    let kind: String
+    let label: String
+    let description: String
+    let urp: String
+}
+
+/// Holes of the form "Perforated": grid in UV space (Blender/Unity convention, v up).
+struct PerforationInfo: Decodable {
+    let spacing: Double
+    let radius: Double
+    let cells: Double?
 }
 
 /// Particle emitter of an accessory (1.12): position/direction in character space (right, up, forward).
@@ -295,6 +314,9 @@ struct RobotConfig: Decodable {
     let emitters: [EmitterInfo]?
     // since generator 1.13
     let specials: [SpecialInfo]?
+    // since generator 1.14
+    let forms: [FormInfo]?
+    let perforation: PerforationInfo?
 
     /// Static motifs and animated ones (flipbook).
     var allDisplays: [String] { displays + (displayAnimations ?? []).map(\.name) }

@@ -1,12 +1,13 @@
-# Cube Escape – Roboter-Charakter (Generator 1.13.0)
+# Cube Escape – Roboter-Charakter (Generator 1.14.0)
 
 Der spielbare Roboter aus dem Cube-Escape-Keyart, vollständig per Skript erzeugt: Geometrie mit Bauteil-Varianten
 und Accessoires, Materialien, gebackene Texturen (Detail- und Ausdrucks-Texturen per ImageMagick), Rig mit Bein- und
 Arm-IK, 71 Animationen, maschinenlesbare Clip-Daten fürs Spiel, automatische QA, Vorschaurender, `.blend`,
 Unity-fertige `.fbx` (Standard, modular und je Robotertyp) und ein eigener **Robot Viewer** zum Anpassen: 71
-Animationen in 8 Gruppen (darunter zwei Typ-Emotes), 71 Skins als Daten (Palette mit Zweitfarbe, Oberfläche,
+Animationen in 8 Gruppen (darunter zwei Typ-Emotes), 76 Skins als Daten (Palette mit Zweitfarbe, Oberfläche,
 Werkstoff, Abzeichen, Leuchtlinien, Schichten wie Rost, Moos, Frost, Glutrisse, Tarnung, Abnutzung, Spezialmaterialien
-Glas, Hologramm, Glitch, Schillern, Skizze, Regenbogen, Galaxie), 33
+Glas, Hologramm, Glitch, Schillern, Skizze, Regenbogen, Galaxie, Körperformen facettiert, Voxel, durchbrochen und
+offene Kabel), 33
 Augen-Ausdrücke, 16 Display-Motive und 3 animierte, 34 Accessoires (Umhang und Antenne schwingen nach, der Schornstein
 raucht), 24 Robotertypen, Skin-Bogen im Stil der Konzeptbilder und UI-Icons.
 **Das Spielprojekt wurde nicht verändert** – dieser Ordner steht für sich.
@@ -26,6 +27,7 @@ raucht), 24 Robotertypen, Skin-Bogen im Stil der Konzeptbilder und UI-Icons.
 | `output/LOD/`, `output/Types/LOD/` | Unity: Detailstufen LOD1/LOD2 (≈ 6 000 / 2 500 Dreiecke) je FBX, gleiches Rig, ohne Takes |
 | `output/CubeEscape_Robot_Modular.fbx` | Unity: alle Bauteil-Varianten und Accessoires als einzelne Meshes am selben Rig (ohne Animation) |
 | `output/Types/CubeEscape_Robot_<Typ>.fbx` | Unity: jeder Robotertyp fertig kombiniert als 1 Mesh + Rig (ohne Animation, Clips aus der Haupt-FBX) |
+| `output/Forms/` | Unity (1.14): Körperformen – `CubeEscape_Robot_<Form>.fbx` (Standard-Look in der Form, gleiches Rig, ohne Takes) für Faceted, Voxel, Wired, `CubeEscape_Robot_Modular_<Form>.fbx` für die Mesh-Formen |
 | `output/Looks/<Typ>.robotlook.json`, `output/robot_look.schema.json` | Look je Robotertyp im Spielstand-Format (Version 2) und JSON-Schema dazu |
 | `output/CubeEscape_Robot.blend` | Blender-Szene: Standard-Mesh, `Robot_Parts` (alle Teile), Rig, NLA-Spur je Animation |
 | `output/robot_config.json` | Slots, Varianten, Robotertypen (mit Maßen), Skins, Ausdrücke, Display-Motive, Atlas-Zellen und **Clip-Daten** (für Unity) |
@@ -204,12 +206,14 @@ Fahrplan: [docs/FAHRPLAN.md](docs/FAHRPLAN.md); Techniken und Lehren (für Cubeg
   Helmring), Ohren (1.12, am linken Ohr: Linsenauge, Zahnräder, Zifferblatt), Hals (Fliege, Schal, Medaille,
   Glöckchen), Rücken (Jetpack, Umhang – schwingt nach, Flügel; 1.12: Rucksack mit Taschen), Hand (Schraubenschlüssel,
   Blume, Fahne – in Kletter-/Hänge-Clips automatisch ausgeblendet).
-- **Farben:** 62 Skins als Startpunkt (★ = Startset), Thema darunter; ein Skin setzt Farben, Oberfläche, Zweitfarbe,
+- **Farben:** 76 Skins als Startpunkt (★ = Startset), Thema darunter; ein Skin setzt Farben, Oberfläche, Zweitfarbe,
   Abzeichen und Leuchtlinien, Retro/Orbit/Tank auch eigene Teile. Danach frei: Panzerung, Mechanik, Metall, Lichter,
   Augen, Display, Visier, Stoff; Oberfläche Standard/Matt/Satin/Glanz/Candy/Chrom.
 - **Spezialmaterial (1.13):** Glas/Kristall, Hologramm (wandernde Scanlinien), Glitch, Schillern, Skizze, Regenbogen
   und Galaxie (animiert) mit zwei Farben, Stärke und Tempo; Wirkung zur Laufzeit über dem Skin, Visier und Lichter
   bleiben. Die Beschreibung fürs spätere URP-Material steht in `robot_config.json` › `specials` (`urp`).
+- **Form (1.14):** Grundform, Facettiert (Origami, Geo), Voxel (Pixel), Durchbrochen (Bone) oder Offene Kabel (Wire);
+  der Skin bringt seine Form mit, jede Form passt zu jedem Skin.
 - **Zweitfarbe:** Farbe und Lackzonen (Kopf, Ohren, Brust, Schultern, Arme, Hüfte, Beine, Füße).
 - **Abzeichen:** bis zu zwei mit eigener Farbe – Warnstreifen, Kreuz, Wolke, Nummer, Biohazard, Schriftzeichen,
   Rennstreifen, Zielmarke, Stern, Zahnrad, Blatt (Ohrscheibe, Brust, Schulter, Oberschenkel, Rücken, Hinterkopf je nach
@@ -231,7 +235,7 @@ Fahrplan: [docs/FAHRPLAN.md](docs/FAHRPLAN.md); Techniken und Lehren (für Cubeg
 - **Hilfsobjekte:** Kante, Stange, Leiter oder Kiste an der Stelle, die der Clip voraussetzt – damit sieht man, ob
   Hände und Füße wirklich greifen.
 - **Ansicht:** Iso, Front, Side, Back, Face, Drehteller, Boden; Maus/Trackpad dreht und zoomt.
-- **Look laden/speichern** (`*.robotlook.json`, Version 5; Versionen 1 bis 4 werden übernommen, unbekannte Teile/Namen
+- **Look laden/speichern** (`*.robotlook.json`, Version 6; Versionen 1 bis 5 werden übernommen, unbekannte Teile/Namen
   durch Standardwerte ersetzt und gemeldet), **Screenshot** (1600 × 1600 PNG), **GIF** (15 fps, 600 px) und **Video**
   (MP4, 30 fps, 1080 px) der laufenden Animation.
 - **Vergleich A/B:** „Als B merken“ stellt den aktuellen Look rechts daneben (gleicher Clip, gleiche Ansicht),
@@ -245,15 +249,15 @@ output/RobotViewer.app/Contents/MacOS/RobotViewer --snapshot /tmp/robot.png --ty
 ```
 
 Weitere Schalter: `--look datei.json`, `--save-look out.json` (schreibt den geladenen, ggf. migrierten Look),
-`--skin` (mit `--skin-parts` samt Teilen), `--expression`, `--display`, `--finish`, `--variant Slot=Variante`,
+`--skin` (mit `--skin-parts` samt Teilen), `--form` (1.14), `--expression`, `--display`, `--finish`, `--variant Slot=Variante`,
 `--size 1000x1000`, `--no-floor`, `--no-props`, mit `--anim` auch `--gif clip.gif` oder `--video clip.mp4` (ganzer
-Clip). `viewer/test_viewer.sh` nutzt das für Migrations-, Round-Trip- und Export-Tests.
+Clip). `viewer/test_viewer.sh` nutzt das für Migrations-, Form-, Round-Trip- und Export-Tests.
 
 ## Kennzahlen
 
 | | |
 |---|---|
-| Höhe | 1,30 m (Classic-Kopf), steht auf z = 0, Ursprung zwischen den Füßen |
+| Höhe | 1,38 m (Classic-Kopf, seit 1.14; vorher 1,30 m), steht auf z = 0, Ursprung zwischen den Füßen |
 | Standard-Mesh | 11 852 Dreiecke, starres Skinning, 3 Materialien (Körper-Atlas, Augen, Display) |
 | Modular | 35 Teil-Objekte: `Robot_Body` + je Slot/Variante, gemeinsamer Textur-Atlas |
 | Je Robotertyp | 1 Mesh, 3–4 Materialien (Fabric nur bei Stoff-Accessoires), Maße in `robot_config.json` › `typeBounds` |
@@ -303,6 +307,19 @@ Clip). `viewer/test_viewer.sh` nutzt das für Migrations-, Round-Trip- und Expor
   Meter), Glitch (12 Bänder je Meter, Zufall je Band und Takt), Schillern (Farbton aus Blickwinkel und Höhe),
   Skizze (Papier, Tuschekontur, Schraffur im Dunkeln), Regenbogen und Galaxie (animiert, nur Panzerung). Visier und
   Lichter bleiben. Gebacken wird nichts; ohne Effekt zeigt der Skin seine Palette.
+- **Proportionen (1.14):** Die Teile werden im alten Maß gebaut und danach je Knochen umgeformt (`PROPORTIONS`):
+  Kopf breiter (× 1,14) und höher (× 1,24), Arme, Hände und Beine kräftiger, Rumpf und Becken breiter; Gelenke,
+  Clips, IK-Ziele und Bodenkontakte bleiben unverändert. Schulterpanzer und runde Füße behalten ihr Maß (sonst
+  stoßen sie an den Kopf bzw. den Oberschenkel). Fugen und Schrauben auf Beinen, Hüfte und Brust.
+- **Körperformen (1.14):** `robot_config.json` › `forms`, Skin- und Look-Feld `form`. *Mesh-Formen* sind eigene
+  Teil-Objekte mit demselben Rig, denselben Materialien und dem Textur-Atlas (jeder Skin passt): Facettiert = Decimate
+  „Collapse“ auf 16 % mit flachen Facetten, Voxel = Würfel von 3 cm im Weltraster (eine Zelle zählt, wenn ihr
+  Mittelpunkt mindestens eine halbe Zelle tief im Teil liegt – so ragt kein Würfel über die Grundform hinaus; jede
+  Würfelseite übernimmt UV und Material des nächsten Originalpunkts, ist also einfarbig). Gelenkkugeln, Finger und
+  dünne Teile (Schrauben, Ringe) bleiben glatt, Visier und Bildschirme ebenfalls. *Shader-Form* Durchbrochen:
+  runde Löcher in der Panzerung im UV-Raum (`perforation`: Abstand 4,5 cm, Radius 0,33 Zelle, jede zweite Reihe
+  versetzt; im Viewer `discard`, in Unity `clip`, Innenseiten sichtbar). *Teile-Form* Kabel: Gruppe `Form_Wired`
+  (Kabelstränge an Armen, Beinen, Hals, Bauch, je Knochen starr).
 - **Detailstufen und Treffer-Kapseln (1.13):** LOD1/LOD2 je FBX (Decimate „Collapse“, Teile bleiben starr an ihren
   Knochen); `hitCapsules`: 15 Kapseln (Becken, Rumpf, Kopf, Arme, Hände, Beine, Füße) im Charakterraum der Ruhepose,
   Radius = 93. Perzentil des Abstands zur Knochenachse, je Kapsel die Abdeckung ihrer Vertices.
@@ -414,18 +431,20 @@ Ausdrücke im Spiel umschalten = `material.mainTextureOffset` setzen (Werte in `
 bleiben bewusst eigene Materialien: so reichen Standard-Shader mit Tiling/Offset, der Gewinn eines gemeinsamen
 Materials wäre ein einziger Draw Call.
 
-**Spieler-Prefab:** CharacterController Height 1,30, Radius 0,30, Center (0, 0,65, 0). Animator-Parameter aus
+**Spieler-Prefab:** CharacterController Height 1,30, Radius 0,30, Center (0, 0,65, 0) – seit 1.14 ist der Roboter
+1,38 m hoch (Kopf ragt 8 cm über die Kapsel, siehe Offene Punkte). Animator-Parameter aus
 `IRobotMotion` (`Speed`, `Grounded`, `Crouch`, Trigger `Land`) plus `Push`, `Interact`, `Dead`; Lauf-Blend-Tree
 CrouchWalk/Walk/Run/RunFast/Sprint nach `naturalSpeed`. Als neue Variante neben dem bestehenden code-basierten
 `RobotAnimator` einführen (Golden Rule). Für einen festen Robotertyp die FBX aus `output/Types/` nehmen (1 Mesh statt
 eines Meshes je Bauteil).
 
-**Spieler-Looks:** Format `CubeEscapeRobotLook` Version 5 (`robot_look.schema.json`, Beispiele in `output/Looks/`):
+**Spieler-Looks:** Format `CubeEscapeRobotLook` Version 6 (`robot_look.schema.json`, Beispiele in `output/Looks/`):
 seit Version 3 `skin`, `armor2`, `zones2`, `badges` (höchstens 2), `lines`; seit Version 4 `material`, `layers`
-(ID, Stärke, Farbe), `wear`; seit Version 5 `special` (ID, zwei Farben, Stärke, Tempo). Namen von Skins, Bauteilen,
-Ausdrücken, Motiven, Oberflächen, Abzeichen, Mustern, Zonen und Spezialmaterialien sind **ewige IDs**. Versionen 1
-bis 4 werden beim Laden übernommen (ein v2-Look behält seine Farben und heißt Skin „Custom“, v3 bekommt keinen
-Werkstoff, keine Schichten und die gebackene Abnutzung, v4 kein Spezialmaterial), unbekannte IDs durch Standardwerte
+(ID, Stärke, Farbe), `wear`; seit Version 5 `special` (ID, zwei Farben, Stärke, Tempo); seit Version 6 `form`
+(Körperform). Namen von Skins, Bauteilen, Ausdrücken, Motiven, Oberflächen, Abzeichen, Mustern, Zonen,
+Spezialmaterialien und Formen sind **ewige IDs**. Versionen 1 bis 5 werden beim Laden übernommen (ein v2-Look behält
+seine Farben und heißt Skin „Custom“, v3 bekommt keinen Werkstoff, keine Schichten und die gebackene Abnutzung, v4
+kein Spezialmaterial, v5 die Grundform), unbekannte IDs durch Standardwerte
 ersetzt, neuere Versionen abgelehnt – dieselben Regeln gehören in die Spielstand-Migration. Ein neuer Slot (1.12:
 `AccEar`) braucht keine neue Version: fehlt er im Look, gilt sein Standard „None“.
 
@@ -435,7 +454,10 @@ ersetzt, neuere Versionen abgelehnt – dieselben Regeln gehören in die Spielst
 |---|---|---|
 | Unity-Integration | nicht begonnen, nicht im Spiel getestet (Spielprojekt bewusst unverändert) | FBX importieren, Materialien/Animator nach diesem README aufbauen, als neue Variante neben `RobotAnimator` |
 | Tempo Laufen | Clips bis Sprint ≈ 4,2 m/s; Spiel: 5 bzw. 8 m/s | Animator-Tempo = Geschwindigkeit / `naturalSpeed` (Sprint bei 8 m/s ≈ 1,9-fach) oder Spieltempo senken (Design-Entscheidung) |
-| Ducken | CrouchDeep ≈ 1,00 m, tiefer geht es mit dem großen Kopf nicht ohne Überschneidung; Spiel-Kapsel 0,65 m | Duck-Kapsel auf ≈ 1,0 m anheben (Design-Entscheidung) |
+| Standhöhe | seit 1.14 (Proportionen) 1,38 m statt 1,30 m; Spiel-Kapsel 1,30 m. Kürzere Beine würden ClimbUp (1,20 m) und die Griffhöhen an Kante und Leiter brechen | Kapsel 1,40 m oder Kopf darf überstehen (Design-Entscheidung) |
+| Ducken | CrouchDeep ≈ 1,05 m, tiefer geht es mit dem großen Kopf nicht ohne Überschneidung; Spiel-Kapsel 0,65 m | Duck-Kapsel auf ≈ 1,05 m anheben (Design-Entscheidung) |
+| Textur-Atlas | Smart UV Project ohne Skalierung auf die Fläche: die Inseln aller Teile belegen nur ≈ 19 % des 2048²-Atlas | Inseln auf den Atlas skalieren (mehr Texel je cm, alle Masken neu backen) |
+| Formen im Spiel | Mesh-Formen als eigene FBX, Lochung als Formel, Kabel als Teil | Spielversion „Spektrum“: Formen als Meshes bzw. Shader-Variante (Cull Off) mit Fallback |
 | Kapselbreite | Rumpf + Schultern 0,70 m (Runner) bis 0,77 m, mit Armen 0,73–0,87 m (`typeBounds`); Kapsel 0,6 m | Überstand akzeptieren (üblich) oder Radius 0,35 |
 | Draw Calls | Standard und je Robotertyp: 1 Mesh, 3–4 Materialien, LOD1/LOD2 (1.13); modular 1 Mesh je Teil | bei frei kombinierbaren Looks die Teile zur Laufzeit zu einem Skinned Mesh kombinieren |
 | Spieler-Looks | Format, Schema, Migration und Beispiele fertig, Viewer getestet | im Spiel in den Spielstand übernehmen (`SaveData`-Migration) |
@@ -449,8 +471,8 @@ ersetzt, neuere Versionen abgelehnt – dieselben Regeln gehören in die Spielst
 
 - **Bauteile:** alle Teile berühren ihre Konfiguration (keine schwebenden Teile; das Augen-Display ist bewusst
   ein Decal 1,5 mm vor dem Visier), starres Skinning, Transformationen = Identität.
-- **Animationen × Robotertypen:** für alle 24 Typen jeder der 71 Clips Frame für Frame (Typ-Emotes nur mit ihrem
-  Typ): kein Vertex unter dem Boden, keine neuen Überschneidungen nicht benachbarter Körperteile, kein gelöstes
+- **Animationen × Robotertypen und Formen:** für alle 24 Typen und die Formen Facettiert, Voxel und Kabel jeder der
+  71 Clips Frame für Frame (Typ-Emotes nur mit ihrem Typ): kein Vertex unter dem Boden, keine neuen Überschneidungen nicht benachbarter Körperteile, kein gelöstes
   Gelenk, Loops schließen exakt. Die Typen tragen zusammen jeden Aufsatz, so ist jeder in jedem Clip geprüft.
   Bewusst erlaubt: Stoff am Hals darf vom gesenkten Kinn eingedrückt werden; Hand-Gegenstände berühren die Finger
   (Griff) und werden in den oben genannten Clips ausgeblendet; in HatTip liegt der Hut in der Hand und verlässt den

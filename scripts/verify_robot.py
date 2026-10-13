@@ -43,6 +43,7 @@ MASK_TEXTURES = ["T_Robot_BadgeMask.png", "T_Robot_BadgeMask2.png", "T_Robot_Bad
                  "T_Robot_MaterialMask2.png"]                            # 1.11
 START_SET_1_13 = {"Glass", "Ghost", "Aurora", "Rainbow"}
 SPECIALS_1_13 = ["Glass", "Hologram", "Glitch", "Iridescent", "Sketch", "Rainbow", "Galaxy"]
+FORMS_1_14 = ["Faceted", "Voxel", "Perforated", "Wired"]
 START_SET_1_12 = {"Miner", "Samurai", "Steam", "Signal", "Wood", "Celest"}
 START_SET_1_11 = {"Rust", "Moss", "Arctic", "Inferno", "Circuit"}
 # 1.12 Bolt-On: attachments that a robot type must carry (so that the QA of all types covers them in every clip)
@@ -516,8 +517,8 @@ def verify_spectral():
     check("skins: start set of stage 1.13", start13 == START_SET_1_13, sorted(start13 ^ START_SET_1_13))
     check("skins: at least 71 (9 new in 1.13)", len(skins) >= 71, len(skins))
     looks = [json.load(open(os.path.join(OUT, "Looks", f), encoding="utf-8")) for f in os.listdir(os.path.join(OUT, "Looks"))]
-    check("looks: format version 5 with a special field", looks and all(lk["version"] == 5 and "special" in lk
-                                                                         for lk in looks), len(looks))
+    check("looks: format version 5 or newer with a special field", looks and all(lk["version"] >= 5 and "special" in lk
+                                                                                  for lk in looks), len(looks))
     # Unity mask packs: present, at most 1024², zone ID consistent with the zone masks
     tex = os.path.join(OUT, "Textures")
     ut = [u["file"] for u in cfg.get("unityTextures", [])]
@@ -553,6 +554,70 @@ def verify_spectral():
           sorted(walk))
 
 
+def import_single(path):
+    """Imports an FBX; returns (mesh object, armature) or None when it is not one mesh + one rig."""
+    before = set(bpy.data.objects)
+    bpy.ops.import_scene.fbx(filepath=path, use_anim=False, ignore_leaf_bones=False)
+    new = [o for o in bpy.data.objects if o not in before]
+    unturn(new)
+    meshes = [o for o in new if o.type == "MESH"]
+    arms = [o for o in new if o.type == "ARMATURE"]
+    return (meshes[0], arms[0]) if len(meshes) == 1 and len(arms) == 1 else None
+
+
+def verify_reshape():
+    """1.14: base proportions (height), body forms (catalog, skins, look version 6, FBX, viewer chunks, QA)."""
+    cfg = json.load(open(os.path.join(OUT, "robot_config.json"), encoding="utf-8"))
+    forms = {f["id"]: f for f in cfg.get("forms", [])}
+    check("forms: Faceted, Voxel, Perforated, Wired with kind, description and URP note",
+          list(forms)[:4] == FORMS_1_14 and all(f["kind"] in ("mesh", "shader", "parts") and f["description"] and f["urp"]
+                                               for f in forms.values()), list(forms))
+    perf = cfg.get("perforation", {})
+    check("forms: perforation grid from the texel density (holes per UV unit, radius < half a cell)",
+          perf.get("cells", 0) > 10 and 0 < perf.get("radius", 0) < 0.5, perf)
+    skins = {sk["name"]: sk for sk in cfg["skins"]}
+    bad = [n for n, sk in skins.items() if sk.get("form", "None") not in ["None"] + list(forms)]
+    used = {sk["form"] for sk in skins.values() if sk.get("form", "None") != "None"}
+    check("skins: forms known, every form used by a skin", not bad and used == set(forms), bad or sorted(set(forms) - used))
+    start14 = {n for n, sk in skins.items() if sk["startSet"] and sk["stage"] == "1.14"}
+    check("skins: start set of stage 1.14 (Pixel, Origami), at least 76 skins", start14 == {"Pixel", "Origami"} and
+          len(skins) >= 76, (sorted(start14), len(skins)))
+    looks = [json.load(open(os.path.join(OUT, "Looks", f), encoding="utf-8")) for f in os.listdir(os.path.join(OUT, "Looks"))]
+    check("looks: format version 6 with a form field", looks and all(lk["version"] == 6 and lk.get("form") == "None"
+                                                                     for lk in looks), len(looks))
+    for fid, f in forms.items():
+        if f["kind"] == "shader":
+            continue
+        path = os.path.join(OUT, "Forms", "CubeEscape_Robot_%s.fbx" % fid)
+        got = import_single(path) if os.path.exists(path) else None
+        ok, detail = got is not None, "missing or not one mesh + rig"
+        if got:
+            ob, arm = got
+            tris = sum(len(p.vertices) - 2 for p in ob.data.polygons)
+            zs = [(ob.matrix_world @ v.co).z for v in ob.data.vertices]
+            ok = 2000 <= tris <= 25000 and 1.2 <= max(zs) - min(zs) <= 1.5 and all(b in arm.data.bones for b in REQUIRED)
+            if f["kind"] == "mesh":
+                ok &= os.path.exists(os.path.join(OUT, "Forms", "CubeEscape_Robot_Modular_%s.fbx" % fid))
+            detail = "%d tris, %.2f m" % (tris, max(zs) - min(zs))
+        check("forms: %s FBX (rig, 1.2-1.5 m, 2k-25k triangles%s)" % (fid, ", modular" if f["kind"] == "mesh" else ""),
+              ok, detail)
+    doc = json.load(open(os.path.join(OUT, "ViewerData", "robot.json"), encoding="utf-8"))
+    chunk_forms = {p.get("form", "") for p in doc["parts"]}
+    want = {""} | {fid for fid, f in forms.items() if f["kind"] == "mesh"}
+    check("viewer: geometry chunks of the base and of every mesh form", chunk_forms == want, sorted(chunk_forms))
+    check("viewer: the cable part of the form Wired is a chunk object",
+          any(p["object"] == "Form_Wired" for p in doc["parts"]), "Form_Wired")
+    rep_ = json.load(open(os.path.join(OUT, "logs", "robot_report.json"), encoding="utf-8"))
+    qa = rep_.get("qa", {})
+    if len(qa) > 4:                         # full tier: every type and every geometry form over all clips
+        form_qa = {k: v for k, v in qa.items() if k.startswith("Form_")}
+        bad = {k: [n for n, e in v["actions"].items() if e["new_overlaps"] or e["detached_joints"] or e["min_z"] < -0.006]
+               for k, v in form_qa.items()}
+        check("qa: geometry forms checked over all clips without problems",
+              len(form_qa) == 3 and not any(bad.values()) and all(len(v["actions"]) >= 69 for v in form_qa.values()),
+              {k: len(v) for k, v in bad.items()} or "missing")
+
+
 def main():
     print("== verify %s" % bpy.data.filepath)
     ref = verify_blend()
@@ -566,6 +631,7 @@ def main():
     verify_paintjob()
     verify_bolton()
     verify_spectral()
+    verify_reshape()
     ok = all(r["ok"] for r in results)
     os.makedirs(os.path.join(OUT, "logs"), exist_ok=True)
     with open(os.path.join(OUT, "logs", "verify_report.json"), "w", encoding="utf-8") as fh:

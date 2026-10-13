@@ -101,6 +101,11 @@ Abzeichen und Ruckeln behoben.
 Skizze, Regenbogen, Galaxie als Laufzeit-Effekte (Vorschau und Viewer, je eine URP-Beschreibung), 71 Skins (9 neue),
 Look-Format 5. Dazu: LOD1/LOD2, Treffer-Kapseln, Servo-Ereignisse, Masken für Unity gepackt, Unity-Testpaket in einem
 Start (12 s), Skills `rg-unity-testbed` und `rg-unity-integration`.
+**1.14 Reshape veröffentlicht** (13.10., v1.14.0): Proportionen nach den Konzeptbildern (größerer Kopf, kräftigere
+Glieder, Fugen und Schrauben, 1,38 m) und Körperformen Facettiert, Voxel, Durchbrochen, Offene Kabel als Daten (eigene
+Meshes mit demselben Rig, Lochung als Formel, Kabel als Teil), 76 Skins (Pixel, Origami, Geo, Bone, Wire), Look-Format
+6; QA aller Typen und Formen über alle Clips ohne Befund.
+
 1.13.1–1.13.3: Prüfungen parallel (`check_output.sh`), QA-Cache und Render-Cache – mit warmem Cache Standardlauf
 etwa 45 s, Volllauf 90–115 s statt rund 7 Minuten; eine sichtbare Änderung rendert nur ihre eigenen Bilder neu.
 
@@ -136,7 +141,8 @@ Neunzehn weitere Punkte (zwei Vorschläge vom 12. Oktober 2026 wurden in Generat
 - [ ] **Vorschlag: Weathering- und Paintjob-Vorlagen per Bildgenerator** (Core ML auf der Neural Engine) nur als einmaliges Vorlagenwerkzeug, Ergebnisse eingecheckt – nie im Generatorlauf, weil gleiche Eingabe nicht dasselbe Bild garantiert und Cache-Schlüssel reproduzierbar bleiben müssen; Stil-Abnahme vorher; passt zur Stufe Weathering. Geprüft in 1.9.2: kein Einsatz – die Vorlagen entstehen reproduzierbar per ImageMagick im Low-Poly-Stil und hängen im Cache-Schlüssel; ein Bildgenerator (mehrere GB Modell, Lizenz- und Stilprüfung) liefert das nicht
 - [x] **Konzeptbögen auswerten:** umgesetzt in Generator 1.10 ohne Neural Engine – `scripts/concept_palettes.py` liest die vier Farbpunkte aller 42 Karten der Bögen A und C an vermessenen Positionen aus (`data/concept_palettes.json`), Namen abgetippt; innerhalb der Zeitregel (eine Sitzung)
 - [x] **Icon-Lesbarkeit prüfen:** umgesetzt in Generator 1.10 ohne Neural Engine – Füllgrad und Lage des Motivs je Icon per ImageMagick (unter 1 s, nur Hinweis im Bericht); ein Saliency-Modell war nicht nötig
-- [ ] **Proportionen des Basismodells** (Konzeptvergleich 12.10.): gedrungener, größerer Kopf, klobigere Platten, Fugen und Schrauben wie auf den Konzeptbildern – betrifft alle 69 Clips und die QA, eigene Entscheidung des Nutzers, spätestens vor Generator 2.0
+- [x] **Proportionen des Basismodells** (Konzeptvergleich 12.10.): gedrungener, größerer Kopf, klobigere Platten, Fugen und Schrauben wie auf den Konzeptbildern – umgesetzt in Generator 1.14 (Umformung je Knochen nach dem Bauen, Gelenke und Clips unverändert, zehn Posen angepasst; Standhöhe 1,38 m statt 1,30 m – Spiel-Kapsel ist eine Design-Entscheidung)
+- [ ] **Textur-Atlas besser nutzen:** die UV-Inseln belegen nur ≈ 19 % des 2048²-Atlas (Smart UV Project ohne Skalierung) – Inseln auf die Fläche skalieren, alle Masken neu backen; vor dem Spiel-Import
 - [x] **Abnutzung je Skin** statt für alle Skins gleicher Schmutz und Kratzer (Konzeptvergleich 12.10.) – umgesetzt in Generator 1.11 (`wear` je Skin)
 - [x] **Masken für Unity packen:** Lackzonen und Gelenke als ID-Kanal, Masken in 1024² (der Viewer packt schon beim Laden) – umgesetzt in Generator 1.13 (`Textures/Unity`, Testbett-Shader nutzt sie)
 - [ ] **Bloom im Spiel:** URP-Bloom so, dass nur Emission strahlt (wie auf den Skin-Karten) – Spiel-Roboter

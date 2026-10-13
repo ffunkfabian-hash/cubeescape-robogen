@@ -3,6 +3,37 @@
 Versionen des Roboter-Generators (zählen getrennt von Cube Escape und Cubegen). Jede Version hat einen Tag
 `v<Version>` und einen Release-Branch `release/<Version>`.
 
+## 1.14.0 „Reshape“ – 2026-10-13
+
+**Proportionen wie auf den Konzeptbildern:** eine Proportions-Stufe nach dem Bauen formt die Teile je Knochen um
+(`PROPORTIONS`, Ausnahmen je Variante in `SHAPE_VARIANTS`). Kopf breiter (× 1,14) und höher (× 1,24), Arme, Hände und
+Beine kräftiger, Rumpf und Becken breiter; Fugen und Schrauben auf Beinen, Hüfte und Brust. Gelenke, Clips, IK-Ziele
+und Bodenkontakte bleiben unverändert. Der Classic ist jetzt 1,38 m hoch (vorher 1,30 m).
+
+* Posen angepasst, damit nichts in den größeren Kopf greift: Think, Wave, DanceRobot, IdleScratch, EdgeBalance,
+  HatTip, Jump, Crouch, CrouchWalk, Sleep. Schulterpanzer und runde Füße behalten ihr Maß, der Kastenkopf wird nur
+  höher, der Daumen nur wenig dicker.
+* Gefunden: Bei nach vorn gestrecktem Arm wirkt der Abspreiz-Kanal (XYZ-Euler) als Drehung um die Armachse – nach
+  außen führt dann der dritte Kanal.
+
+**Körperformen** (`robot_config.json` › `forms`, Skin- und Look-Feld `form`, Look-Format 6):
+
+* *Facettiert* (Origami, Geo): eigene Teil-Objekte, Decimate „Collapse“ auf 16 %, flache Facetten.
+* *Voxel* (Pixel): Würfel von 3 cm im Weltraster; eine Zelle zählt, wenn ihr Mittelpunkt eine halbe Zelle tief im
+  Teil liegt (kein Würfel ragt über die Grundform). Jede Würfelseite nimmt UV und Material des nächsten
+  Originalpunkts. Gelenkkugeln, Finger, dünne Teile, Visier und Bildschirme bleiben glatt.
+* *Durchbrochen* (Bone): Löcher in der Panzerung, Raster im UV-Raum (Abstand 4,5 cm aus der Texeldichte), gleiche
+  Formel in Vorschau, Viewer (`discard`) und Unity-Testbett (`clip`).
+* *Offene Kabel* (Wire): Kabelstränge als Gruppe `Form_Wired`, je Knochen starr.
+* Mesh-Formen haben dasselbe Rig, dieselben Materialien und den Textur-Atlas: jeder Skin passt auf jede Form.
+  Export `Forms/CubeEscape_Robot_<Form>.fbx` (+ modular), Viewer-Daten mit Formkennung je Geometrie-Stück.
+* QA: Facettiert, Voxel und Kabel laufen wie Robotertypen über alle Clips (`Form_*`), alle ohne Befund.
+* 5 neue Skins: Pixel ★, Origami ★, Geo, Bone, Wire (76 insgesamt).
+* Viewer: Abschnitt „Form“, Schalter `--form`, Tests für Migration v5 → v6, unbekannte Form und sichtbare Form.
+  Unity-Testbett: Form-FBX mit den Hauptknochen, Form je Skin gelesen, Lochung im Shader, 2 neue EditMode-Tests.
+* Offen notiert: der Textur-Atlas ist nur zu ≈ 19 % belegt (Smart UV Project ohne Skalierung).
+* Doku: README, AGENTS, TECHNIK.md › 15, FAHRPLAN.
+
 ## 1.13.3 „Spectral“ – 2026-10-13
 
 **Render-Cache:** jedes Vorschaubild (Ansichten, Skins, Karten, Typen, Ausdrücke, Icons, Gegenüberstellung,

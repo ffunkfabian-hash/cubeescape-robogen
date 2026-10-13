@@ -101,6 +101,8 @@ namespace RobotTestbed.Editor
             foreach (var t in Textures) files.Add((Path.Combine(output, "Textures", t), "Textures/" + t));
             foreach (var f in Directory.GetFiles(Path.Combine(output, "Types"), "*.fbx"))
                 files.Add((f, "Types/" + Path.GetFileName(f)));
+            foreach (var f in Directory.GetFiles(Path.Combine(output, "Forms"), "*.fbx"))
+                files.Add((f, "Forms/" + Path.GetFileName(f)));
             foreach (var f in Directory.GetFiles(Path.Combine(output, "Looks"), "*.robotlook.json"))
                 files.Add((f, "Looks/" + Path.GetFileName(f)));
             var copied = new List<string>();
@@ -117,7 +119,7 @@ namespace RobotTestbed.Editor
                 copied.Add(rel);
             }
             var wanted = new HashSet<string>(files.Select(f => Path.GetFullPath(Path.Combine(dst, f.rel))));
-            foreach (string sub in new[] { "Types", "Looks", "Textures" })
+            foreach (string sub in new[] { "Types", "Forms", "Looks", "Textures" })
                 foreach (var f in Directory.GetFiles(Path.Combine(dst, sub)))
                     if (!f.EndsWith(".meta") && !wanted.Contains(Path.GetFullPath(f)))
                     {
@@ -350,6 +352,32 @@ namespace RobotTestbed.Editor
             Check("lod: LOD1/LOD2 with the main bones, about 6000/2500 triangles", ok, string.Join(", ", detail));
         }
 
+        /// <summary>1.14 body forms: every geometry form (mesh, parts) as Forms/CubeEscape_Robot_&lt;id&gt;.fbx with the bones of
+        /// the main FBX (the main clips play on it), mesh forms also as a modular FBX.</summary>
+        static void CheckForms(Prefabs p)
+        {
+            var main = p.Main.GetComponentInChildren<SkinnedMeshRenderer>(true);
+            var detail = new List<string>();
+            bool ok = main != null;
+            int n = 0;
+            foreach (var f in p.Config.Objects("forms"))
+            {
+                string id = (string)f["id"], kind = (string)f["kind"];
+                if (kind == "shader") continue;
+                n++;
+                var go = AssetDatabase.LoadAssetAtPath<GameObject>(TestbedImport.ImportDir + "/Forms/CubeEscape_Robot_" + id + ".fbx");
+                var smr = go != null ? go.GetComponentInChildren<SkinnedMeshRenderer>(true) : null;
+                if (smr == null || main == null) { ok = false; detail.Add(id + " missing"); continue; }
+                bool sameBones = smr.bones.Select(b => b.name).SequenceEqual(main.bones.Select(b => b.name));
+                bool modular = kind != "mesh" || AssetDatabase.LoadAssetAtPath<GameObject>(
+                    TestbedImport.ImportDir + "/Forms/CubeEscape_Robot_Modular_" + id + ".fbx") != null;
+                ok &= sameBones && modular;
+                detail.Add(id + " " + smr.sharedMesh.triangles.Length / 3 + " tris" + (sameBones ? "" : " (other bones)") +
+                           (modular ? "" : " (no modular FBX)"));
+            }
+            Check("forms: " + n + " form FBX with the main bones", ok && n > 0, string.Join(", ", detail));
+        }
+
         /// <summary>1.13: hit capsules (character space, rest pose) moved into bone space via the bind poses cover the
         /// vertices of their bone in a running frame - the way the game would use them.</summary>
         static void CheckCapsules(Prefabs p)
@@ -474,6 +502,7 @@ namespace RobotTestbed.Editor
             CheckPose(p);
             CheckBoltOn(p, bones);
             CheckLods(p);
+            CheckForms(p);
             CheckCapsules(p);
             CheckLooks(p);
         }
@@ -593,7 +622,7 @@ namespace RobotTestbed.Editor
             {
                 var app = go.GetComponent<RobotAppearance>();
                 var skins = p.Config.Objects("skins").ToList();
-                int withSpecial = 0, specialRead = 0;
+                int withSpecial = 0, specialRead = 0, withForm = 0, formRead = 0;
                 foreach (var s in skins)
                 {
                     var look = new RobotLook();
@@ -604,11 +633,18 @@ namespace RobotTestbed.Editor
                         withSpecial++;
                         if (look.Special == (string)sd["id"]) specialRead++;
                     }
+                    if (s.TryGetValue("form", out var fm) && fm is string fs && fs != "None")
+                    {
+                        withForm++;
+                        if (look.Form == fs) formRead++;
+                    }
                 }
                 Check("looks: every skin applies (" + skins.Count + ")", true, skins.Count);
                 // RobotBody draws no special material yet (game version "Spektrum"): those skins show their palette
                 Check("specials: special material read for " + withSpecial + " skins (drawn as palette until the URP material)",
                       withSpecial > 0 && specialRead == withSpecial, specialRead + "/" + withSpecial);
+                Check("forms: body form read for " + withForm + " skins", withForm > 0 && formRead == withForm,
+                      formRead + "/" + withForm);
             }
             finally
             {

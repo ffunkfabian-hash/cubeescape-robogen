@@ -63,6 +63,7 @@ Shader "CubeEscape/RobotBody"
         _EmissionStrength ("Emission strength", Float) = 3
         _OcclusionStrength ("Occlusion strength", Float) = 1
         [Toggle] _Fabric ("Fabric (tinted, no recolour)", Float) = 0
+        _Perforation ("Form Perforated: on, holes per UV unit, radius share", Vector) = (0, 50, 0.33, 0)
     }
 
     SubShader
@@ -111,6 +112,7 @@ Shader "CubeEscape/RobotBody"
                 float4 _MaterialSel0, _MaterialSel1, _MaterialColor, _LayerAmount, _LayerAmount2;
                 float4 _RustColor, _MossColor, _FrostColor, _EmberColor, _CamoColor, _LayerRough, _LayerMetal, _BareMetal;
                 float _LinePaint, _Glow, _EmissionStrength, _OcclusionStrength, _Fabric, _Wear;
+                float4 _Perforation;
             CBUFFER_END
 
             #define SAMPLE(t, uv) SAMPLE_TEXTURE2D(t, sampler_BaseMap, uv)
@@ -155,6 +157,14 @@ Shader "CubeEscape/RobotBody"
                 float3 c = SAMPLE(_BaseMap, uv).rgb;
                 float lum = max(dot(c, LUMA), 1e-5);
                 float4 mk = SAMPLE(_ColorLight, uv);
+                // 1.14 form "Perforated": holes on a grid in UV space (every second row offset by half a cell),
+                // armour only - same formula as the preview and the viewer (robot_config.json > perforation)
+                if (_Perforation.x > 0.5 && mk.r > 0.5)
+                {
+                    float2 q = uv * _Perforation.y;
+                    q.x += fmod(floor(q.y), 2.0) * 0.5;
+                    clip(length(frac(q) - 0.5) - _Perforation.z);
+                }
                 float4 ms = SAMPLE(_MetalWear, uv);
                 float4 aux = SAMPLE(_Aux, uv);
                 float rough = 1.0 - ms.a;

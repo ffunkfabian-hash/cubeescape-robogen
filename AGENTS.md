@@ -34,6 +34,16 @@ Agenten lesen die passende `SKILL.md` vor der Arbeit):
 - Typ-Emotes (`robotTypes[].emote`) gehören zu ihrem Typ: QA und Spiel nur mit diesem Typ. Gewollte Ausnahmen der QA
   stehen benannt in `ACCEPTED_OVERLAPS` / `ACCEPTED_DETACH`, nie pauschal.
 
+## Proportionen und Körperformen (1.14)
+
+- Maße ändern über `PROPORTIONS` / `SHAPE_VARIANTS` (Umformung je Knochen nach dem Bauen), nie über Gelenke: Gelenke,
+  Clips, IK-Ziele, Kletterhöhen (ClimbUp 1,20 m) und Bodenkontakte sind Spielvertrag. Nach jeder Maßänderung die QA
+  aller Typen und Formen (`--tier full --skip-bake --no-render` reicht dafür).
+- Neue Teile im alten Maß bauen und mit `conform_front` auflegen; Sockel und Federknochen über `shaped()` platzieren.
+- Formen (`FORMS`) sind Daten wie Spezialmaterialien: IDs ewig, nur am Ende erweitern. Mesh-Formen behalten Rig,
+  Vertex-Gruppen-Reihenfolge, Materialien und die UV-Ebene `UVMap`; jede Geometrie-Form läuft als `Form_<id>` durch die
+  QA aller Clips. Die Lochformel ist in Vorschau, Viewer und Unity-Shader gleich zu halten.
+
 ## Sprache
 
 Antworten an den Nutzer, README, CHANGELOG, Doku und Commit-Messages auf **Deutsch**. Code, Bezeichner,

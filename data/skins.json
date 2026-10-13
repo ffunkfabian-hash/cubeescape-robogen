@@ -1486,6 +1486,11 @@
       "finish": "Matt",
       "expression": "Normal",
       "special": {"id": "Sketch", "color": "#efe6dc", "color2": "#2a2622"}
-    }
+    },
+    {"id": "Pixel", "theme": "8-Bit / Voxel", "since": "1.14.0", "stage": "1.14", "startSet": true, "concept": "C02 Pixel", "palette": {"armor": "#e8eef2", "mech": "#20262c", "metal": "#8fa6b4", "eye": "#3fe6ff", "screen": "#3fe6ff", "accent": "#2ad0ff", "visor": "#060709", "fabric": "#2ad0ff"}, "finish": "Matt", "form": "Voxel", "expression": "Pixel", "display": "Cube"},
+    {"id": "Origami", "theme": "Falttechnik / Minimal", "since": "1.14.0", "stage": "1.14", "startSet": true, "concept": "C04 Origami", "palette": {"armor": "#eceae6", "mech": "#3b3f46", "metal": "#b8bcc2", "eye": "#49d7ff", "screen": "#49d7ff", "accent": "#49d7ff", "visor": "#060709", "fabric": "#c9ccd2"}, "finish": "Matt", "wear": 0.2, "form": "Faceted", "expression": "Focused"},
+    {"id": "Geo", "theme": "Geometrisch / Abstrakt", "since": "1.14.0", "stage": "1.14", "startSet": false, "concept": "C05 Geo", "palette": {"armor": "#3a2a5c", "mech": "#141020", "metal": "#5a4a7a", "eye": "#ff8a2a", "screen": "#ff8a2a", "accent": "#ff5a8a", "visor": "#060709", "fabric": "#ff5a8a"}, "finish": "Glanz", "lines": {"pattern": "Seams", "color": "#ff6a3a", "strength": 0.9}, "form": "Faceted", "expression": "Determined"},
+    {"id": "Bone", "theme": "Skelett / Tech-Organisch", "since": "1.14.0", "stage": "1.14", "startSet": false, "concept": "C11 Bone", "palette": {"armor": "#d9cbb0", "mech": "#4a3a2c", "metal": "#a89478", "eye": "#ff8a2a", "screen": "#ff9a3a", "accent": "#e07a2a", "visor": "#060709", "fabric": "#8a6a4a"}, "finish": "Matt", "wear": 0.6, "form": "Perforated", "expression": "Skeptical"},
+    {"id": "Wire", "theme": "Offen / Technik", "since": "1.14.0", "stage": "1.14", "startSet": false, "concept": "C13 Wire", "palette": {"armor": "#e6e8ea", "mech": "#23262a", "metal": "#9aa0a6", "eye": "#4fd8ff", "screen": "#4fd8ff", "accent": "#d8322a", "visor": "#060709", "fabric": "#d8322a"}, "finish": "Standard", "form": "Wired", "display": "Warning"}
   ]
 }

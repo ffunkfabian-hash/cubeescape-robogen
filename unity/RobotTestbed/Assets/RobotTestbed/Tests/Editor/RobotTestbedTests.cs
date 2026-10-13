@@ -87,6 +87,23 @@ namespace RobotTestbed.Tests
         }
 
         [Test]
+        public void V5LookGetsTheBaseForm()
+        {
+            var l = Load("look_v5.json", new List<string>());
+            Assert.AreEqual("Glitch", l.Special);
+            Assert.AreEqual("None", l.Form);
+        }
+
+        [Test]
+        public void UnknownFormFallsBack()
+        {
+            var warnings = new List<string>();
+            var l = Load("look_v6_unknown_form.json", warnings);
+            Assert.AreEqual("None", l.Form);
+            Assert.IsTrue(warnings.Exists(w => w.Contains("Form")));
+        }
+
+        [Test]
         public void FutureLookVersionIsRejected()
         {
             Assert.Throws<FormatException>(() => Load("look_future_version.json", new List<string>()));
@@ -116,6 +133,7 @@ namespace RobotTestbed.Tests
                 Assert.LessOrEqual(look.Badges.Count, RobotLook.MaxBadges);
                 if (s.TryGetValue("parts", out var p))
                     foreach (var kv in (Dictionary<string, object>)p) Assert.AreEqual(kv.Value, look.Variants[kv.Key]);
+                Assert.AreEqual(s.TryGetValue("form", out var f) ? (string)f : "None", look.Form, (string)s["name"]);
             }
         }
 

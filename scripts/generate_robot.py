@@ -31,6 +31,7 @@ import shutil
 import json
 import logging
 import math
+import mathutils
 import os
 import struct
 import subprocess
@@ -445,6 +446,29 @@ SPECIALS = collections.OrderedDict([
                 "urp": "Opak: Nebel = 3D-Rauschen (3 Oktaven, Maßstab 3) zwischen Farbe 1 und 2, driftet mit "
                        "0,02·Tempo; Sterne = Zellraster 120/m mit Schwelle 0,985, leuchtend"}),
 ])
+# 1.14 Reshape: body forms. "mesh" forms are geometry of their own (every part object rebuilt: same rig, same UVs on
+# the texture atlas, so every skin, mask and badge still fits), "shader" forms a runtime cut-out (formula in
+# docs/TECHNIK.md › 15, identical in preview and viewer), "parts" forms extra parts (group Form_<id>). A skin names its
+# form; IDs are permanent (append only).
+FORMS = collections.OrderedDict([
+    ("Faceted", {"kind": "mesh", "label": "Facettiert",
+                 "description": "flache, scharfkantige Facetten wie gefaltetes Papier (Origami, Geo)",
+                 "urp": "eigene Meshes (Forms/…_Faceted.fbx), flach schattiert; dasselbe Material und dieselben Clips"}),
+    ("Voxel", {"kind": "mesh", "label": "Voxel",
+               "description": "aus Würfeln von 3 cm gebaut, jede Würfelseite einfarbig (Pixel)",
+               "urp": "eigene Meshes (Forms/…_Voxel.fbx); Visier und Bildschirme bleiben glatt vor den Würfeln"}),
+    ("Perforated", {"kind": "shader", "label": "Durchbrochen",
+                    "description": "runde Löcher in der Panzerung, innen sichtbar (Bone)",
+                    "urp": "Alpha-Clip im Body-Shader: Lochraster im UV-Raum (perforation.cells je UV-Einheit, jede "
+                           "zweite Reihe um eine halbe Zelle versetzt), Loch bei Abstand zur Zellmitte < "
+                           "perforation.radius × Zelle, nur wo ColorMask R > 0,5; Cull Off"}),
+    ("Wired", {"kind": "parts", "label": "Offene Kabel",
+               "description": "Kabelstränge an Armen, Beinen, Hals und Rumpf (Wire)",
+               "urp": "zusätzliches Teil Form_Wired im modularen FBX bzw. Forms/…_Wired.fbx, starr an den Knochen"}),
+])
+MESH_FORMS = [f for f, d in FORMS.items() if d["kind"] == "mesh"]
+QA_FORMS = ["Form_" + f for f, d in FORMS.items() if d["kind"] in ("mesh", "parts")]   # checked like robot types
+PERFORATION = {"spacing": 0.045, "radius": 0.33}    # metres between hole centres, hole radius as share of a cell
 GLOW_PARTS = ("Ear_Ring", "Neck_Ring", "Waist_Ring", "Elbow_Band", "Battery_Ring")    # line pattern "Joints"
 
 
@@ -528,6 +552,8 @@ def load_skins(path=SKIN_FILE):
                            "speed": float(sp.get("speed", d["speed"]))}
                 if not 0.0 <= special["strength"] <= 1.0 or not 0.0 <= special["speed"] <= 4.0:
                     raise ValueError("special %r: strength 0..1, speed 0..4" % sp)
+            if rec.get("form", "None") not in ["None"] + list(FORMS):
+                raise ValueError("form %r (one of %s)" % (rec["form"], list(FORMS)))
             wear = float(rec.get("wear", WEAR_DEFAULT))
             if not 0.0 <= wear <= 1.0:
                 raise ValueError("wear %r" % wear)
@@ -543,6 +569,7 @@ def load_skins(path=SKIN_FILE):
         pal_.setdefault("armor2", pal_["armor"])
         skins[sid] = {"id": sid, "palette": pal_, "zones2": zones2, "finish": rec.get("finish", "Standard"),
                       "material": material, "layers": layers, "wear": wear, "badges": badges, "special": special,
+                      "form": None if rec.get("form", "None") == "None" else rec["form"],
                       "lines": lines, "parts": dict(rec.get("parts", {})), "expression": rec.get("expression"),
                       "display": rec.get("display"), "theme": rec.get("theme", ""), "since": rec.get("since", ""),
                       "stage": rec.get("stage", ""), "startSet": bool(rec.get("startSet")),
@@ -1170,6 +1197,30 @@ def cyl_between(name, a, b, r, mat, bone, segs=12, r2=None, bev=0.0):
     return cylinder(name, r, (b - a).length, (a + b) / 2, mat, bone, axis=b - a, segs=segs, r2=r2, bev=bev)
 
 
+def tube(name, pts, r, mat, bone, segs=6):
+    """Closed tube of radius r along a polyline (cables)."""
+    pts = [Vector(p) for p in pts]
+    bm = bmesh.new()
+    rings = []
+    for i, p in enumerate(pts):
+        fr = frame_from_dir(pts[min(i + 1, len(pts) - 1)] - pts[max(i - 1, 0)])
+        rings.append([bm.verts.new(p + fr @ Vector((r * math.cos(2 * math.pi * j / segs),
+                                                    r * math.sin(2 * math.pi * j / segs), 0.0)))
+                      for j in range(segs)])
+    for r0, r1 in zip(rings, rings[1:]):
+        for j in range(segs):
+            bm.faces.new((r0[j], r0[(j + 1) % segs], r1[(j + 1) % segs], r1[j]))
+    bm.faces.new(list(reversed(rings[0])))
+    bm.faces.new(rings[-1])
+    return add_part(name, bm, mat, bone)
+
+
+def bowed(a, b, out, n=6):
+    """Points from a to b that bulge by the vector out in the middle (a loose cable)."""
+    a, b, out = Vector(a), Vector(b), Vector(out)
+    return [a.lerp(b, i / (n - 1)) + out * math.sin(math.pi * i / (n - 1)) for i in range(n)]
+
+
 def torus(name, R, r, center, mat, bone, axis=(0, 0, 1), segs=24, rsegs=8, arc=360.0):
     """Ring (optionally an open arc in the local XY plane starting at +X), local Z mapped to axis."""
     bm = bmesh.new()
@@ -1452,6 +1503,21 @@ class variant:
         return False
 
 
+class form_parts:
+    """with form_parts("Wired"): parts of a "parts" form (group Form_<id>; not a slot, the look's form shows them)."""
+
+    def __init__(self, name):
+        self.name = name
+
+    def __enter__(self):
+        VARIANT[:] = ["Form", self.name]
+        return self
+
+    def __exit__(self, *exc):
+        VARIANT[:] = [None, None]
+        return False
+
+
 def group_key(slot, var):
     return "Body" if slot is None else "%s_%s" % (slot, var)
 
@@ -1723,6 +1789,28 @@ def build_robot():
             front_detail("Shin_Bolt_%d_%s" % (i, side), bolt(), "Shin_" + side, x0 + dx, 0.142, G, "LowerLeg_" + side)
         front_detail("Hips_Bolt_" + side, bolt(), "Hips", s * 0.120, 0.470, G, "Pelvis")
         front_detail("Chest_Bolt_" + side, bolt(), "Chest_Plate", s * 0.165, 0.770, G, "Spine")
+
+    # ================= 1.14 form "Wired": open cable strands (rigid per bone, they never cross a joint) =================
+    with form_parts("Wired"):
+        for s, side in ((1, "L"), (-1, "R")):
+            sh, el, wr = J["shoulder_" + side], J["elbow_" + side], J["wrist_" + side]
+            d1, d2 = J["dir_upper_" + side], J["dir_fore_" + side]
+            out, back = Vector((s, 0, 0)), Vector((0, 1, 0))       # outside and back of the arm
+            for i, (off, mat) in enumerate(((out * 0.054, O), ((out + back).normalized() * 0.054, D))):
+                tube("Wire_UpperArm_%d_%s" % (i, side), bowed(sh + d1 * 0.075 + off, el - d1 * 0.03 + off,
+                                                             off.normalized() * 0.012), 0.008, mat, "UpperArm_" + side)
+                tube("Wire_Forearm_%d_%s" % (i, side), bowed(el + d2 * 0.05 + off * 1.15, wr - d2 * 0.03 + off,
+                                                            off.normalized() * 0.012), 0.008, mat, "LowerArm_" + side)
+            x0 = s * LEG_X
+            for i, (dx, dy, mat) in enumerate(((0.068, -0.010, O), (0.052, -0.052, D))):
+                tube("Wire_Thigh_%d_%s" % (i, side), bowed((x0 + s * dx, dy, 0.375), (x0 + s * dx, dy, 0.285),
+                                                          (s * 0.012, 0, 0)), 0.008, mat, "UpperLeg_" + side)
+                tube("Wire_Shin_%d_%s" % (i, side), bowed((x0 + s * dx, dy, 0.205), (x0 + s * dx, dy, 0.125),
+                                                         (s * 0.012, 0, 0)), 0.008, mat, "LowerLeg_" + side)
+            tube("Wire_Neck_" + side, bowed((s * 0.072, 0.035, 0.955), (s * 0.090, 0.035, 0.900), (s * 0.010, 0.0, 0)),
+                 0.009, O if s > 0 else D, "Head")
+            tube("Wire_Belly_" + side, bowed((s * 0.120, -0.140, 0.690), (s * 0.105, -0.115, 0.585), (0, -0.016, 0)),
+                 0.009, D if s > 0 else O, "Spine")
 
     # ================= accessories (on socket bones) =================
     with variant("AccHead", "Antenna"):
@@ -2109,7 +2197,8 @@ def check_part_connectivity(report):
 def assemble_groups(mats, coll):
     """One mesh object per group: Robot_Body (core) and <Slot>_<Variant> for every variant/accessory."""
     objs = collections.OrderedDict()
-    order = ["Body"] + [group_key(sl, v) for sl, vs in SLOTS.items() for v in vs]
+    order = ["Body"] + [group_key(sl, v) for sl, vs in SLOTS.items() for v in vs] + \
+        [group_key("Form", f) for f, d in FORMS.items() if d["kind"] == "parts"]
     for key in order:
         parts = [p for p in PARTS if p["group"] == key]
         if not parts:
@@ -2994,7 +3083,7 @@ def bake_ao_configs(objs, mats, size, samples, dummy):
     n = max(len(v) for v in by_slot.values())
     for i in range(n):
         passes.append(core + [vs[i % len(vs)] for vs in by_slot.values()])
-    defaults = [o for o in objs if o.get("slot") and SLOTS[o["slot"]][0] == o["variant"]]
+    defaults = [o for o in objs if o.get("slot") and SLOTS.get(o["slot"], [None])[0] == o["variant"]]
     passes.append(core + defaults)
     img = bpy.data.images.new("bake_AO", size, size, alpha=False, float_buffer=True)
     img.colorspace_settings.name = "Non-Color"
@@ -3203,7 +3292,21 @@ def preview_special_nodes(mat, bsdf, armor):
             metal = k.math("ADD", metal, k.math("MULTIPLY", w, k.math("SUBTRACT", emetal, metal)))
     k.link(col, bsdf.inputs["Base Color"])
     k.link(_add_rgb(k, emit, em_add), bsdf.inputs["Emission Color"])
-    keep = k.node("NodeReroute")         # alpha is linked only while a see-through special is on (set_special)
+    # 1.14 form "Perforated": round holes on a grid in UV space (every second row offset by half a cell), armour only
+    uvn = k.node("ShaderNodeUVMap")
+    uvn.uv_map = "UVMap"
+    uvs = k.node("ShaderNodeSeparateXYZ")
+    k.link(uvn.outputs[0], uvs.inputs[0])
+    cells = value_node("PerfCells", 50.0)
+    u, v = k.math("MULTIPLY", uvs.outputs[0], cells), k.math("MULTIPLY", uvs.outputs[1], cells)
+    shift = k.math("MULTIPLY", k.math("FLOORED_MODULO", k.math("FLOOR", v), 2.0), 0.5)
+    du = k.math("SUBTRACT", k.math("FRACT", k.math("ADD", u, shift)), 0.5)
+    dv = k.math("SUBTRACT", k.math("FRACT", v), 0.5)
+    dist = k.math("SQRT", k.math("ADD", k.math("MULTIPLY", du, du), k.math("MULTIPLY", dv, dv)))
+    hole = k.math("MULTIPLY", k.math("LESS_THAN", dist, PERFORATION["radius"]),
+                  k.math("GREATER_THAN", sep.outputs[0], 0.5))
+    alpha = k.math("MULTIPLY", alpha, k.math("SUBTRACT", 1.0, k.math("MULTIPLY", hole, value_node("PerfW", 0.0))))
+    keep = k.node("NodeReroute")         # alpha is linked only while a see-through special or the form needs it
     keep.name = "SpecialAlpha"
     k.link(alpha, keep.inputs[0])
     k.link(rough, bsdf.inputs["Roughness"])
@@ -3251,6 +3354,326 @@ def combine_objects(objs, name, coll):
     res.name = name
     res.data.name = name
     return res
+
+
+# ------------------------------- 1.14 body forms: Faceted and Voxel geometry -------------------------------
+# Every part object gets a form copy with the same vertex groups, materials and UV atlas: bound to the same rig, it
+# plays every clip, and every skin texture fits. Screens and the visor stay smooth (they carry the eye and display
+# atlases); in the voxel form they move in front of the blocks.
+FACET_RATIO = 0.16          # share of the triangles the collapse keeps (sharp, paper-like facets)
+VOXEL_CELL = 0.03           # metres; world grid in the rest pose, so the blocks of neighbouring parts line up
+VOXEL_INSET = 0.5           # a cell counts if its centre lies this share of a cell inside the part: blocks stick out
+                            # at most 3 mm (more: blocks of neighbouring parts collide when crouching or folding arms)
+FORM_KEEP = ("Head_Visor", "Eye_Screen", "Chest_Display", "Chest_Screen")
+# voxel form: joints stay round (a block cluster is not rotation-invariant like a ball: it would cut into its
+# neighbour in every clip) and fingers stay as they are (smaller than a cell); matched on the part name without side
+VOXEL_KEEP = ("Shoulder_Socket", "Shoulder_Ball", "Elbow", "Elbow_Band", "Wrist", "Hip_Ball", "Knee", "Ankle", "Neck",
+              "Neck_Ring", "Collar", "Waist", "Waist_Ring", "Crotch", "Palm", "Finger", "Thumb", "Claw_Cuff",
+              "Claw_Prong", "Claw_Tip", "Claw_Thumb")
+FORM_OBJS = {}              # form -> {group key: object}
+FACE_INT_LAYERS = ("part_id", "paint_zone", "glow_part")
+
+
+def form_keep(ob, bm, extra=()):
+    """Predicate: faces that stay smooth (screens by material, visor and screens by part name, extra: base names
+    without side and index, e.g. "Finger" for Finger_0_L)."""
+    names = list(ob.data.get("part_names", []))
+    ids = {i for i, n in enumerate(names) if n in FORM_KEEP or
+           any(n == e or n.startswith(e + "_") for e in extra)}
+    mats = {i for i, m in enumerate(ob.data.materials)
+            if m and m.name.startswith(("M_RobotEyes", "M_RobotDisplay", "EyeScreen", "Display"))}
+    layer = bm.faces.layers.int.get("part_id")
+    return lambda f: f.material_index in mats or (layer is not None and f[layer] in ids)
+
+
+def uv_layer_of(bm):
+    """The UV layer of a new form mesh, named like the part objects' (materials and the FBX look it up by name)."""
+    return bm.loops.layers.uv.get("UVMap") or bm.loops.layers.uv.new("UVMap")
+
+
+class FaceCopier:
+    """Copies bmesh faces with weights, UVs, materials and the integer face layers into another bmesh."""
+
+    def __init__(self, src, dst):
+        self.dst = dst
+        self.src_def, self.dst_def = src.verts.layers.deform.verify(), dst.verts.layers.deform.verify()
+        self.src_uv = src.loops.layers.uv.active
+        self.dst_uv = uv_layer_of(dst) if self.src_uv is not None else None
+        self.ints = []
+        for name in FACE_INT_LAYERS:
+            sl = src.faces.layers.int.get(name)
+            if sl is not None:
+                self.ints.append((sl, dst.faces.layers.int.get(name) or dst.faces.layers.int.new(name)))
+
+    def copy(self, faces, shift=None):
+        for f in faces:
+            vs = []
+            for v in f.verts:
+                nv = self.dst.verts.new(v.co + shift if shift is not None else v.co)
+                for k, w in v[self.src_def].items():
+                    nv[self.dst_def][k] = w
+                vs.append(nv)
+            nf = self.dst.faces.new(vs)
+            nf.material_index, nf.smooth = f.material_index, f.smooth
+            if self.src_uv is not None:
+                for l, ol in zip(f.loops, nf.loops):
+                    ol[self.dst_uv].uv = l[self.src_uv].uv
+            for sl, dl in self.ints:
+                nf[dl] = f[sl]
+
+
+def _form_object(src, bm, form, coll):
+    me = bpy.data.meshes.new("%s__%s" % (src.name, form))
+    for m in src.data.materials:
+        me.materials.append(m)
+    bm.to_mesh(me)
+    for k in ("part_names", "spin_parts"):
+        if k in src.data:
+            me[k] = list(src.data[k])
+    ob = bpy.data.objects.new(me.name, me)
+    coll.objects.link(ob)
+    for g in src.vertex_groups:                 # same order: the deform layer indexes them
+        ob.vertex_groups.new(name=g.name)
+    for p in me.polygons:
+        p.use_smooth = False
+    ob["form"], ob["base"] = form, src.name
+    ob["slot"], ob["variant"] = src.get("slot", ""), src.get("variant", "")
+    return ob
+
+
+def faceted_copy(src, coll):
+    """Collapse-decimated copy with flat facets; screens and visor are carried over unchanged."""
+    bm = bmesh.new()
+    bm.from_mesh(src.data)
+    keep = [f for f in bm.faces if form_keep(src, bm)(f)]
+    rest = bmesh.new()
+    rest.from_mesh(src.data)
+    rest_keep = form_keep(src, rest)
+    bmesh.ops.delete(rest, geom=[f for f in rest.faces if rest_keep(f)], context="FACES")
+    tmp_me = bpy.data.meshes.new("facet_tmp")
+    rest.to_mesh(tmp_me)
+    rest.free()
+    tmp = bpy.data.objects.new("facet_tmp", tmp_me)
+    coll.objects.link(tmp)
+    for g in src.vertex_groups:
+        tmp.vertex_groups.new(name=g.name)
+    mod = tmp.modifiers.new("Decimate", "DECIMATE")
+    mod.decimate_type, mod.ratio, mod.use_collapse_triangulate = "COLLAPSE", FACET_RATIO, True
+    for o in bpy.context.scene.objects:
+        o.select_set(o == tmp)
+    bpy.context.view_layer.objects.active = tmp
+    with bpy.context.temp_override(object=tmp, active_object=tmp, selected_objects=[tmp]):
+        if tmp.data.has_custom_normals:
+            bpy.ops.mesh.customdata_custom_splitnormals_clear()
+        bpy.ops.object.modifier_apply(modifier=mod.name)
+    out = bmesh.new()
+    out.from_mesh(tmp.data)
+    remove_object(tmp)
+    if keep:
+        FaceCopier(bm, out).copy(keep)
+    bm.free()
+    ob = _form_object(src, out, "Faceted", coll)
+    out.free()
+    return ob
+
+
+def _islands(bm):
+    seen, islands = set(), []
+    for f in bm.faces:
+        if f.index in seen:
+            continue
+        stack, isl = [f], []
+        seen.add(f.index)
+        while stack:
+            g = stack.pop()
+            isl.append(g)
+            for e in g.edges:
+                for h in e.link_faces:
+                    if h.index not in seen:
+                        seen.add(h.index)
+                        stack.append(h)
+        islands.append(isl)
+    return islands
+
+
+_VOX_DIRS = ((1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1))
+
+
+def _voxelise_island(isl, tris, out, cell, uv_layer, int_layers, group):
+    """Cells whose centre lies inside the closed island (ray parity) and VOXEL_INSET deep; one quad per open cube
+    side, UV, material and part of the nearest point of the surface. Returns False for thin parts without such a
+    cell (bolts, seams, rings): they stay smooth, a whole block would stick out far."""
+    loops = [lt for f in isl for lt in tris[f.index]]
+    verts = [l.vert.co for lt in loops for l in lt]
+    tree = BVHTree.FromPolygons(verts, [(3 * i, 3 * i + 1, 3 * i + 2) for i in range(len(loops))])
+    lo = Vector([min(v[i] for v in verts) for i in range(3)])
+    hi = Vector([max(v[i] for v in verts) for i in range(3)])
+    occ = set()
+    ray = Vector((1, 0, 0))
+    for ix in range(math.floor(lo.x / cell), math.ceil(hi.x / cell)):
+        for iy in range(math.floor(lo.y / cell), math.ceil(hi.y / cell)):
+            for iz in range(math.floor(lo.z / cell), math.ceil(hi.z / cell)):
+                o0 = o = Vector(((ix + 0.5) * cell, (iy + 0.5) * cell, (iz + 0.5) * cell))
+                n = 0
+                while True:
+                    hit = tree.ray_cast(o, ray)
+                    if hit[0] is None:
+                        break
+                    n += 1
+                    o = hit[0] + ray * 1e-5
+                if n % 2 and tree.find_nearest(o0)[3] >= VOXEL_INSET * cell:
+                    occ.add((ix, iy, iz))
+    if not occ:
+        return False
+    dl = out.verts.layers.deform.verify()
+    ul = uv_layer_of(out) if uv_layer is not None else None
+    for (ix, iy, iz) in sorted(occ):
+        for d in _VOX_DIRS:
+            if (ix + d[0], iy + d[1], iz + d[2]) in occ:
+                continue
+            fc = Vector(((ix + 0.5 + d[0] / 2) * cell, (iy + 0.5 + d[1] / 2) * cell, (iz + 0.5 + d[2] / 2) * cell))
+            a, b = [k for k in range(3) if d[k] == 0]
+            corners = []
+            for s1, s2 in ((-1, -1), (1, -1), (1, 1), (-1, 1)):
+                p = fc.copy()
+                p[a] += s1 * cell / 2
+                p[b] += s2 * cell / 2
+                corners.append(p)
+            if Vector(d).dot((corners[1] - corners[0]).cross(corners[2] - corners[1])) < 0:
+                corners.reverse()
+            vs = [out.verts.new(c) for c in corners]
+            for v in vs:
+                v[dl][group] = 1.0
+            f = out.faces.new(vs)
+            _, near, ti, _ = tree.find_nearest(fc)
+            lt = loops[ti]
+            src_face = lt[0].face
+            f.material_index, f.smooth = src_face.material_index, False
+            if ul is not None:
+                tri = [l.vert.co for l in lt]
+                uv = mathutils.geometry.barycentric_transform(near, *tri, *[l[uv_layer].uv.to_3d() for l in lt])
+                if not all(math.isfinite(c) for c in uv):         # degenerate triangle: its nearest corner
+                    uv = min(lt, key=lambda l: (l.vert.co - near).length)[uv_layer].uv.to_3d()
+                for l in f.loops:
+                    l[ul].uv = uv.to_2d()
+            for sl, dl_ in int_layers:
+                f[dl_] = src_face[sl]
+    return True
+
+
+def voxel_copies(part_objs, keys, coll):
+    """Voxel copies of the part objects; the smooth screens and the visor move in front of the blocks."""
+    built, decals = {}, []
+    fronts = {"head": [], "chest": []}          # (x, z, y) of block corners near the decals
+    for key in keys:
+        src = part_objs[key]
+        bm = bmesh.new()
+        bm.from_mesh(src.data)
+        bm.faces.ensure_lookup_table()
+        tris = collections.defaultdict(list)
+        for lt in bm.calc_loop_triangles():
+            tris[lt[0].face.index].append(lt)
+        keeps, decal = form_keep(src, bm, VOXEL_KEEP), form_keep(src, bm)
+        deform = bm.verts.layers.deform.verify()
+        uv_layer = bm.loops.layers.uv.active
+        out = bmesh.new()
+        ints = FaceCopier(bm, out).ints
+        gnames = {g.index: g.name for g in src.vertex_groups}
+        keep, smooth = [], []
+        for isl in _islands(bm):
+            if keeps(isl[0]):
+                (keep if decal(isl[0]) else smooth).extend(isl)
+                continue
+            group = max(isl[0].verts[0][deform].items(), key=lambda kv: kv[1])[0]
+            n0 = len(out.verts)
+            if not _voxelise_island(isl, tris, out, VOXEL_CELL, uv_layer, ints, group):
+                smooth.extend(isl)
+                continue
+            fam = {"Head": "head", "Spine": "chest"}.get(gnames[group])
+            if fam and (key == "Body" or key.startswith("Head_")):
+                out.verts.ensure_lookup_table()
+                fronts[fam] += [tuple(v.co) for v in out.verts[n0:]]
+        if smooth:
+            FaceCopier(bm, out).copy(smooth)
+        if keep:
+            decals.append((key, keep))
+        built[key] = (src, bm, out)
+    # decals: the visor and the eye screen move together (head), the chest screen on its own
+    for key, keep in decals:
+        src, bm, out = built[key]
+        gnames = {g.index: g.name for g in src.vertex_groups}
+        deform = bm.verts.layers.deform.verify()
+        by_fam = collections.defaultdict(list)
+        for f in keep:
+            g = max(f.verts[0][deform].items(), key=lambda kv: kv[1])[0]
+            by_fam["chest" if gnames[g] == "Spine" else "head"].append(f)
+        for fam, faces in by_fam.items():
+            co = [v.co for f in faces for v in f.verts]
+            x0, x1 = min(c.x for c in co), max(c.x for c in co)
+            z0, z1 = min(c.z for c in co), max(c.z for c in co)
+            front = min(c.y for c in co)
+            blocks = [y for x, y, z in ((p[0], p[1], p[2]) for p in fronts[fam]) if x0 <= x <= x1 and z0 <= z <= z1]
+            shift = Vector((0, min(0.0, min(blocks) - 0.003 - front) if blocks else 0.0, 0))
+            FaceCopier(bm, out).copy(faces, shift)
+    objs = collections.OrderedDict()
+    for key in keys:
+        src, bm, out = built[key]
+        objs[key] = _form_object(src, out, "Voxel", coll)
+        bm.free()
+        out.free()
+    return objs
+
+
+def perforation_cells(ob):
+    """Holes per UV unit for PERFORATION["spacing"]: metres per UV unit from the surface and UV areas of the core
+    body's atlas faces (smart UV project keeps the texel density about even; eyes and display have fixed UVs that
+    span a whole atlas cell and are left out)."""
+    me = ob.data
+    uv = me.uv_layers[0].data
+    body = {i for i, k in enumerate(MAT_ORDER) if k in BODY_MATS}     # authoring slots (before remap_materials)
+    area3 = area2 = 0.0
+    for p in me.polygons:
+        if p.material_index not in body:
+            continue
+        pts = [uv[i].uv for i in p.loop_indices]
+        area2 += abs(sum(pts[i].x * pts[i - 1].y - pts[i - 1].x * pts[i].y for i in range(len(pts)))) / 2
+        area3 += p.area
+    return round(math.sqrt(area3 / max(area2, 1e-9)) / PERFORATION["spacing"], 1)
+
+
+def make_forms(part_objs, coll, arm_ob):
+    """FORM_OBJS: the mesh-form copies of every part object, bound to the rig and hidden."""
+    FORM_OBJS.clear()
+    keys = [k for k in part_objs if not k.startswith("Form_")]
+    for form in MESH_FORMS:
+        t0 = time.time()
+        if form == "Faceted":
+            objs = collections.OrderedDict((k, faceted_copy(part_objs[k], coll)) for k in keys)
+        else:
+            objs = voxel_copies(part_objs, keys, coll)
+        for ob in objs.values():
+            bind_mesh(ob, arm_ob)
+            ob.hide_render = True
+            ob.hide_set(True)
+        FORM_OBJS[form] = objs
+        LOG.debug("  form %s: %d objects, %d triangles (default look) in %.1f s", form, len(objs),
+                  sum(tri_count(objs[g].data) for g in config_groups(default_config())), time.time() - t0)
+
+
+def form_objects(part_objs, robot_mesh, variants, form):
+    """Objects that show a look: the variants in its form (mesh form copies, or the parts of a parts form)."""
+    kind = FORMS[form]["kind"] if form else None
+    if not variants and kind not in ("mesh", "parts"):
+        return [robot_mesh]
+    cfg = default_config()
+    cfg.update(variants or {})
+    groups = config_groups(cfg)
+    if kind == "mesh":
+        return [FORM_OBJS[form][g] for g in groups]
+    objs = [part_objs[g] for g in groups]
+    if kind == "parts":
+        objs.append(part_objs[group_key("Form", form)])
+    return objs
 
 
 # ----------------------------------------------------------------------------------------------
@@ -6139,15 +6562,18 @@ def montage_sheet(tiles, sheet, pointsize):
 SEE_THROUGH_SPECIALS = ("Glass", "Hologram")
 
 
-def set_special(nt, sp):
-    """Preview: switch the special-material nodes (preview_special_nodes) to a skin's special (None = off)."""
+def set_special(nt, sp, form=None):
+    """Preview: switch the special-material nodes (preview_special_nodes) to a skin's special (None = off) and the
+    holes of the form "Perforated" on or off."""
+    nt.nodes["PerfW"].outputs[0].default_value = float(form == "Perforated")
+    nt.nodes["PerfCells"].outputs[0].default_value = PERFORATION.get("cells", 50.0)
     for sid in SPECIALS:
         nt.nodes["SpecialW_" + sid].outputs[0].default_value = float(bool(sp) and sp["id"] == sid)
     bsdf = next(n for n in nt.nodes if n.type == "BSDF_PRINCIPLED")
     for link in list(bsdf.inputs["Alpha"].links):
         nt.links.remove(link)
     bsdf.inputs["Alpha"].default_value = 1.0
-    if sp and sp["id"] in SEE_THROUGH_SPECIALS:      # opaque materials stay on EEVEE's opaque path
+    if sp and sp["id"] in SEE_THROUGH_SPECIALS or form == "Perforated":     # else EEVEE's opaque path
         nt.links.new(nt.nodes["SpecialAlpha"].outputs[0], bsdf.inputs["Alpha"])
     if sp:
         nt.nodes["SpecialA"].outputs[0].default_value = (*sp["color"], 1.0)
@@ -6182,7 +6608,7 @@ def set_look(ob, tex_dir, skin=DEFAULT_SKIN, expression="Normal", display="Statu
                 nt.nodes["FinishRough"].outputs[0].default_value = rough
                 nt.nodes["FinishMetal"].outputs[0].default_value = metal
             if "SpecialA" in nt.nodes:
-                set_special(nt, SKIN_DATA[skin]["special"])
+                set_special(nt, SKIN_DATA[skin]["special"], SKIN_DATA[skin]["form"])
             suffix = "" if skin == DEFAULT_SKIN else "_" + skin
             # "base_"/"emit_": half-size textures the comparison job left behind in this worker
             for nd in nt.nodes:
@@ -6253,11 +6679,9 @@ def render_skins(cam, ob, part_objs, out_dir, tex_dir, names):
     tiles = {"front": [], "iso": []}
     for skin in names:
         rec = SKIN_DATA[skin]
-        objs = [ob]
-        if rec["parts"]:
-            cfg = default_config()
-            cfg.update(rec["parts"])
-            objs = [part_objs[g] for g in config_groups(cfg)]
+        objs = form_objects(part_objs, ob, rec["parts"], rec["form"])
+        own = objs != [ob]
+        if own:
             ob.hide_render = True
             for o in objs:
                 o.hide_render = False
@@ -6269,7 +6693,7 @@ def render_skins(cam, ob, part_objs, out_dir, tex_dir, names):
             cam.location = loc
             look_at(cam, (0, 0, 0.64))
             tiles[view].append((skin, render_still(os.path.join(out_dir, "skin_%s_%s.png" % (skin, view)))))
-        if rec["parts"]:
+        if own:
             for o in objs:
                 o.hide_render = True
                 set_look(o, tex_dir)
@@ -6287,11 +6711,7 @@ def card_objects(part_objs, robot_mesh, kind, name):
         rec = SKIN_DATA[name]
         variants, skin = rec["parts"], name
         expr, disp = rec["expression"] or "Normal", rec["display"] or "Status"
-    if not variants:
-        return [robot_mesh], skin, expr, disp
-    cfg = default_config()
-    cfg.update(variants)
-    return [part_objs[g] for g in config_groups(cfg)], skin, expr, disp
+    return form_objects(part_objs, robot_mesh, variants, None if kind == "type" else rec["form"]), skin, expr, disp
 
 
 def render_compare(cam, ob, out_dir, compare_dir):
@@ -6396,7 +6816,7 @@ def _render_card_items(cam, part_objs, robot_mesh, out_dir, tex_dir, items, out,
             if rim:
                 rim.data.color = old_rim
             bg.inputs[0].default_value = old_bg
-        if kind == "type" or SKIN_DATA.get(name, {}).get("parts") and kind == "skin":
+        if kind == "type" or kind == "skin" and (SKIN_DATA[name]["parts"] or SKIN_DATA[name]["form"]):
             scene.render.film_transparent = True
             scene.render.resolution_x, scene.render.resolution_y = 400, 440
             cam.data.type = "ORTHO"
@@ -6562,6 +6982,8 @@ def skin_card(i, sid, render, path):
         dots += ["-fill", srgb_hex(pal_[key]), "-stroke", "#5b6b7c", "-strokewidth", 2,
                  "-draw", "circle %d,46 %d,46" % (cx, cx + 16)]
     info = ["Spezial: " + SPECIALS[rec["special"]["id"]]["label"]] if rec["special"] else []
+    if rec["form"]:
+        info.insert(0, "Form: " + FORMS[rec["form"]]["label"])
     if rec["finish"] != "Standard":
         info.append("Oberfläche " + rec["finish"])
     if rec["zones2"]:
@@ -7015,9 +7437,13 @@ class JobContext:
             for other in self.qa_meshes.values():
                 bpy.data.objects.remove(other, do_unlink=True)
             self.qa_meshes.clear()
-            cfg = default_config()
-            cfg.update(ROBOT_TYPES[tname]["variants"])
-            ob = combine_objects([self.part_objs[g] for g in config_groups(cfg)], "QA_" + tname, self.coll)
+            if tname.startswith("Form_"):         # a body form in the default look (QA_FORMS)
+                objs = form_objects(self.part_objs, None, {}, tname[len("Form_"):])
+            else:
+                cfg = default_config()
+                cfg.update(ROBOT_TYPES[tname]["variants"])
+                objs = [self.part_objs[g] for g in config_groups(cfg)]
+            ob = combine_objects(objs, "QA_" + tname, self.coll)
             bind_mesh(ob, self.arm_ob)
             self.qa_meshes[tname] = ob
         return ob
@@ -7030,6 +7456,27 @@ class JobContext:
         set_fast_eyes(False)
         bpy.context.scene.eevee.use_raytracing = True
         show_tool(False)
+
+
+def export_forms(folder, part_objs, robot_mesh, coll, arm_ob, tex_dir):
+    """Forms/CubeEscape_Robot_<Form>.fbx (default look in that form, same rig, no takes - the clips of the main FBX
+    play on it) and, for mesh forms, Forms/CubeEscape_Robot_Modular_<Form>.fbx. Returns triangle counts."""
+    os.makedirs(folder, exist_ok=True)
+    out = {}
+    for form, d in FORMS.items():
+        if d["kind"] == "shader":
+            continue
+        tmp = combine_objects(form_objects(part_objs, robot_mesh, {}, form), "Robot_Mesh_" + form, coll)
+        bind_mesh(tmp, arm_ob)
+        set_look(tmp, tex_dir)
+        export_fbx(os.path.join(folder, "CubeEscape_Robot_%s.fbx" % form), [tmp], arm_ob, animations=False)
+        out[form] = {"triangles": tri_count(tmp.data)}
+        bpy.data.objects.remove(tmp, do_unlink=True)
+        if d["kind"] == "mesh":
+            export_fbx(os.path.join(folder, "CubeEscape_Robot_Modular_%s.fbx" % form), list(FORM_OBJS[form].values()),
+                       arm_ob, animations=False)
+    LOG.info("  forms: %s", ", ".join("%s %d triangles" % (f, v["triangles"]) for f, v in out.items()))
+    return out
 
 
 def export_type_fbx(ctx, names, lods):
@@ -7265,6 +7712,8 @@ def main():
         else:
             unwrap(list(part_objs.values()), cache_dir, read=not args.no_cache)
 
+    if part_objs["Body"].data.uv_layers:
+        PERFORATION["cells"] = perforation_cells(part_objs["Body"])
     queue, procs = None, []
     if not args.no_cache:
         RENDER_CACHE["dir"] = os.path.join(args.src_dir or out, "cache", "render")
@@ -7275,7 +7724,7 @@ def main():
                 LOG.info("  %s cache: removed %d entries unused for %d days", kind, pruned, QA_CACHE_DAYS)
     if not worker and args.stage == "full":
         only = set(filter(None, args.qa_types.split(",")))
-        type_names = [t for t in ROBOT_TYPES if t != "Classic" and (not only or t in only)]
+        type_names = [t for t in list(ROBOT_TYPES) + QA_FORMS if t != "Classic" and (not only or t in only)]
         jobs = make_jobs(type_names, {a.name for a in ANIMS}, args, args.workers + 1)
         queue = JobQueue.create(os.path.join(out, "logs", "jobs"), jobs)
         n_qa_jobs = sum(j["lane"] == "qa" for j in jobs)
@@ -7332,6 +7781,8 @@ def main():
         arm_ob = build_armature(coll)
         for o in [robot_mesh] + list(part_objs.values()):
             bind_mesh(o, arm_ob)
+    with Step("forms"):
+        make_forms(part_objs, get_collection("Robot_Forms"), arm_ob)
         add_preview_tool(arm_ob, preview_coll)
         report["bones"] = [b.name for b in arm_ob.data.bones]
     with Step("animations"):
@@ -7381,6 +7832,7 @@ def main():
                                                        arm_ob)
         export_fbx(os.path.join(out, "CubeEscape_Robot_Modular.fbx"), list(part_objs.values()), arm_ob,
                    animations=False)
+        report["forms"] = export_forms(os.path.join(out, "Forms"), part_objs, robot_mesh, coll, arm_ob, tex_dir)
         # the robot types are exported by "fbx" work packages in parallel (export_type_fbx)
         capsules = hit_capsules(robot_mesh, arm_ob)
         report["hit_capsules"] = {c["bone"]: c["coverage"] for c in capsules}
@@ -7391,8 +7843,9 @@ def main():
         vcfg = viewer_config()
         vcfg["clips"] = clips
         vcfg["typeBounds"] = bounds
-        export_viewer.export(os.path.join(out, "ViewerData"), list(part_objs.values()), arm_ob, ANIMS, actions,
-                             tex_dir, vcfg, LOG)
+        form_objs = [o for objs in FORM_OBJS.values() for o in objs.values()]
+        export_viewer.export(os.path.join(out, "ViewerData"), list(part_objs.values()) + form_objs, arm_ob, ANIMS,
+                             actions, tex_dir, vcfg, LOG)
     with Step("work packages (main process)"):
         ctx.camera()                # the .blend keeps its preview scene
         count, busy = queue.work(ctx, ["render", "qa"], "main")
@@ -7491,6 +7944,8 @@ def viewer_config():
         "unityTextures": [{"file": "Unity/" + n, "channels": d} for n, d in UNITY_TEXTURES.items()],
         "specials": [dict(id=n, **{k: (list(parse_color(v)) if k.startswith("color") else v) for k, v in d.items()})
                      for n, d in SPECIALS.items()],
+        "forms": [dict(id=n, **d) for n, d in FORMS.items()],
+        "perforation": dict(PERFORATION),
         "linePaint": LINE_PAINT,
         "layers": [catalog_entry(n, LAYER_TEXTURES, i, LAYER_DEFAULTS.get(n)) for i, n in enumerate(LAYERS)],
         "materials": [catalog_entry(n, MATERIAL_TEXTURES, i, MATERIAL_DEFAULTS[n]) for i, n in enumerate(MATERIALS)],
@@ -7536,6 +7991,7 @@ def skin_config(sid):
                 "lines": dict(rec["lines"], color=list(rec["lines"]["color"])) if rec["lines"] else None,
                 "special": (dict(rec["special"], color=list(rec["special"]["color"]),
                                  color2=list(rec["special"]["color2"])) if rec["special"] else None),
+                "form": rec["form"] or "None",
                 "parts": rec["parts"], "theme": rec["theme"], "since": rec["since"], "stage": rec["stage"],
                 "startSet": rec["startSet"], "concept": rec["concept"]})
     for k in ("expression", "display"):
@@ -7618,7 +8074,7 @@ def write_config(out, clips, bounds, capsules=None):
 # ---------------------------------- player looks ----------------------------------
 # A look is what the player saves. Names of skins, variants, expressions and displays are IDs: never rename them.
 LOOK_FORMAT = "CubeEscapeRobotLook"
-LOOK_VERSION = 5            # 1 = viewer 1.6 (no format/version), 2 = 1.7-1.9, 3 = 1.10, 4 = 1.11 (migrated on load)
+LOOK_VERSION = 6            # 1 = viewer 1.6 (no format/version), 2 = 1.7-1.9, 3 = 1.10, 4 = 1.11, 5 = 1.13 (migrated)
 LOOK_COLORS = {"armor": "armor", "mech": "mech", "metal": "metal", "lights": "accent", "screen": "screen",
                "eyes": "eye", "visor": "visor", "fabric": "fabric", "armor2": "armor2"}     # look key -> skin key
 
@@ -7643,7 +8099,7 @@ def type_look(tname):
                  "material": ({"id": rec["material"]["id"], "color": rgb(rec["material"]["color"])} if rec["material"]
                               else {"id": "None", "color": rgb(skin["armor"])}),
                  "layers": [{"id": ly["id"], "amount": ly["amount"], "color": rgb(ly["color"])} for ly in rec["layers"]],
-                 "wear": rec["wear"], "special": special_look(rec["special"])})
+                 "wear": rec["wear"], "special": special_look(rec["special"]), "form": rec["form"] or "None"})
     return look
 
 
@@ -7691,6 +8147,8 @@ def look_schema():
                     "properties": {"id": {"enum": ["None"] + list(SPECIALS)}, "color": rgb, "color2": rgb,
                                    "strength": {"type": "number", "minimum": 0, "maximum": 1},
                                    "speed": {"type": "number", "minimum": 0, "maximum": 4}}},
+        "form": {"enum": ["None"] + list(FORMS), "description": "body form (version 6): own geometry, holes or "
+                                                                "extra parts; follows the skin"},
         "lines": {"type": "object", "required": ["pattern"], "additionalProperties": False, "properties": {
             "pattern": {"enum": ["None"] + LINE_PATTERNS}, "color": rgb,
             "strength": {"type": "number", "minimum": 0, "maximum": 2}}},
@@ -7699,7 +8157,7 @@ def look_schema():
     return {"$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "robot_look.schema.json",
             "title": "Cube Escape robot look (version %d)" % LOOK_VERSION,
             "description": "Player customisation. Names are permanent IDs; unknown values fall back to the default "
-                           "with a warning. Versions 1-4 are migrated on load (missing fields take their defaults).",
+                           "with a warning. Versions 1-5 are migrated on load (missing fields take their defaults).",
             "type": "object", "required": ["format", "version", "variants", "expression", "display"],
             "properties": props, "additionalProperties": False}
 

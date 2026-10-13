@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 
 /// Entry point. GUI by default; `--snapshot <out.png>` renders offscreen and exits (used by the QA scripts):
-///   RobotViewer --snapshot out.png [--type Party] [--look file.json] [--skin Neon] [--expression Love]
+///   RobotViewer --snapshot out.png [--type Party] [--look file.json] [--skin Neon] [--form Voxel] [--expression Love]
 ///               [--display Heart] [--variant Head=TV ...] [--anim DanceRobot --frame 30] [--view Iso|Front|Side|Back|Face]
 ///               [--size 1000x1000] [--no-floor] [--no-props] [--save-look out.json] [--data <ViewerData dir>]
 ///               [--gif clip.gif | --video clip.mp4]   (with --anim: the whole clip instead of one frame)
@@ -74,6 +74,7 @@ enum Snapshot {
             if let s = value(args, "--skin"), let skin = data.config.skins.first(where: { $0.name == s }) {
                 look.apply(skin: skin, parts: args.contains("--skin-parts"))
             }
+            if let f = value(args, "--form") { look.form = f }      // 1.14 body form ("None" = base form)
             if let e = value(args, "--expression") { look.expression = e }
             if let d = value(args, "--display") { look.display = d }
             if let f = value(args, "--finish"), let fin = Finish(rawValue: f) { look.finish = fin }

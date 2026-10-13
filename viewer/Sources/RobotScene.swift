@@ -12,7 +12,7 @@ final class RobotScene: NSObject, SCNSceneRendererDelegate {
     let cameraNode = SCNNode()
     private(set) var boneNodes: [String: SCNNode] = [:]
     private var boneOrder: [SCNNode] = []
-    private var objectNodes: [String: [SCNNode]] = [:]
+    private var objectNodes: [String: [SCNNode]] = [:]     // key "<form>|<object>", form "" = base geometry
     private var spinNodes: [SCNNode] = []
     private var bodyMat = SCNMaterial()
     private var fabricMat = SCNMaterial()
@@ -287,6 +287,14 @@ final class RobotScene: NSObject, SCNSceneRendererDelegate {
         float rough = 1.0 - ms.a;
         float metalness = ms.r;
         \(body)
+        // 1.14 form "Perforated" (P(20): on, holes per UV unit, radius as share of a cell): grid in UV space with v up
+        // (Blender/Unity), every second row offset by half a cell, armour only - same formula as the preview.
+        float4 pf = P(20);
+        if (pf.x > 0.5 && mk.r > 0.5) {
+            float2 q = float2(uv.x, 1.0 - uv.y) * pf.y;
+            q.x += fmod(floor(q.y), 2.0) * 0.5;
+            if (length(fract(q) - 0.5) < pf.z) discard_fragment();
+        }
         // 1.13 special materials (P(10): mode 1..7 = robot_config.json > specials order, strength, speed, armour
         // only?; P(11)/P(12): colours; P(13): turntable cos/sin). Same formulas as preview_special_nodes().
         float4 sp = P(10);
@@ -586,7 +594,7 @@ final class RobotScene: NSObject, SCNSceneRendererDelegate {
                 node = pivot
             }
             boneNodes[part.bone]?.addChildNode(node)
-            objectNodes[part.object, default: []].append(node)
+            objectNodes["\(part.form ?? "")|\(part.object)", default: []].append(node)
         }
     }
 
@@ -727,10 +735,17 @@ final class RobotScene: NSObject, SCNSceneRendererDelegate {
         for slot in data.config.slots where look.variants[slot.id] == nil {
             if let first = slot.variants.first, first != "None" { visible.insert("\(slot.id)_\(first)") }
         }
+        // body form (1.14): mesh forms swap every chunk for its form copy, a parts form adds its group
+        let form = (data.config.forms ?? []).first { $0.id == look.form }
+        let meshForm = form?.kind == "mesh" ? look.form : ""
+        if form?.kind == "parts" { visible.insert("Form_\(look.form)") }
         heldItemNodes = []
-        for (obj, nodes) in objectNodes {
-            for n in nodes { n.isHidden = !visible.contains(obj) }
-            if obj.hasPrefix("AccHand_") && visible.contains(obj) { heldItemNodes += nodes }
+        for (key, nodes) in objectNodes {
+            let cut = key.firstIndex(of: "|")!
+            let (chunkForm, obj) = (String(key[..<cut]), String(key[key.index(after: cut)...]))
+            let shown = visible.contains(obj) && chunkForm == meshForm
+            for n in nodes { n.isHidden = !shown }
+            if obj.hasPrefix("AccHand_") && shown { heldItemNodes += nodes }
         }
         heldItemVisible = true
         let cfg = data.config
@@ -779,6 +794,8 @@ final class RobotScene: NSObject, SCNSceneRendererDelegate {
         p[11] = RobotScene.f4(look.special.color)
         p[12] = RobotScene.f4(look.special.color2)
         p[13] = params[13] == .zero ? SIMD4(1, 0, 0, 0) : params[13]       // turntable angle, kept across looks
+        let perf = cfg.perforation
+        p[20] = SIMD4(look.form == "Perforated" ? 1 : 0, Float(perf?.cells ?? 50), Float(perf?.radius ?? 0.33), 0)
         params = p
         writeParams()
         // glass and hologram need blending (alpha from the shader); everything else stays in the opaque pass
@@ -786,6 +803,7 @@ final class RobotScene: NSObject, SCNSceneRendererDelegate {
         for m in [bodyMat, fabricMat] {
             m.transparencyMode = seeThrough ? .dualLayer : .default
             m.transparency = seeThrough ? 0.999 : 1.0
+            m.isDoubleSided = look.form == "Perforated"         // the holes show the inside of the plates
         }
         let matID = material?.id ?? "None"
         if matID != shownMaterial {

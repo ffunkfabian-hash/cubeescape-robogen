@@ -390,6 +390,9 @@ struct Sidebar: View {
                 if !(model.config.specials ?? []).isEmpty {
                     section("Spezialmaterial") { specialSection }
                 }
+                if !(model.config.forms ?? []).isEmpty {
+                    section("Form") { formSection }
+                }
                 section("Zweitfarbe") {
                     ColorPicker("Farbe", selection: colorBinding(\.armor2))
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4), spacing: 4) {
@@ -532,6 +535,25 @@ struct Sidebar: View {
     }
 
     /// 1.13: glass, hologram, glitch, iridescence, sketch, rainbow, galaxy - runtime effects on top of the skin.
+    /// Body form (1.14): own geometry (faceted, voxel), holes, or extra parts (cables); IDs from robot_config.json.
+    @ViewBuilder private var formSection: some View {
+        let forms = model.config.forms ?? []
+        Picker("Form", selection: Binding(
+            get: { model.look.form },
+            set: { id in
+                var l = model.look
+                l.form = id
+                l.skin = "Custom"
+                model.look = l
+            })) {
+            Text("Grundform").tag("None")
+            ForEach(forms) { Text($0.label).tag($0.id) }
+        }
+        if let info = forms.first(where: { $0.id == model.look.form }) {
+            Text(info.description).font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
     @ViewBuilder private var specialSection: some View {
         let specials = model.config.specials ?? []
         Picker("Material", selection: Binding(

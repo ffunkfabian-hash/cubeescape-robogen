@@ -10,7 +10,7 @@ namespace RobotTestbed
     public sealed class RobotLook
     {
         public const string Format = "CubeEscapeRobotLook";
-        public const int CurrentVersion = 5;
+        public const int CurrentVersion = 6;
         public const float WearDefault = 0.5f;
         public const int MaxBadges = 2;
         static readonly string[] ColorKeys = { "armor", "mech", "metal", "lights", "screen", "eyes", "visor", "fabric" };
@@ -45,6 +45,9 @@ namespace RobotTestbed
         public string Special = "None";
         public Vector4 SpecialColor = Vector4.one, SpecialColor2 = Vector4.one;
         public float SpecialStrength = 1f, SpecialSpeed = 1f;
+        // version 6: body form (robot_config.json > forms): own meshes (Forms/*.fbx), holes in the body shader, or
+        // the extra part Form_<id>
+        public string Form = "None";
 
         static Vector4 Rgb(object o)
         {
@@ -116,6 +119,8 @@ namespace RobotTestbed
             if (d.TryGetValue("wear", out var wr)) l.Wear = (float)(double)wr;
             // version 5: no special material
             if (d.TryGetValue("special", out var sp)) l.ReadSpecial((Dictionary<string, object>)sp, Rgb);
+            // version 6: the base body form
+            l.Form = d.TryGetValue("form", out var fm) ? (string)fm : "None";
             var variants = d.TryGetValue("variants", out var vv) ? (Dictionary<string, object>)vv : new Dictionary<string, object>();
             l.Sanitize(config, variants, warnings);
             return l;
@@ -184,6 +189,9 @@ namespace RobotTestbed
             SpecialSpeed = Mathf.Clamp(SpecialSpeed, 0f, 4f);
             SpecialColor = Clamp01(SpecialColor);
             SpecialColor2 = Clamp01(SpecialColor2);
+            bool knownForm = false;
+            foreach (var f in config.Objects("forms")) knownForm |= (string)f["id"] == Form;
+            if (Form != "None" && !knownForm) { warnings.Add("Form " + Form + " unbekannt"); Form = "None"; }
             MaterialColor = Clamp01(MaterialColor);
             Glow = Mathf.Clamp(Glow, 0.2f, 2.5f);
             foreach (var k in ColorKeys) Colors[k] = Clamp01(Colors[k]);
@@ -240,6 +248,7 @@ namespace RobotTestbed
             Wear = skin.TryGetValue("wear", out var w) ? (float)(double)w : WearDefault;
             Special = "None";
             if (skin.TryGetValue("special", out var sp) && sp is Dictionary<string, object> sd) ReadSpecial(sd, o => RobotConfig.Vec(o));
+            Form = skin.TryGetValue("form", out var fm) && fm is string fs ? fs : "None";
             if (!parts) return;
             if (skin.TryGetValue("parts", out var p))
                 foreach (var kv in (Dictionary<string, object>)p) Variants[kv.Key] = (string)kv.Value;

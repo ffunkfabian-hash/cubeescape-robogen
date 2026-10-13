@@ -22,7 +22,8 @@ namespace RobotTestbed
             MatSel1 = Shader.PropertyToID("_MaterialSel1"), MatColor = Shader.PropertyToID("_MaterialColor"),
             LayerAmount = Shader.PropertyToID("_LayerAmount"), LayerAmount2 = Shader.PropertyToID("_LayerAmount2"),
             LayerRough = Shader.PropertyToID("_LayerRough"), LayerMetal = Shader.PropertyToID("_LayerMetal"),
-            Wear = Shader.PropertyToID("_Wear"), BareMetal = Shader.PropertyToID("_BareMetal");
+            Wear = Shader.PropertyToID("_Wear"), BareMetal = Shader.PropertyToID("_BareMetal"),
+            Perforation = Shader.PropertyToID("_Perforation");
         static readonly string[] LayerIds = { "Rust", "Moss", "Frost", "Embers", "Camo" };
         static readonly int[] LayerColor = { Shader.PropertyToID("_RustColor"), Shader.PropertyToID("_MossColor"),
             Shader.PropertyToID("_FrostColor"), Shader.PropertyToID("_EmberColor"), Shader.PropertyToID("_CamoColor") };
@@ -106,6 +107,11 @@ namespace RobotTestbed
             var weathering = cfg.Root.TryGetValue("weathering", out var wobj) ? (Dictionary<string, object>)wobj : null;
             float soft = weathering != null ? (float)(double)weathering["coverSoft"] : 0.1f;
             var bare = weathering != null ? RobotConfig.Vec(weathering["bareMetal"]) : new Vector4(0.62f, 0.63f, 0.65f);
+            // 1.14 form "Perforated": x = on, y = holes per UV unit, z = hole radius as share of a cell
+            var perforation = Vector4.zero;
+            if (look.Form == "Perforated" && cfg.Root.TryGetValue("perforation", out var pv) && pv is Dictionary<string, object> pf)
+                perforation = new Vector4(1f, pf.TryGetValue("cells", out var pc) ? (float)(double)pc : 50f,
+                                          (float)(double)pf["radius"], 0f);
             block ??= new MaterialPropertyBlock();
             bodySlots.Clear();
             foreach (var r in GetComponentsInChildren<Renderer>(true))
@@ -152,6 +158,7 @@ namespace RobotTestbed
                     block.SetVector(LayerMetal, metal4);
                     block.SetFloat(Wear, look.Wear);
                     block.SetVector(BareMetal, bare);
+                    block.SetVector(Perforation, perforation);
                     r.SetPropertyBlock(block, i);
                 }
             }

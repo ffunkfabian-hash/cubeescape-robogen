@@ -128,7 +128,7 @@ struct SpecialLook: Codable, Equatable {
 /// and lines) take the defaults for missing fields; a version 2 look keeps its colours and gets skin "Custom".
 struct Look: Codable, Equatable {
     static let format = "CubeEscapeRobotLook"
-    static let currentVersion = 5
+    static let currentVersion = 6
     static let wearDefault = 0.5
     static let maxBadges = 2
 
@@ -157,11 +157,12 @@ struct Look: Codable, Equatable {
     var layers: [LayerLook] = []
     var wear: Double = Look.wearDefault
     var special = SpecialLook()
+    var form: String = "None"
 
     enum CodingKeys: String, CodingKey {
         case format, version, name, variants, armor, mech, metal, lights, screen, eyes, visor, fabric, finish, glow,
              expression, display, autoExpression, autoDisplay, skin, armor2, zones2, badges, lines, material, layers, wear,
-             special
+             special, form
     }
 
     init() {}
@@ -206,6 +207,8 @@ struct Look: Codable, Equatable {
         wear = try c.decodeIfPresent(Double.self, forKey: .wear) ?? Look.wearDefault
         // version 5: no special material
         special = try c.decodeIfPresent(SpecialLook.self, forKey: .special) ?? SpecialLook()
+        // version 6: the base body form
+        form = try c.decodeIfPresent(String.self, forKey: .form) ?? "None"
     }
 
     func encode(to encoder: Encoder) throws {
@@ -233,6 +236,7 @@ struct Look: Codable, Equatable {
         try c.encode(layers, forKey: .layers)
         try c.encode(wear, forKey: .wear)
         try c.encode(special, forKey: .special)
+        try c.encode(form, forKey: .form)
     }
 
     /// Replaces unknown IDs with defaults (e.g. a look saved by a newer generator) and clamps values.
@@ -303,6 +307,10 @@ struct Look: Codable, Equatable {
         l.special.speed = min(max(special.speed, 0), 4)
         l.special.color = l.special.color.clamped
         l.special.color2 = l.special.color2.clamped
+        if form != "None" && !(config.forms ?? []).contains(where: { $0.id == form }) {
+            warnings.append("Form „\(form)“ unbekannt")
+            l.form = "None"
+        }
         l.glow = min(max(glow, 0.2), 2.5)
         for kp in [\Look.armor, \.mech, \.metal, \.lights, \.screen, \.eyes, \.visor, \.fabric] {
             l[keyPath: kp] = l[keyPath: kp].clamped
@@ -327,6 +335,7 @@ struct Look: Codable, Equatable {
         wear = s.wear ?? Look.wearDefault
         special = s.special.map { SpecialLook(id: $0.id, color: RGB($0.color), color2: RGB($0.color2),
                                               strength: $0.strength, speed: $0.speed) } ?? SpecialLook()
+        form = s.form ?? "None"
         if let ln = s.lines {
             lines = LineLook(pattern: ln.pattern, color: RGB(ln.color), strength: ln.strength)
         } else {

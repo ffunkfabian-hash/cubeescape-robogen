@@ -1,6 +1,6 @@
 #!/bin/bash
-# Headless viewer tests: look migration (v1 and v2 -> v3), unknown IDs, rejected future versions, round trip of every
-# type look, GIF and video export.
+# Headless viewer tests: look migration (v1 ... v5 -> v6), unknown IDs, rejected future versions, visible body forms,
+# round trip of every type look, GIF and video export.
 #   viewer/test_viewer.sh [output dir]      default: ../output (needs RobotViewer.app)
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -12,12 +12,12 @@ ok() { echo "PASS $1"; }
 bad() { echo "FAIL $1"; fail=1; }
 
 "$BIN" --snapshot "$TMP/v1.png" --look "$HERE/tests/look_v1.json" --save-look "$TMP/v1_migrated.json" --size 300x300 >/dev/null
-# the current look version is 5 (1.10: skin, armor2, zones2, badges, lines; 1.11: material, layers, wear;
-# 1.13: special)
-python3 - "$TMP/v1_migrated.json" <<'PY' && ok "v1 look migrated to v5" || bad "v1 look migrated to v5"
+# the current look version is 6 (1.10: skin, armor2, zones2, badges, lines; 1.11: material, layers, wear;
+# 1.13: special; 1.14: form)
+python3 - "$TMP/v1_migrated.json" <<'PY' && ok "v1 look migrated to v6" || bad "v1 look migrated to v6"
 import json, sys
 l = json.load(open(sys.argv[1]))
-assert l["format"] == "CubeEscapeRobotLook" and l["version"] == 5 and l["special"]["id"] == "None"
+assert l["format"] == "CubeEscapeRobotLook" and l["version"] == 6 and l["special"]["id"] == "None"
 assert l["material"]["id"] == "None" and l["layers"] == [] and l["wear"] == 0.5
 assert l["skin"] == "Custom" and l["badges"] == [] and l["zones2"] == [] and l["lines"]["pattern"] == "None"
 assert l["variants"]["Head"] == "TV" and l["variants"]["Hands"] == "Claw" and l["variants"]["Feet"] == "Boots"
@@ -26,10 +26,10 @@ assert abs(l["visor"]["r"] - 0.006) < 1e-6
 PY
 
 "$BIN" --snapshot "$TMP/v2.png" --look "$HERE/tests/look_v2.json" --save-look "$TMP/v2_migrated.json" --size 300x300 >/dev/null
-python3 - "$HERE/tests/look_v2.json" "$TMP/v2_migrated.json" <<'PY' && ok "v2 look migrated to v5" || bad "v2 look migrated to v5"
+python3 - "$HERE/tests/look_v2.json" "$TMP/v2_migrated.json" <<'PY' && ok "v2 look migrated to v6" || bad "v2 look migrated to v6"
 import json, sys
 old, l = json.load(open(sys.argv[1])), json.load(open(sys.argv[2]))
-assert l["version"] == 5 and l["skin"] == "Custom" and l["badges"] == [] and l["lines"]["pattern"] == "None"
+assert l["version"] == 6 and l["skin"] == "Custom" and l["badges"] == [] and l["lines"]["pattern"] == "None"
 assert l["armor2"] == old["armor"] and l["zones2"] == []          # a v2 look keeps exactly its colours
 for k in ("armor", "mech", "metal", "lights", "screen", "eyes", "visor", "fabric", "finish", "expression"):
     assert l[k] == old[k], k
@@ -39,21 +39,45 @@ assert all(v == "None" for k, v in l["variants"].items() if k not in old["varian
 PY
 
 "$BIN" --snapshot "$TMP/v3.png" --look "$HERE/tests/look_v3.json" --save-look "$TMP/v3_migrated.json" --size 300x300 >/dev/null
-python3 - "$HERE/tests/look_v3.json" "$TMP/v3_migrated.json" <<'PY' && ok "v3 look migrated to v5" || bad "v3 look migrated to v5"
+python3 - "$HERE/tests/look_v3.json" "$TMP/v3_migrated.json" <<'PY' && ok "v3 look migrated to v6" || bad "v3 look migrated to v6"
 import json, sys
 old, l = json.load(open(sys.argv[1])), json.load(open(sys.argv[2]))
-assert l["version"] == 5 and l["skin"] == old["skin"] and l["badges"] == old["badges"] and l["lines"] == old["lines"]
+assert l["version"] == 6 and l["skin"] == old["skin"] and l["badges"] == old["badges"] and l["lines"] == old["lines"]
 assert l["material"]["id"] == "None" and l["layers"] == [] and l["wear"] == 0.5
 PY
 
 "$BIN" --snapshot "$TMP/v4.png" --look "$HERE/tests/look_v4.json" --save-look "$TMP/v4_migrated.json" --size 300x300 >/dev/null
-python3 - "$HERE/tests/look_v4.json" "$TMP/v4_migrated.json" <<'PY' && ok "v4 look migrated to v5" || bad "v4 look migrated to v5"
+python3 - "$HERE/tests/look_v4.json" "$TMP/v4_migrated.json" <<'PY' && ok "v4 look migrated to v6" || bad "v4 look migrated to v6"
 import json, sys
 old, l = json.load(open(sys.argv[1])), json.load(open(sys.argv[2]))
-assert l["version"] == 5 and l["special"]["id"] == "None"
+assert l["version"] == 6 and l["special"]["id"] == "None"
 for k in ("skin", "badges", "lines", "material", "layers", "wear", "armor", "finish", "expression"):
     assert l[k] == old[k], k
 PY
+
+"$BIN" --snapshot "$TMP/v5.png" --look "$HERE/tests/look_v5.json" --save-look "$TMP/v5_migrated.json" --size 300x300 >/dev/null
+python3 - "$HERE/tests/look_v5.json" "$TMP/v5_migrated.json" <<'PY' && ok "v5 look migrated to v6" || bad "v5 look migrated to v6"
+import json, sys
+old, l = json.load(open(sys.argv[1])), json.load(open(sys.argv[2]))
+assert l["version"] == 6 and l["form"] == "None" and l["special"] == old["special"]
+PY
+
+msg6="$("$BIN" --snapshot "$TMP/u6.png" --look "$HERE/tests/look_v6_unknown_form.json" --save-look "$TMP/u6.json" --size 300x300)"
+python3 - "$TMP/u6.json" <<'PY' && ok "unknown form replaced" || bad "unknown form replaced"
+import json, sys
+assert json.load(open(sys.argv[1]))["form"] == "None"
+PY
+case "$msg6" in *Form*) ok "form warning reported" ;; *) bad "form warning reported" ;; esac
+
+# 1.14 body forms: each form skin renders differently from the same skin in the base form (geometry, holes, cables)
+for skin in Pixel Origami Bone Wire; do
+  "$BIN" --snapshot "$TMP/form_$skin.png" --skin "$skin" --size 300x300 >/dev/null
+  "$BIN" --snapshot "$TMP/base_$skin.png" --skin "$skin" --form None --size 300x300 >/dev/null
+  # snapshots are deterministic (the same look differs by 0 px); the thin cables of Wire still change ~55 px
+  diff=$(magick compare -metric AE -fuzz 2% "$TMP/form_$skin.png" "$TMP/base_$skin.png" null: 2>&1 || true)
+  if awk -v d="${diff%% *}" 'BEGIN { exit !(d > 20) }'; then ok "form of $skin is visible (${diff%% *} px)"
+  else bad "form of $skin is visible (${diff%% *} px)"; fi
+done
 
 msg5="$("$BIN" --snapshot "$TMP/u5.png" --look "$HERE/tests/look_v5_unknown_special.json" --save-look "$TMP/u5.json" --size 300x300)"
 python3 - "$TMP/u5.json" <<'PY' && ok "unknown special material replaced" || bad "unknown special material replaced"

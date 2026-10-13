@@ -1,7 +1,8 @@
 """Cube Escape robot - data export for the RobotViewer app (SceneKit).
 
 Writes into <out_dir>:
-    robot.json      bones (rest matrices), parts (geometry chunks), animations, customisation config
+    robot.json      bones (rest matrices), parts (geometry chunks; "form" = body form of the chunk, "" = the base
+                    geometry, 1.14), animations, customisation config
     vertices.bin    float32 [px py pz nx ny nz u v] per vertex, positions in bone space
     indices.bin     uint32 triangle indices (per chunk, relative to the chunk's first vertex)
     anim.bin        float32 [tx ty tz qx qy qz qw sx sy sz] per bone per frame (bone-local, parent space)
@@ -102,7 +103,8 @@ def export(out_dir, part_objs, arm, anims, actions, tex_dir, config, log):
             data = np.c_[p4[:, :3], n3, uv[loops]].astype(np.float32)
             idx = np.arange(len(data), dtype=np.uint32)
             mat_name = me.materials[mi].name.split(".")[0]
-            entry = {"object": ob.name, "slot": ob.get("slot", ""), "variant": ob.get("variant", ""),
+            entry = {"object": ob.get("base", ob.name), "form": ob.get("form", ""), "slot": ob.get("slot", ""),
+                     "variant": ob.get("variant", ""),
                      "bone": bone, "material": KIND.get(mat_name, "body"), "spin": bool(spin_name),
                      "part": spin_name, "vertexOffset": vbase, "vertexCount": int(len(data)),
                      "indexOffset": ibase, "indexCount": int(len(idx))}

@@ -333,6 +333,7 @@ Szenen-Abdruck, Hashes über kanonische Daten, Engine-Prüfungen gebündelt in e
 - [ ] Looks/Paletten als versionierte Datendatei mit Loader-Prüfung und Migration
 - [ ] Farbvarianten aus einmal gebackenen Gewichtskarten zusammensetzen, Gegenprobe im Volllauf
 - [ ] Maskenkanäle (Zonen, Abzeichen, Leuchtlinien) statt Textursatz je Variante; Formel mit Helligkeitsverhältnis
+- [ ] Formvarianten (facettiert, Voxel, Lochung) als Ableitung mit gleichem Atlas und gleicher QA
 - [ ] Lackzonen über benannte Teile → Flächenattribut → Attribute-Node
 - [ ] Decal-Anker je Modellfamilie, Decal-Bibliothek per ImageMagick
 - [ ] Gemeinsame Teilgraphen in Materialien (Knotenzahl messen)
@@ -347,3 +348,34 @@ Szenen-Abdruck, Hashes über kanonische Daten, Engine-Prüfungen gebündelt in e
 - [ ] Effektmaterialien (Glas, Hologramm …) als Laufzeit-Effekt mit Zielbeschreibung; Masken für die Engine packen
 - [ ] LOD-Stufen und Kollisionsformen automatisch erzeugen und in der Engine prüfen
 - [ ] Prüfergebnisse cachen (Eingaben + Prüfcode im Schlüssel), Bilder nach Szenen-Abdruck, Prüfer parallel, Engine-Prüfung in einem Prozess
+
+## 15. Proportionen und Körperformen (1.14)
+
+- **Umformen statt neu modellieren:** Die Teile entstehen im alten Maß, danach formt eine Matrix je Knochen sie um
+  (`PROPORTIONS`: Achsen-Skalierung um einen Drehpunkt oder „radial“ = dicker um die Knochenachse). Gelenke bleiben,
+  also bleiben alle Clips, IK-Ziele und Bodenkontakte gültig; was am Kopf und Rumpf hängt (Sockel, Federknochen,
+  Emitter, Augen-UVs), wandert mit derselben Matrix. Varianten können eine eigene Matrix haben (`SHAPE_VARIANTS`).
+- **Breiter geht nur, wo die Clips Platz lassen:** Überall, wo Arme am Kopf vorbeigehen, kostet Breite Kollisionen
+  (Schulterpanzer, Hand am Kinn, Leiter). Höhe ist billig, Tiefe am Rumpf trifft die Unterarme, Tiefe am Oberschenkel
+  die Ferse. Die QA aller Typen nach jedem Schritt zeigt, welcher Faktor zu viel ist.
+- **Falle Euler-Winkel:** Bei XYZ-Euler dreht der Abspreiz-Kanal einen nach vorn gestreckten Arm um seine eigene
+  Achse; der Ellbogen bewegt sich nicht. Nach außen führt dann der dritte Kanal.
+- **Formen als Geometrie mit gleichem Rig und gleichem Atlas:** Eine Form-Kopie jedes Teil-Objekts behält Vertex-
+  Gruppen (gleiche Reihenfolge!), Materialien und UVs – so passt jeder Skin, jede Maske und jeder Clip ohne neue
+  Texturen. Die UV-Ebene muss wie im Original heißen (`UVMap`): Augen- und Normal-Map-Knoten greifen über den Namen zu,
+  sonst bleiben die Augen schwarz.
+- **Voxel ohne Kollisionsfolgen:** Zellen nur zählen, wenn ihr Mittelpunkt eine halbe Zelle tief im Teil liegt –
+  dann liegt jeder Würfel innerhalb der Grundform, und die Kollisionsfreiheit der Grundform überträgt sich. Bei einem
+  Viertel ragten Brust- und Kugelwürfel bis 7 mm heraus und trafen sich in 67 von 69 Clips. Würfelhaufen sind nicht
+  drehinvariant wie eine Kugel: Gelenkkugeln bleiben glatt, ebenso Finger und dünne Teile (sonst ragt ein ganzer
+  Würfel heraus). Jede Würfelseite nimmt UV und Material des nächsten Originalpunkts (baryzentrisch, bei entarteten
+  Dreiecken die nächste Ecke) – ein Texel je Seite ergibt den Pixel-Look.
+- **Lochung als Formel statt Textur:** Raster im UV-Raum, Abstand aus der Texeldichte (Fläche ÷ UV-Fläche, nur
+  Atlasflächen – Augen und Display haben feste UVs über eine ganze Atlaszelle und verfälschen sonst die Dichte um das
+  Neunfache). Gleiche Formel in Blender (Mathe-Knoten), SceneKit (`discard_fragment`) und Unity (`clip`), Innenseiten
+  sichtbar (beidseitig rendern).
+- **Sichtbarkeit testen:** Snapshots sind deterministisch (derselbe Look: 0 Pixel Unterschied); ein Formtest vergleicht
+  Skin mit und ohne Form – schon 55 Pixel (Kabel) sind ein sicherer Befund.
+
+**Für Cubegen:** Formvarianten als Ableitung (Facetten, Voxel, Lochung) eines gemeinsamen Modells mit gemeinsamem Atlas;
+Voxel konservativ (innen) rastern, Gelenke/Kleinteile glatt lassen; Variantengeometrie mit derselben QA wie das Original.

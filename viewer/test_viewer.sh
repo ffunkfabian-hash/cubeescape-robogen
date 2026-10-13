@@ -30,8 +30,11 @@ import json, sys
 old, l = json.load(open(sys.argv[1])), json.load(open(sys.argv[2]))
 assert l["version"] == 4 and l["skin"] == "Custom" and l["badges"] == [] and l["lines"]["pattern"] == "None"
 assert l["armor2"] == old["armor"] and l["zones2"] == []          # a v2 look keeps exactly its colours
-for k in ("armor", "mech", "metal", "lights", "screen", "eyes", "visor", "fabric", "variants", "finish", "expression"):
+for k in ("armor", "mech", "metal", "lights", "screen", "eyes", "visor", "fabric", "finish", "expression"):
     assert l[k] == old[k], k
+# slots added later (1.12: AccEar) arrive with their default; every saved choice stays
+assert all(l["variants"][k] == v for k, v in old["variants"].items())
+assert all(v == "None" for k, v in l["variants"].items() if k not in old["variants"]), l["variants"]
 PY
 
 "$BIN" --snapshot "$TMP/v3.png" --look "$HERE/tests/look_v3.json" --save-look "$TMP/v3_migrated.json" --size 300x300 >/dev/null

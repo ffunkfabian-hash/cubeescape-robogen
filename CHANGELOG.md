@@ -3,6 +3,35 @@
 Versionen des Roboter-Generators (zählen getrennt von Cube Escape und Cubegen). Jede Version hat einen Tag
 `v<Version>` und einen Release-Branch `release/<Version>`.
 
+## 1.12.0 „Bolt-On“ – 2026-10-13
+
+Aufsätze an den Sockets, Nachschwingen, Typ-Emotes; 62 Skins (15 neue: Miner, Samurai, Steam, Signal, Wood, Celest –
+Startset –, Astronaut, Scout, Spike, Observer, Clockwork, Chrono, Vertex, Obsidian, Arbor; Forest mit Moos, Spross und
+grünem Stoff). Alle Aufsätze ohne Durchdringung in allen Clips.
+
+* **14 Aufsätze:** Kopf – Grubenhelm mit Stirnlampe, Samurai-Helm (Kabuto), Stacheln, Ohren, Satellitenschüssel,
+  Schornstein mit Rauch, Heiligenschein (schwebt bewusst, `FLOATING_PARTS`), Blattspross; neuer Slot **Ohren**
+  (`AccEar`, am linken Ohr – die rechte Hand streift das rechte Ohr in Wave/Think mit unter 1 cm) – Linsenauge,
+  Zahnräder, Zifferblatt; Gesicht – Linsenringe, Helmring (per Strahl an die Kopfschale geschmiegt); Rücken –
+  Rucksack mit Taschen. Slots: 34 Accessoires.
+* **10 neue Robotertypen** (Miner, Samurai, Steam, Signal, Celest, Sapling, Astronaut, Clockwork, Vertex, Spike), die
+  zusammen jeden Aufsatz tragen: Die QA prüft jetzt 24 Typen gegen alle Clips, `verify_robot.py` die Abdeckung.
+  Gefunden und behoben: Grubenhelm im Augen-Display beim Hochschauen, Rucksack-Rolle am Hinterkopf beim Ducken,
+  Zifferblatt und Zahnräder an der rechten Hand.
+* **Nachschwingen:** Federknochen `Cape` und `Antenna`; eine gedämpfte Feder je Clip, Fahrtwind in den Lauf-Clips,
+  gebacken als Knochenkurven (keine Laufzeit-Physik). Umhang nur weg vom Körper, Loops geschlossen.
+* **Typ-Emotes** (`robotTypes[].emote`): HatTip (Gentleman – der Hut gleitet zur Hand und reitet beim Verbeugen auf
+  ihr) und FlagWave (King); 71 Clips. QA und Spiel nutzen ein Typ-Emote nur mit seinem Typ.
+* **Abzeichen** Stern, Zahnrad, Blatt in `T_Robot_BadgeMask3`; der Viewer packt die zwei gewählten Abzeichen je Look in
+  eine Textur (beliebig viele Masken, ein Sampler), Unity nutzt drei Masken.
+* **Emitter als Daten** (`robot_config.json` › `emitters`, `springBones`): Schornsteinrauch, im Viewer als
+  Partikelsystem.
+* **Behoben (seit 1.11):** Einzelne Typen wurden zufällig im Classic-Look gerendert, wenn derselbe Worker vorher die
+  Gegenüberstellung gerendert hatte (`set_look` erkannte deren Ersatz-Texturen nicht).
+* Viewer-Test: ein v2-Look bekommt den neuen Slot mit „None“ (Test angepasst, alle übrigen Werte unverändert).
+* Unity-Testpaket: Federknochen, Emitter-Sockets, Umhang/Antenne schwingen, HatTip hebt den Hut (23 Prüfungen).
+* Doku: README, AGENTS (Aufsätze und Bewegung), TECHNIK.md › 10, Fahrplan.
+
 ## 1.11.0 „Weathering“ – 2026-10-13
 
 Oberflächen-Schichten, Werkstoffe und Abnutzung als Daten; 47 Skins (9 neue: Rust, Moss, Inferno, Circuit, Magma,

@@ -93,18 +93,24 @@ final class RobotScene: NSObject, SCNSceneRendererDelegate {
     /// RGBA8 texture whose channels are picked from other textures: [(file, channel)] per output channel
     /// (nil = 0). SceneKit draws a shader modifier with more than six custom textures magenta, so the viewer
     /// packs the generator's masks into fewer textures. Zone masks become one zone number (index / 8).
-    private func packed(_ channels: [(String, Int)?], zoneIDs: [String]? = nil, zoneChannel: Int = -1) -> Any? {
-        guard let (w, h, bytes) = packBytes(channels, zoneIDs: zoneIDs, zoneChannel: zoneChannel) else { return nil }
+    private func packed(_ channels: [(String, Int)?], zoneIDs: [String]? = nil, zoneChannel: Int = -1,
+                        keepPixels: Bool = false) -> Any? {
+        guard let (w, h, bytes) = packBytes(channels, zoneIDs: zoneIDs, zoneChannel: zoneChannel,
+                                            keepPixels: keepPixels) else { return nil }
         return RobotScene.texture(w, h, bytes)
     }
 
+    /// keepPixels: decoded files stay in packCache (masks that are repacked on every look change, e.g. badges).
     private func packBytes(_ channels: [(String, Int)?], zoneIDs: [String]? = nil,
-                           zoneChannel: Int = -1) -> (Int, Int, [UInt8])? {
+                           zoneChannel: Int = -1, keepPixels: Bool = false) -> (Int, Int, [UInt8])? {
         var cache: [String: (Int, Int, [UInt8])] = [:]
         func px(_ f: String) -> (Int, Int, [UInt8])? {
             if let c = cache[f] { return c }
+            let key = data.root.path + "#px:" + f
+            if keepPixels, let c = RobotScene.packCache[key] as? (Int, Int, [UInt8]) { return c }
             let p = pixels(f)
             cache[f] = p
+            if keepPixels, let p = p { RobotScene.packCache[key] = p }
             return p
         }
         let files = channels.compactMap { $0?.0 } + (zoneIDs ?? [])
@@ -227,9 +233,9 @@ final class RobotScene: NSObject, SCNSceneRendererDelegate {
             c *= 1.0 - 0.6 * more * grime;
         }
         if (misc.w > 0.5) c = mix(c, mix(P(19).rgb * ratio, c, aux.b), mk.r);
-        float4 b0 = badgeTex0.sample(s, uv), b1 = badgeTex1.sample(s, uv);
-        c = mix(c, P(14).rgb * ratio, saturate(dot(b0, P(10)) + dot(b1, P(11))));
-        c = mix(c, P(15).rgb * ratio, saturate(dot(b0, P(12)) + dot(b1, P(13))));
+        float4 bd = badgeTex.sample(s, uv);       // R = first badge, G = second (packed per look)
+        c = mix(c, P(14).rgb * ratio, bd.r);
+        c = mix(c, P(15).rgb * ratio, bd.g);
         float patchy = 0.6 + 0.6 * grime;
         float4 lr = P(28), lm = P(29);
         float cv;
@@ -260,8 +266,7 @@ final class RobotScene: NSObject, SCNSceneRendererDelegate {
         #pragma arguments
         texture2d<float> maskTexture;
         texture2d<float> msTexture;
-        texture2d<float> badgeTex0;
-        texture2d<float> badgeTex1;
+        texture2d<float> badgeTex;
         texture2d<float> lineTex;
         texture2d<float> auxTexture;
         texture2d<float> layerTex;
@@ -312,8 +317,6 @@ final class RobotScene: NSObject, SCNSceneRendererDelegate {
             // metal/smoothness, plus the wear fields in the free channels
             ("msTexture", packed([("T_Robot_MetallicSmoothness.png", 0), chan(layers, idx("Wear")),
                                   chan(layers, idx("Grime")), ("T_Robot_MetallicSmoothness.png", 3)])),
-            ("badgeTex0", packed((0..<4).map { chan(cfg.badges, $0) })),
-            ("badgeTex1", packed((4..<8).map { chan(cfg.badges, $0) })),
             ("lineTex", packed((0..<4).map { chan(lines, $0) })),
             ("layerTex", packed(["Rust", "Moss", "Frost", "Embers"].map { chan(layers, idx($0)) })),
         ]
@@ -344,9 +347,66 @@ final class RobotScene: NSObject, SCNSceneRendererDelegate {
         return RobotScene.texture(w, h, bytes) as Any
     }
 
+    /// The look's two badges as one texture (R, G): any number of badge masks, one sampler. Packed on a badge change.
+    private func badgeTexture(_ ids: [String]) -> Any {
+        let chans = (data.config.badges ?? []).reduce(into: [String: (String, Int)]()) { $0[$1.id] = ($1.texture, $1.channel) }
+        let channels: [(String, Int)?] = [0, 1].map { $0 < ids.count ? chans[ids[$0]] : nil } + [nil, nil]
+        let none = RobotScene.texture(4, 4, [UInt8](repeating: 0, count: 64)) as Any
+        if channels.allSatisfy({ $0 == nil }) { return none }
+        return packed(channels, keepPixels: true) ?? none       // a missing mask file: no badge, not an unbound sampler
+    }
+
     /// The look as 32 float4 texels (layout: the P(i) indices in the shader).
     private var params = [SIMD4<Float>](repeating: .zero, count: 32)
     private var shownMaterial = "?"
+    private var shownBadges: [String]? = nil
+    private var emitterNodes: [(object: String, node: SCNNode)] = []
+
+    /// Soft grey puffs that rise, grow and fade (chimney smoke).
+    private static func smoke(direction: SIMD3<Float>) -> SCNParticleSystem {
+        let ps = SCNParticleSystem()
+        let size = 64
+        var px = [UInt8](repeating: 0, count: size * size * 4)
+        for y in 0..<size { for x in 0..<size {
+            let dx = (Float(x) + 0.5) / Float(size) * 2 - 1, dy = (Float(y) + 0.5) / Float(size) * 2 - 1
+            let a = max(0, 1 - (dx * dx + dy * dy))
+            let i = (y * size + x) * 4
+            let v = UInt8(a * a * 255)          // premultiplied white
+            px[i] = v; px[i + 1] = v; px[i + 2] = v; px[i + 3] = v
+        } }
+        let ctx = CGContext(data: &px, width: size, height: size, bitsPerComponent: 8, bytesPerRow: size * 4,
+                            space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+        ps.particleImage = ctx?.makeImage()
+        ps.birthRate = 9
+        ps.warmupDuration = 2       // snapshots and the first frame already show a plume
+        ps.particleLifeSpan = 1.8
+        ps.particleLifeSpanVariation = 0.4
+        ps.particleSize = 0.035
+        ps.particleColor = NSColor(white: 0.78, alpha: 0.55)
+        ps.particleVelocity = 0.22
+        ps.particleVelocityVariation = 0.06
+        ps.spreadingAngle = 12
+        ps.emittingDirection = SCNVector3(direction.x, direction.y, direction.z)
+        ps.acceleration = SCNVector3(0, 0.05, 0)
+        ps.blendMode = .alpha
+        ps.isLightingEnabled = false
+        let grow = CAKeyframeAnimation()
+        grow.values = [1.0, 2.6, 4.0]
+        let fade = CAKeyframeAnimation()
+        fade.values = [0.0, 0.7, 0.0]
+        fade.keyTimes = [0, 0.15, 1]
+        ps.propertyControllers = [.size: SCNParticlePropertyController(animation: grow),
+                                  .opacity: SCNParticlePropertyController(animation: fade)]
+        return ps
+    }
+
+    /// Emitters follow the visible accessories.
+    private func updateEmitters(_ look: Look) {
+        for (object, node) in emitterNodes {
+            let parts = object.split(separator: "_", maxSplits: 1).map(String.init)
+            node.isHidden = parts.count != 2 || look.variants[parts[0]] != parts[1]
+        }
+    }
     private lazy var paramTexture: MTLTexture? = {
         let desc = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .rgba32Float, width: 32, height: 1,
                                                             mipmapped: false)
@@ -369,7 +429,7 @@ final class RobotScene: NSObject, SCNSceneRendererDelegate {
         SIMD4(Float(v[0]), Float(v[1]), Float(v[2]), Float(v.count > 3 ? v[3] : 0))
     }
 
-    /// One-hot channel weights per mask texture (badges: 2 textures x RGBA, lines: 1 texture).
+    /// One-hot channel weights per mask texture (line patterns: 2 textures x RGBA).
     private func maskSelector(_ id: String?, in channels: [MaskChannel]) -> [[Double]] {
         var sel = [[Double]](repeating: [0, 0, 0, 0], count: 2)
         guard let id = id, let ch = channels.first(where: { $0.id == id }) else { return sel }
@@ -402,6 +462,16 @@ final class RobotScene: NSObject, SCNSceneRendererDelegate {
         }
         scene.rootNode.addChildNode(robotRoot)
         robotRoot.addChildNode(propRoot)
+        for e in data.config.emitters ?? [] {      // the rig is still in its rest pose here
+            guard let bone = boneNodes[e.bone] else { continue }
+            let node = SCNNode()
+            node.simdPosition = bone.simdConvertPosition(EmitterInfo.scn(e.position), from: robotRoot)
+            node.addParticleSystem(RobotScene.smoke(direction: bone.simdConvertVector(EmitterInfo.scn(e.direction),
+                                                                                     from: robotRoot)))
+            node.isHidden = true
+            bone.addChildNode(node)
+            emitterNodes.append(("\(e.slot)_\(e.variant)", node))
+        }
 
         let stride = doc.vertexStride * 4
         for part in doc.parts {
@@ -602,10 +672,7 @@ final class RobotScene: NSObject, SCNSceneRendererDelegate {
         for (i, z) in (cfg.zones ?? []).enumerated() where look.zones2.contains(z.id) { zoneBits |= 1 << i }
         p[9] = RobotScene.f4([rf, mo, joints, Double(zoneBits)])
         for (i, badge) in [0, 1].map({ $0 < look.badges.count ? look.badges[$0] : nil }).enumerated() {
-            let sel = maskSelector(badge?.id, in: cfg.badges ?? [])
-            p[10 + 2 * i] = RobotScene.f4(sel[0])
-            p[11 + 2 * i] = RobotScene.f4(sel[1])
-            p[14 + i] = RobotScene.f4(badge?.color ?? RGB(0, 0, 0))
+            p[14 + i] = RobotScene.f4(badge?.color ?? RGB(0, 0, 0))     // P(10..13) are free since 1.12
         }
         p[16] = RobotScene.f4(maskSelector(look.lines.pattern, in: cfg.linePatterns ?? [])[0])
         p[17] = RobotScene.f4(look.lines.color, look.lines.strength)
@@ -634,6 +701,13 @@ final class RobotScene: NSObject, SCNSceneRendererDelegate {
             let aux = auxTexture(material: matID)
             for m in [bodyMat, fabricMat] { m.setValue(SCNMaterialProperty(contents: aux), forKey: "auxTexture") }
         }
+        let badgeIDs = look.badges.prefix(2).map(\.id)
+        if badgeIDs != shownBadges {
+            shownBadges = badgeIDs
+            let tex = badgeTexture(badgeIDs)
+            for m in [bodyMat, fabricMat] { m.setValue(SCNMaterialProperty(contents: tex), forKey: "badgeTex") }
+        }
+        updateEmitters(look)
         shownExpression = ""            // eye colour or style may have changed
         displayMat.setValue(vec(look.screen), forKey: "screenColor")
         shownPower = -1

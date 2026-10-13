@@ -51,7 +51,7 @@ import make_textures  # noqa: E402 - ImageMagick source textures
 import export_viewer  # noqa: E402 - data for the RobotViewer app
 
 LOG = logging.getLogger("robot")
-VERSION = "1.11.0"
+VERSION = "1.12.0"
 
 # ----------------------------------------------------------------------------------------------
 # Arguments and logging
@@ -363,8 +363,9 @@ FINISH_PARAMS = collections.OrderedDict([("Standard", (1.0, 0.0)), ("Matt", (1.9
 FINISHES = list(FINISH_PARAMS)
 # Badges: painted onto the armour at fixed anchors (decals of make_textures.BADGE_ART or procedural patterns). Each badge
 # is one channel of a mask texture: index i -> BADGE_TEXTURES[i // 4], channel "RGBA"[i % 4]. Append only (IDs).
-BADGES = ["HazardStripes", "Cross", "Cloud", "Number", "Biohazard", "Glyph", "RacingStripes", "Target"]
-BADGE_TEXTURES = ["T_Robot_BadgeMask.png", "T_Robot_BadgeMask2.png"]
+BADGES = ["HazardStripes", "Cross", "Cloud", "Number", "Biohazard", "Glyph", "RacingStripes", "Target", "Star", "Gear",
+          "Leaf"]
+BADGE_TEXTURES = ["T_Robot_BadgeMask.png", "T_Robot_BadgeMask2.png", "T_Robot_BadgeMask3.png"]
 # Glow line patterns: emissive lines (on the armour, "Joints" on ring parts), one channel each of LINE_TEXTURES.
 LINE_PATTERNS = ["Circuit", "Rings", "Seams", "Bolt", "Joints"]
 LINE_TEXTURES = ["T_Robot_LineMask.png", "T_Robot_LineMask2.png"]
@@ -602,7 +603,9 @@ def badge_anchors():
 BADGE_PLACES = {"Cross": ("ear", "chest", "shoulder", "thigh", "back"),
                 "Cloud": ("ear", "shoulder", "thigh", "head_back"),
                 "Number": ("chest", "shoulder", "thigh", "back"), "Biohazard": ("ear", "chest", "shoulder", "back"),
-                "Glyph": ("ear", "shoulder", "back", "head_back"), "Target": ("ear", "shoulder", "thigh", "head_back")}
+                "Glyph": ("ear", "shoulder", "back", "head_back"), "Target": ("ear", "shoulder", "thigh", "head_back"),
+                "Star": ("ear", "chest", "shoulder", "back"), "Gear": ("ear", "shoulder", "thigh", "back"),
+                "Leaf": ("ear", "shoulder", "thigh", "head_back")}
 
 
 def layer_fields(k, vec, g, sc):
@@ -1154,6 +1157,46 @@ def sphere(name, r, center, mat, bone, segs=14, rings=8, scale=(1, 1, 1)):
     return add_part(name, bm, mat, bone)
 
 
+def deform_part(bm, fn):
+    """Applies a world-space deform (e.g. visor_bend) to a part that is already placed."""
+    for v in bm.verts:
+        v.co = fn(v.co.copy())
+    return bm
+
+
+def ellipse_ring(name, a, b, r, mat, bone, segs=48, rsegs=8):
+    """Tube of radius r along an ellipse (half axes a in X, b in Z) around the origin, facing -Y; place it with
+    conform_front."""
+    bm = bmesh.new()
+    rings = []
+    for i in range(segs):
+        t = 2 * math.pi * i / segs
+        c = Vector((a * math.cos(t), 0.0, b * math.sin(t)))
+        n = Vector((math.cos(t) / a, 0.0, math.sin(t) / b)).normalized()     # in-plane outward normal
+        rings.append([bm.verts.new(c + n * (r * math.cos(2 * math.pi * j / rsegs)) +
+                                   Vector((0, r * math.sin(2 * math.pi * j / rsegs), 0))) for j in range(rsegs)])
+    for i in range(segs):
+        r0, r1 = rings[i], rings[(i + 1) % segs]
+        for j in range(rsegs):
+            bm.faces.new((r0[j], r0[(j + 1) % rsegs], r1[(j + 1) % rsegs], r1[j]))
+    return add_part(name, bm, mat, bone)
+
+
+def conform_front(bm, target, center_xz, gap=0.010):
+    """Moves a part built around y = 0 onto the front surface of another part (ray cast along +Y), so a rim follows
+    a rounded shell; gap = how far the part's y = 0 plane stays in front of the surface."""
+    src = next(p for p in PARTS if p["name"] == target)
+    tree = BVHTree.FromBMesh(src["bm"])
+    cx, cz = center_xz
+    fallback = min(v.co.y for v in src["bm"].verts)
+    for v in bm.verts:
+        x, z = v.co.x + cx, v.co.z + cz
+        hit = tree.ray_cast(Vector((x, -1.0, z)), Vector((0, 1, 0)))
+        y0 = hit[0].y if hit[0] is not None else fallback
+        v.co = Vector((x, y0 - gap + v.co.y, z))
+    return bm
+
+
 # ----------------------------------------------------------------------------------------------
 # Robot layout (meters). All joint positions live here so geometry and rig agree.
 # ----------------------------------------------------------------------------------------------
@@ -1204,9 +1247,11 @@ VARIANT = [None, None]          # (slot, variant) the parts being built belong t
 SLOTS = collections.OrderedDict()   # slot -> [variants]; the first variant is the default
 SLOT_LABELS = {"Head": "Kopf", "Hands": "Hände", "Feet": "Füße", "Pads": "Schulterpanzer", "Backpack": "Rucksack",
                "AccHead": "Kopf-Accessoire", "AccFace": "Gesicht", "AccNeck": "Hals", "AccBack": "Rücken",
-               "AccHand": "In der Hand"}
-ACCESSORY_SLOTS = ("AccHead", "AccFace", "AccNeck", "AccBack", "AccHand")
+               "AccHand": "In der Hand", "AccEar": "Ohren"}
+ACCESSORY_SLOTS = ("AccHead", "AccFace", "AccNeck", "AccBack", "AccHand", "AccEar")
 SPIN_PARTS = set()              # part names that spin in the viewer (propeller)
+FLOATING_PARTS = {"Halo_Ring"}  # parts that float on purpose (rigid on their socket); skipped by the connectivity check
+EMITTERS = []                   # particle emitters of accessories (smoke ...), exported for the viewer and the game
 for _slot in ACCESSORY_SLOTS:
     SLOTS[_slot] = ["None"]
 
@@ -1226,11 +1271,12 @@ ROBOT_TYPES = collections.OrderedDict([
     ("Agent", {"variants": {"Head": "Dome", "AccFace": "Shades", "AccNeck": "Scarf"}, "skin": "Neon",
                "expression": "Focused", "display": "Cube"}),
     ("Gentleman", {"variants": {"AccHead": "TopHat", "AccFace": "Monocle", "AccNeck": "BowTie"}, "skin": "Noir",
-                   "expression": "Skeptical", "display": "Clock"}),
+                   "expression": "Skeptical", "display": "Clock", "emote": "HatTip"}),
     ("Punk", {"variants": {"Pads": "Square", "AccHead": "Mohawk", "AccFace": "Shades", "AccNeck": "Bell"},
               "skin": "Toxic", "expression": "Determined", "display": "Lightning"}),
     ("King", {"variants": {"Head": "Dome", "AccHead": "Crown", "AccNeck": "Medal", "AccBack": "Cape",
-                           "AccHand": "Flag"}, "skin": "Gold", "expression": "Happy", "display": "Star"}),
+                           "AccHand": "Flag"}, "skin": "Gold", "expression": "Happy", "display": "Star",
+              "emote": "FlagWave"}),
     ("DJ", {"variants": {"Head": "Boxy", "Feet": "Round", "AccHead": "Headphones", "AccBack": "Wings"},
             "skin": "Vapor", "expression": "Laugh", "display": "Music"}),
     ("Gardener", {"variants": {"AccFace": "Mustache", "AccHand": "Flower"}, "skin": "Forest", "expression": "Shy",
@@ -1240,6 +1286,27 @@ ROBOT_TYPES = collections.OrderedDict([
     # narrowest silhouette: fits the game's character capsule (radius 0.3 m)
     ("Runner", {"variants": {"Head": "Dome", "Pads": "Slim", "Feet": "Round"}, "skin": "Ocean",
                 "expression": "Determined", "display": "Lightning"}),
+    # 1.12 Bolt-On: together these carry every attachment, so the QA of all types covers each one in every clip
+    ("Miner", {"variants": {"Hands": "Claw", "Feet": "Mech", "AccHead": "MinerHelmet"}, "skin": "Miner",
+               "expression": "Focused", "display": "Warning"}),
+    ("Samurai", {"variants": {"Pads": "Square", "AccHead": "Kabuto"}, "skin": "Samurai", "expression": "Determined",
+                 "display": "Lightning"}),
+    ("Steam", {"variants": {"AccHead": "Chimney", "AccFace": "Goggles", "AccEar": "Dial"}, "skin": "Steam",
+               "expression": "Normal", "display": "Clock"}),
+    ("Signal", {"variants": {"AccHead": "Dish", "AccEar": "LensEye"}, "skin": "Signal", "expression": "Focused",
+                "display": "Wave"}),
+    ("Celest", {"variants": {"AccHead": "Halo", "AccBack": "Wings"}, "skin": "Celest", "expression": "Happy",
+                "display": "Star"}),
+    ("Sapling", {"variants": {"Feet": "Round", "AccHead": "Sprout"}, "skin": "Wood", "expression": "Happy",
+                 "display": "Heart"}),
+    ("Astronaut", {"variants": {"Feet": "Mech", "AccHead": "Antenna", "AccFace": "SpaceRing", "AccBack": "Pouches"},
+                   "skin": "Astronaut", "expression": "Normal", "display": "Status"}),
+    ("Clockwork", {"variants": {"AccFace": "LensRims", "AccEar": "Gears"}, "skin": "Clockwork",
+                   "expression": "Skeptical", "display": "Clock"}),
+    ("Vertex", {"variants": {"Pads": "Slim", "AccHead": "Ears"}, "skin": "Vertex", "expression": "Happy",
+                "display": "Cube"}),
+    ("Spike", {"variants": {"Pads": "Square", "Hands": "Claw", "AccHead": "Spikes"}, "skin": "Spike",
+               "expression": "Angry", "display": "Warning"}),
 ])
 
 
@@ -1506,8 +1573,8 @@ def build_robot():
     # ================= accessories (on socket bones) =================
     with variant("AccHead", "Antenna"):
         cylinder("Antenna_Base", 0.032, 0.050, (0, 0.0, 1.300), D, "Socket_Head", segs=14, bev=0.008)
-        cylinder("Antenna_Rod", 0.007, 0.160, (0, 0.0, 1.400), G, "Socket_Head", segs=8)
-        sphere("Antenna_Tip", 0.022, (0, 0.0, 1.482), O, "Socket_Head", segs=12, rings=7)
+        cylinder("Antenna_Rod", 0.007, 0.160, (0, 0.0, 1.400), G, "Antenna", segs=8)
+        sphere("Antenna_Tip", 0.022, (0, 0.0, 1.482), O, "Antenna", segs=12, rings=7)
     with variant("AccHead", "PropellerCap"):
         sphere("Cap_Dome", 0.20, (0, 0.02, 1.270), F, "Socket_Head", segs=20, rings=10, scale=(1.0, 1.0, 0.55))
         prism("Cap_Bill", ellipse(0.22, 0.14, 20), 0.014, "Z", (0, -0.17, 1.272), F, "Socket_Head", r=0.005, segs=1)
@@ -1633,7 +1700,7 @@ def build_robot():
             for c in range(cols):
                 bm.faces.new((grid[r_][c], grid[r_][c + 1], grid[r_ + 1][c + 1], grid[r_ + 1][c]))
         bmesh.ops.solidify(bm, geom=bm.faces[:], thickness=0.012)
-        add_part("Cape_Cloth", bm, F, "Socket_Back")
+        add_part("Cape_Cloth", bm, F, "Cape")
         cylinder("Cape_Clasp", 0.022, 0.085, (0, 0.200, 0.828), O, "Socket_Back", axis=(0, 1, 0), segs=14)
     with variant("AccBack", "Wings"):
         wing = [(0.0, 0.0), (0.10, 0.08), (0.27, 0.19), (0.30, 0.13), (0.21, 0.05), (0.25, -0.02), (0.12, -0.03)]
@@ -1647,6 +1714,166 @@ def build_robot():
                   0.026, "Y", (s * 0.065, 0.250, 0.790), O, "Socket_Back", r=0.004, segs=1)
             cylinder("Wing_Joint_" + sd, 0.028, 0.050, (s * 0.068, 0.240, 0.790), D, "Socket_Back", axis=(0, 1, 0),
                      segs=12, bev=0.006)
+
+    # ================= 1.12 Bolt-On: attachments =================
+    # head tops (Socket_Head; the Classic shell is flat up to |x| 0.12 at z 1.303, rounded with r 0.14 beyond)
+    with variant("AccHead", "MinerHelmet"):
+        # the shell stays above the eye screen (z <= 1.22 at its front), which moves up when the robot looks up
+        sphere("Miner_Shell", 0.290, (0, 0.010, 1.275), W, "Socket_Head", segs=24, rings=12, scale=(1.0, 0.88, 0.36))
+        cylinder("Miner_Brim", 0.300, 0.016, (0, 0.010, 1.278), D, "Socket_Head", segs=28, bev=0.005,
+                 scale=(1.0, 0.90, 1.0))
+        rbox("Miner_Ridge", (0.050, 0.30, 0.030), (0, 0.035, 1.372), D, "Socket_Head", r=0.012, segs=1,
+             rot=(-6, 0, 0))
+        lamp_dir = Vector((0, -1.0, 0.30)).normalized()
+        lamp = Vector((0, -0.224, 1.318))
+        rbox("Miner_LampMount", (0.070, 0.030, 0.050), lamp - lamp_dir * 0.004, D, "Socket_Head", r=0.010, segs=1,
+             rot=frame_from_dir(lamp_dir))
+        cylinder("Miner_LampHousing", 0.040, 0.050, lamp + lamp_dir * 0.028, G, "Socket_Head", axis=lamp_dir,
+                 segs=18, bev=0.008)
+        cylinder("Miner_LampGlass", 0.031, 0.010, lamp + lamp_dir * 0.054, O, "Socket_Head", axis=lamp_dir, segs=18)
+    with variant("AccHead", "Kabuto"):
+        sphere("Kabuto_Bowl", 0.285, (0, 0.010, 1.240), W, "Socket_Head", segs=24, rings=12, scale=(1.0, 0.90, 0.44))
+        torus("Kabuto_Rim", 0.272, 0.014, (0, 0.010, 1.240), D, "Socket_Head", segs=28, rsegs=6)
+        for s in (1, -1):
+            sd = "L" if s > 0 else "R"
+            rbox("Kabuto_Guard_" + sd, (0.022, 0.300, 0.110), (s * 0.282, 0.050, 1.190), D, "Socket_Head",
+                 r=0.008, segs=1, rot=(0, s * 24, 0))
+            rbox("Kabuto_Wing_" + sd, (0.020, 0.075, 0.095), (s * 0.238, -0.140, 1.228), W, "Socket_Head",
+                 r=0.008, segs=1, rot=(0, s * 30, s * 28))
+            horn = [(0.0, 0.0), (0.028, 0.0), (0.150, 0.215), (0.122, 0.222)]
+            prism("Kabuto_Horn_" + sd, [(s * u, v) for u, v in (horn if s > 0 else list(reversed(horn)))], 0.012,
+                  "Y", (s * 0.030, -0.232, 1.300), O, "Socket_Head", r=0.003, segs=1)
+        rbox("Kabuto_Neckguard", (0.420, 0.024, 0.115), (0, 0.235, 1.185), D, "Socket_Head", r=0.008, segs=1,
+             rot=(-24, 0, 0))
+        cylinder("Kabuto_Crest", 0.036, 0.016, (0, -0.236, 1.306), O, "Socket_Head", axis=(0, -1, 0), segs=16,
+                 bev=0.004)
+    with variant("AccHead", "Spikes"):
+        spikes = (((0.0, 0.0, 1.296), (0.0, 0.0, 1.0)),
+                  ((0.155, 0.0, 1.282), (0.55, 0.0, 0.84)), ((-0.155, 0.0, 1.282), (-0.55, 0.0, 0.84)),
+                  ((0.0, 0.130, 1.282), (0.0, 0.55, 0.84)), ((0.0, -0.115, 1.290), (0.0, -0.35, 0.94)),
+                  ((0.110, 0.110, 1.280), (0.42, 0.42, 0.80)), ((-0.110, 0.110, 1.280), (-0.42, 0.42, 0.80)))
+        for i, (base, d) in enumerate(spikes):
+            d = Vector(d).normalized()
+            b = Vector(base)
+            cylinder("Spike_Base_%d" % i, 0.040, 0.020, b, D, "Socket_Head", axis=d, segs=12, bev=0.005)
+            cylinder("Spike_%d" % i, 0.032, 0.105 if i else 0.125, b + d * (0.062 if i else 0.072), G, "Socket_Head",
+                     axis=d, segs=10, r2=0.002)
+    with variant("AccHead", "Ears"):
+        for s in (1, -1):
+            sd = "L" if s > 0 else "R"
+            outer = [(0.0, 0.0), (0.120, 0.0), (0.085, 0.165)]
+            inner = [(0.026, 0.020), (0.094, 0.020), (0.074, 0.112)]
+            for nm, pts, depth, y, mat in (("Ear_Fin_", outer, 0.050, 0.020, W),
+                                           ("Ear_Inner_", inner, 0.012, -0.010, O)):
+                pts = [(s * (u - 0.060), v) for u, v in pts]
+                prism(nm + sd, pts if s > 0 else list(reversed(pts)), depth, "Y", (s * 0.130, y, 1.268), mat,
+                      "Socket_Head", r=0.006 if mat == W else 0.002, segs=1, rot=(0, s * 14, 0))
+    with variant("AccHead", "Dish"):
+        cylinder("Dish_Mast", 0.012, 0.130, (0.120, 0.060, 1.355), D, "Socket_Head", segs=10)
+        cylinder("Dish_Foot", 0.034, 0.020, (0.120, 0.060, 1.298), G, "Socket_Head", segs=14, bev=0.005)
+        dd = Vector((0.35, -0.45, 0.82)).normalized()
+        dc = Vector((0.120, 0.060, 1.440))
+        sphere("Dish_Joint", 0.020, dc - dd * 0.012, G, "Socket_Head", segs=12, rings=7)
+        cylinder("Dish_Bowl", 0.040, 0.050, dc + dd * 0.020, W, "Socket_Head", axis=dd, segs=24, r2=0.120,
+                 bev=0.006)
+        cylinder("Dish_Face", 0.106, 0.006, dc + dd * 0.046, D, "Socket_Head", axis=dd, segs=24)
+        cyl_between("Dish_Feed", dc + dd * 0.046, dc + dd * 0.125, 0.006, G, "Socket_Head", segs=8)
+        sphere("Dish_Tip", 0.014, dc + dd * 0.130, O, "Socket_Head", segs=10, rings=6)
+    with variant("AccHead", "Chimney"):
+        cx, cy = 0.115, 0.055
+        cylinder("Chimney_Foot", 0.058, 0.026, (cx, cy, 1.296), D, "Socket_Head", segs=16, bev=0.006)
+        cylinder("Chimney_Stack", 0.038, 0.170, (cx, cy, 1.390), G, "Socket_Head", segs=16, r2=0.034)
+        cylinder("Chimney_Band", 0.041, 0.018, (cx, cy, 1.360), D, "Socket_Head", segs=16, bev=0.004)
+        cylinder("Chimney_Top", 0.034, 0.030, (cx, cy, 1.482), G, "Socket_Head", segs=16, r2=0.052, bev=0.004)
+        cylinder("Chimney_Glow", 0.030, 0.006, (cx, cy, 1.496), O, "Socket_Head", segs=16)
+        EMITTERS.append({"id": "ChimneySmoke", "kind": "smoke", "slot": "AccHead", "variant": "Chimney",
+                         "bone": "Socket_Head", "position": (cx, cy, 1.505), "direction": (0.0, 0.0, 1.0)})
+    with variant("AccHead", "Halo"):
+        # floats above the head (FLOATING_PARTS): rigid on the socket, so it follows every clip
+        torus("Halo_Ring", 0.150, 0.013, (0, 0.020, 1.440), O, "Socket_Head", axis=(0, 0.26, 1.0), segs=32, rsegs=8)
+    with variant("AccHead", "Sprout"):
+        stem_a, stem_b = Vector((0.0, 0.020, 1.296)), Vector((0.012, 0.030, 1.415))
+        cylinder("Sprout_Pot", 0.034, 0.020, stem_a, D, "Socket_Head", segs=14, bev=0.005)
+        cyl_between("Sprout_Stem", stem_a, stem_b, 0.009, D, "Socket_Head", segs=8)
+        for s in (1, -1):
+            sd = "L" if s > 0 else "R"
+            prism("Sprout_Leaf_" + sd, ellipse(0.120, 0.050, 16), 0.010, "Y",
+                  stem_b + Vector((s * 0.058, 0.0, 0.020)), F, "Socket_Head", r=0.003, segs=1, rot=(0, -s * 28, 0))
+        sphere("Sprout_Bud", 0.016, stem_b + Vector((0, 0, 0.010)), O, "Socket_Head", segs=10, rings=6)
+
+    # ear pieces (Head; Classic ear cap ends at |x| 0.311). A stub from inside the shell keeps them mounted on every
+    # head variant. Only on the left ear: the right hand passes the right ear within 1 cm (Wave, Think).
+    with variant("AccEar", "LensEye"):
+        cyl_between("Lens_Stub", (0.200, 0.010, 1.100), (0.310, 0.010, 1.100), 0.040, D, "Head", segs=14)
+        cylinder("Lens_Housing", 0.078, 0.070, (0.345, 0.010, 1.100), D, "Head", axis=(1, 0, 0), segs=24, bev=0.010)
+        cylinder("Lens_Ring", 0.070, 0.016, (0.384, 0.010, 1.100), G, "Head", axis=(1, 0, 0), segs=24, bev=0.004)
+        cylinder("Lens_Glass", 0.056, 0.012, (0.388, 0.010, 1.100), V, "Head", axis=(1, 0, 0), segs=24)
+        cylinder("Lens_Iris", 0.022, 0.006, (0.395, 0.010, 1.100), O, "Head", axis=(1, 0, 0), segs=16)
+    with variant("AccEar", "Gears"):
+        for s in (1,):
+            sd = "L" if s > 0 else "R"
+            cyl_between("Gear_Stub_" + sd, (s * 0.200, 0.010, 1.100), (s * 0.312, 0.010, 1.100), 0.030, D, "Head",
+                        segs=12)
+            for k, (c, rad, n, th) in enumerate((((s * 0.322, 0.010, 1.100), 0.064, 10, 0.020),
+                                                 ((s * 0.312, 0.085, 1.175), 0.036, 7, 0.016))):
+                c = Vector(c)
+                cylinder("Gear_Disc_%d_%s" % (k, sd), rad, th, c, G, "Head", axis=(1, 0, 0), segs=20, bev=0.003)
+                cylinder("Gear_Hub_%d_%s" % (k, sd), rad * 0.32, th + 0.010, c, D, "Head", axis=(1, 0, 0), segs=12)
+                for t in range(n):
+                    a = 2 * math.pi * (t + 0.5 * k) / n
+                    off = Vector((0.0, math.cos(a), math.sin(a)))
+                    rbox("Gear_Tooth_%d_%d_%s" % (k, t, sd), (th, 0.020, 0.024), c + off * (rad + 0.008), G, "Head",
+                         r=0.003, segs=1, rot=(math.degrees(a) - 90, 0, 0))
+    with variant("AccEar", "Dial"):
+        for s in (1,):
+            sd = "L" if s > 0 else "R"
+            cyl_between("Dial_Stub_" + sd, (s * 0.200, 0.010, 1.100), (s * 0.312, 0.010, 1.100), 0.030, D, "Head",
+                        segs=12)
+            c = Vector((s * 0.322, 0.010, 1.100))
+            cylinder("Dial_Rim_" + sd, 0.080, 0.024, c, G, "Head", axis=(1, 0, 0), segs=28, bev=0.005)
+            cylinder("Dial_Face_" + sd, 0.068, 0.006, c + Vector((s * 0.012, 0, 0)), W, "Head", axis=(1, 0, 0),
+                     segs=28)
+            for t in range(4):
+                a = math.pi / 2 * t
+                off = Vector((0.0, math.cos(a), math.sin(a)))
+                rbox("Dial_Tick_%d_%s" % (t, sd), (0.006, 0.010, 0.014), c + Vector((s * 0.016, 0, 0)) + off * 0.054,
+                     D, "Head", r=0.002, segs=1, rot=(math.degrees(a) - 90, 0, 0))
+            for k, (ln, ang) in enumerate(((0.048, 20), (0.034, 120))):
+                a = math.radians(ang)
+                off = Vector((0.0, math.cos(a), math.sin(a)))
+                rbox("Dial_Hand_%d_%s" % (k, sd), (0.006, 0.010, ln), c + Vector((s * 0.018, 0, 0)) + off * ln / 2,
+                     D, "Head", r=0.002, segs=1, rot=(ang - 90, 0, 0))
+            cylinder("Dial_Pin_" + sd, 0.008, 0.012, c + Vector((s * 0.020, 0, 0)), O, "Head", axis=(1, 0, 0),
+                     segs=10)
+
+    # face rims (Head)
+    with variant("AccFace", "LensRims"):
+        for s in (1, -1):
+            sd = "L" if s > 0 else "R"
+            deform_part(torus("LensRim_" + sd, 0.064, 0.013, (s * EYE_X, -0.226, EYE_Z), G, "Head", axis=(0, -1, 0),
+                              segs=28, rsegs=6), visor_bend)
+        rbox("LensRim_Bridge", (0.040, 0.014, 0.018), (0, -0.228, EYE_Z + 0.012), G, "Head", r=0.005, segs=1)
+    with variant("AccFace", "SpaceRing"):
+        conform_front(ellipse_ring("SpaceRing_Bezel", 0.236, 0.126, 0.012, D, "Head"), "Head_Shell", (0, 1.112),
+                      gap=0.005)
+        for s in (1, -1):
+            cylinder("SpaceRing_Light_" + ("L" if s > 0 else "R"), 0.016, 0.040, (s * 0.262, -0.120, 1.205), O, "Head",
+                     axis=(s * 0.5, -0.6, 0.5), segs=12, bev=0.004)
+
+    # back (Socket_Back, behind the Classic backpack that ends at y 0.22)
+    with variant("AccBack", "Pouches"):
+        # low enough that the head never reaches it (crouching tilts the head back over the shoulders)
+        rbox("Pack_Body", (0.250, 0.100, 0.200), (0, 0.262, 0.735), F, "Socket_Back", r=0.030, segs=2)
+        rbox("Pack_Flap", (0.256, 0.070, 0.050), (0, 0.268, 0.822), D, "Socket_Back", r=0.016, segs=1)
+        for s in (1, -1):
+            sd = "L" if s > 0 else "R"
+            rbox("Pack_Pouch_" + sd, (0.090, 0.050, 0.090), (s * 0.062, 0.330, 0.700), F, "Socket_Back", r=0.016,
+                 segs=1)
+            rbox("Pack_PouchFlap_" + sd, (0.094, 0.030, 0.034), (s * 0.062, 0.340, 0.745), D, "Socket_Back",
+                 r=0.008, segs=1)
+            rbox("Pack_Strap_" + sd, (0.030, 0.012, 0.190), (s * 0.090, 0.315, 0.735), D, "Socket_Back", r=0.004,
+                 segs=1)
+        cylinder("Pack_Roll", 0.040, 0.270, (0, 0.262, 0.602), W, "Socket_Back", axis=(1, 0, 0), segs=16, bev=0.010)
 
     # ---------------- items in the right hand (Prop_R) ----------------
     grip = J["knuckle_R"] + Vector((0.030, -0.005, 0.0))
@@ -1684,7 +1911,7 @@ BONE_ORDER = ["Root", "Pelvis", "Spine", "Head", "Eyes",
               "Shoulder_L", "UpperArm_L", "LowerArm_L", "Hand_L", "Fingers_L", "Thumb_L",
               "Shoulder_R", "UpperArm_R", "LowerArm_R", "Hand_R", "Fingers_R", "Thumb_R",
               "UpperLeg_L", "LowerLeg_L", "Foot_L", "UpperLeg_R", "LowerLeg_R", "Foot_R",
-              "Socket_Head", "Socket_Neck", "Socket_Back", "Prop_L", "Prop_R"]
+              "Socket_Head", "Socket_Neck", "Socket_Back", "Prop_L", "Prop_R", "Cape", "Antenna"]
 REQUIRED_BONES = ["Root", "Pelvis", "Spine", "Head", "Shoulder_L", "Shoulder_R", "UpperArm_L", "UpperArm_R",
                   "LowerArm_L", "LowerArm_R", "Hand_L", "Hand_R", "UpperLeg_L", "UpperLeg_R", "LowerLeg_L",
                   "LowerLeg_R", "Foot_L", "Foot_R"]
@@ -1699,6 +1926,8 @@ def check_part_connectivity(report):
     defaults = {group_key(sl, vs[0]) for sl, vs in SLOTS.items()}
     floating = []
     for i, p in enumerate(PARTS):
+        if p["name"] in FLOATING_PARTS:
+            continue
         ok_groups = {"Body", p["group"]} | (defaults - {group_key(p["slot"], v) for v in SLOTS.get(p["slot"], [])})
         others = [j for j, q in enumerate(PARTS) if j != i and q["group"] in ok_groups]
         if any(trees[i].overlap(trees[j]) for j in others):
@@ -1978,7 +2207,7 @@ def linear_to_srgb(c):
     return np.where(c <= 0.0031308, c * 12.92, 1.055 * np.power(c, 1 / 2.4) - 0.055)
 
 
-BAKE_SCHEMA = "1.11-b"  # bump when the baking code changes in a way the cache key cannot see
+BAKE_SCHEMA = "1.12-a"  # bump when the baking code changes in a way the cache key cannot see
 STATIC_TEXTURES = ("T_Robot_MetallicSmoothness.png", "T_Robot_Occlusion.png", "T_Robot_ColorMask.png",
                    "T_Robot_LightMask.png", "T_Robot_Normal.png") + tuple(BADGE_TEXTURES + LINE_TEXTURES + ZONE_TEXTURES +
                                                                          LAYER_TEXTURES + MATERIAL_TEXTURES)
@@ -2718,6 +2947,9 @@ def build_armature(coll):
     bone("Socket_Head", (0, 0, 1.30), (0, 0, 1.40), "Head", roll_up=(0, -1, 0))
     bone("Socket_Neck", (0, -0.17, 0.872), (0, -0.25, 0.872), "Spine", roll_up=(0, 0, 1))
     bone("Socket_Back", (0, 0.22, 0.77), (0, 0.30, 0.77), "Spine", roll_up=(0, 0, 1))
+    # 1.12 spring bones (SPRINGS): baked secondary motion of the cape and the antenna rod
+    bone("Cape", (0, 0.235, 0.830), (0, 0.235, 0.600), "Socket_Back", roll_up=(0, 1, 0))
+    bone("Antenna", (0, 0.0, 1.325), (0, 0.0, 1.480), "Socket_Head", roll_up=(0, -1, 0))
     for side in ("L", "R"):
         bone("Shoulder_" + side, J["clav_" + side], J["shoulder_" + side], "Spine", roll_up=(0, 0, 1))
         bone("UpperArm_" + side, J["shoulder_" + side], J["elbow_" + side], "Shoulder_" + side, True, (0, -1, 0))
@@ -2768,6 +3000,7 @@ CHANNEL_DEFAULTS = {
     "eyes": (1.0, 0.0, 0.0),        # scale_z, offset_x, offset_z
     "root": (0.0, 0.0, 0.0),        # x, y (m, world), yaw (deg) - root motion for turns and spins
     "root_z": (0.0,),               # height (m) - root motion for climbing
+    "hat": (0.0, 0.0, 0.0, 0.0),    # Socket_Head: pitch, roll (deg) about its base, shift x, lift z (m) - emotes
 }
 for _s in ("L", "R"):
     CHANNEL_DEFAULTS["shoulder_" + _s] = (0.0, 0.0, 0.0)
@@ -2852,6 +3085,10 @@ class Solver:
         self.rest_inv = {k: q.inverted() for k, q in self.rest.items()}
         self.head = {b.name: b.head_local.copy() for b in bones}
         self.parent = {b.name: (b.parent.name if b.parent else None) for b in bones}
+        mats = {b.name: b.matrix_local.copy() for b in bones}
+        self.length = {b.name: b.length for b in bones}
+        self.rest_rel = {n: (mats[p].inverted() @ m if p else m) for n, (m, p) in
+                         ((n, (mats[n], self.parent[n])) for n in mats)}
         # local axis of the Eyes bone that matches armature Z (for blink scaling)
         m = bones["Eyes"].matrix_local.to_3x3()
         self.eye_axis = max(range(3), key=lambda i: abs(m.col[i].z))
@@ -2859,6 +3096,20 @@ class Solver:
 
     def local(self, bone, q_delta):
         return self.rest_inv[bone] @ q_delta @ self.rest[bone]
+
+    def pose_matrix(self, sample, bone, cache):
+        """Armature-space matrix of a bone for one solved sample (Blender's pose formula)."""
+        m = cache.get(bone)
+        if m is None:
+            loc, q, scale = sample.get(bone, (None, None, None))
+            basis = (Matrix.Translation(loc) if loc is not None else Matrix.Identity(4)) @ \
+                (q.to_matrix().to_4x4() if q is not None else Matrix.Identity(4))
+            if scale is not None:
+                basis = basis @ Matrix.Diagonal(Vector(scale)).to_4x4()
+            par = self.parent[bone]
+            m = (self.pose_matrix(sample, par, cache) if par else Matrix.Identity(4)) @ self.rest_rel[bone] @ basis
+            cache[bone] = m
+        return m
 
     def leg_ik(self, side, w_pelvis, pelvis_off, foot, foot_yaw=0.0, root=(0.0, 0.0, 0.0), pelvis_yaw=0.0,
                root_z=0.0):
@@ -2949,6 +3200,9 @@ class Solver:
         out["Pelvis"] = (self.rest_inv["Pelvis"] @ pel_off, self.local("Pelvis", q_pel), None)
         out["Spine"] = (None, self.local("Spine", q_euler(*pose["spine"])), None)
         out["Head"] = (None, self.local("Head", q_euler(*pose["head"])), None)
+        hp, hr, hx, hz = pose["hat"]
+        out["Socket_Head"] = (self.rest_inv["Socket_Head"] @ Vector((hx, 0, hz)),
+                              self.local("Socket_Head", q_euler(hp, hr, 0)), None)
         sz, ox, oz = pose["eyes"]
         scale = [1.0, 1.0, 1.0]
         scale[self.eye_axis] = sz
@@ -2994,6 +3248,101 @@ class Solver:
         return out
 
 
+# Spring bones: secondary motion baked into every clip. A point mass at the bone tip follows the posed rest direction
+# (blended towards gravity) as a damped spring; the result is limited so the part never swings into the body.
+# out = the bone-local axis that points away from the body; swing = (min, max) degrees towards out, side = +-degrees.
+SPRINGS = collections.OrderedDict([
+    # side: small, the cape turns in its own plane and its upper corners rise towards the backpack
+    ("Cape", {"freq": 1.5, "damping": 0.32, "gravity": 0.5, "wind": 38.0, "out": 2, "swing": (0.0, 70.0),
+              "side": 7.0}),
+    ("Antenna", {"freq": 2.8, "damping": 0.16, "gravity": 0.0, "wind": 16.0, "out": None, "swing": (-24.0, 24.0),
+                 "side": 24.0}),
+])
+# Relative wind of the in-place locomotion clips (0..1): lifts the cape and bends the antenna backwards.
+CLIP_WIND = {"Walk": 0.3, "Run": 0.75, "RunFast": 0.9, "Sprint": 1.0, "CrouchWalk": 0.2, "SlopeSlide": 0.6,
+             "Fall": 0.35, "DoubleJump": 0.3}
+
+
+# Type emotes: a socket rides rigidly on a hand between two frames (the hat in "HatTip").
+HAT_GRAB, HAT_RELEASE = 12, 46      # HatTip key frames where the hand holds the hat (same pose at both)
+ATTACHMENTS = {"HatTip": ("Socket_Head", "Hand_R", HAT_GRAB, HAT_RELEASE)}
+
+
+def bake_attachment(solver, samples, name):
+    if name not in ATTACHMENTS:
+        return
+    bone, hand, f0, f1 = ATTACHMENTS[name]
+    par = solver.parent[bone]
+    c0 = {}
+    grip = solver.pose_matrix(samples[f0], hand, c0).inverted() @ solver.pose_matrix(samples[f0], bone, c0)
+    for f in range(f0 + 1, f1 + 1):
+        cache = {}
+        want = solver.pose_matrix(samples[f], hand, cache) @ grip
+        basis = (solver.pose_matrix(samples[f], par, cache) @ solver.rest_rel[bone]).inverted() @ want
+        loc, rot, _ = basis.decompose()
+        samples[f][bone] = (loc, rot, None)
+
+
+def bake_springs(solver, samples, loop, name):
+    """Adds the spring bones to the solved samples (in place)."""
+    n = len(samples)
+    if not all(b in solver.rest_rel for b in SPRINGS):
+        return
+    statics = []
+    for sample in samples:
+        cache = {}
+        statics.append({b: solver.pose_matrix(sample, solver.parent[b], cache) @ solver.rest_rel[b] for b in SPRINGS})
+    dt, sub = 1.0 / FPS, 4
+    wind = CLIP_WIND.get(name, 0.0)
+    for b, cfg in SPRINGS.items():
+        length = solver.length[b]
+        w = 2 * math.pi * cfg["freq"]
+
+        def target(f):
+            m = statics[f][b]
+            d = m.col[1].to_3d().normalized()
+            if cfg["gravity"]:
+                d = d.lerp(Vector((0, 0, -1)), cfg["gravity"]).normalized()
+            if wind:
+                back = (m.col[cfg["out"]].to_3d() if cfg["out"] is not None else -m.col[2].to_3d()).normalized()
+                a = math.radians(cfg["wind"] * wind)
+                d = (d * math.cos(a) + back * math.sin(a)).normalized()
+            return m.translation + d * length
+
+        # loops: four cycles to settle, the last one is kept; one extra step gives the start of the next cycle
+        frames = list(range(n - 1)) * 4 + [0] if loop else list(range(n))
+        x, v = target(frames[0]), Vector((0, 0, 0))
+        tips = {}
+        for k, f in enumerate(frames):
+            t1 = target(f)
+            h = statics[f][b].translation
+            for _ in range(sub):
+                a = (t1 - x) * (w * w) - v * (2 * cfg["damping"] * w)
+                v = v + a * (dt / sub)
+                x = h + (x + v * (dt / sub) - h).normalized() * length
+            if not loop or len(frames) - n <= k < len(frames) - 1:
+                tips[f] = x.copy()
+        if loop:
+            seam = x - tips[0]                  # next cycle start minus this cycle start
+            tips = {f: tips[f] - seam * (f / (n - 1)) for f in tips}       # closes the cycle without a jump
+            tips[n - 1] = tips[0]
+        for f in range(n):
+            m = statics[f][b]
+            d = m.to_3x3().inverted() @ (tips[f] - m.translation)
+            d.normalize()
+            out = cfg["out"]
+            # pitch towards the out axis (or the bone's local X/Z for a free antenna), roll sideways
+            ax_p, ax_r = (out, 0) if out is not None else (2, 0)
+            pitch = math.degrees(math.atan2(d[ax_p], d[1]))
+            roll = math.degrees(math.atan2(d[ax_r], d[1]))
+            pitch = max(cfg["swing"][0], min(cfg["swing"][1], pitch))
+            roll = max(-cfg["side"], min(cfg["side"], roll))
+            dl = [0.0, 1.0, 0.0]
+            dl[ax_p] = math.tan(math.radians(pitch))
+            dl[ax_r] = math.tan(math.radians(roll))
+            samples[f][b] = (None, Vector((0, 1, 0)).rotation_difference(Vector(dl).normalized()), None)
+
+
 def write_action(arm_ob, solver, name, n_frames, pose_fn, loop):
     act = bpy.data.actions.new(name)
     act.use_fake_user = True
@@ -3009,6 +3358,8 @@ def write_action(arm_ob, solver, name, n_frames, pose_fn, loop):
         if solver.ik_error > worst[0]:
             worst = (solver.ik_error, f)
         solver.ik_error = max(before, solver.ik_error)
+    bake_attachment(solver, samples, name)
+    bake_springs(solver, samples, loop, name)
     if loop:
         samples[-1] = samples[0]
     curves = {}
@@ -4386,6 +4737,33 @@ def crouch_walk(f):
     )
 
 
+# ---------------------------------- 1.12 type emotes ----------------------------------
+
+@anim("HatTip", 56, False, "Hut lüften mit Verbeugung (Typ Gentleman; der Kopf-Sockel liegt in der Hand)", "Phase5")
+def hat_tip(f):
+    # the arms cannot reach the crown of the head: the hat lifts and slides towards the hand that comes up beside the
+    # head, then rides on the hand (ATTACHMENTS) through the bow and back
+    lifted = (0, -24, -0.160, 0.005)     # the right brim edge rests on the fingers
+    reach = P(head=(-4, 6, 4), spine=(-2, 0, -3), hat=lifted, fing_R=curl(55), thumb_R=curl(45),
+              handik_R=(0.335, -0.040, 1.180, 1.0, 0.3, -0.2, 1.0), uarm_L=arm(4, 6))
+    sweep = P(pelvis=(0, 0.03, -0.022), pelvis_rot=(6, 0, 0), spine=(20, 0, 0), head=(12, 0, 0), hat=lifted,
+              fing_R=curl(55), thumb_R=curl(45), handik_R=(0.450, -0.200, 0.900, 1.0, 0.3, -0.2, 1.0),
+              uarm_L=arm(10, 4), larm_L=arm(-12), eyes=(0.35, 0, -0.004))
+    return keyed(f, [(0, STAND), (HAT_GRAB, reach), (22, sweep), (34, sweep), (44, reach), (HAT_RELEASE, reach),
+                     (56, STAND)])
+
+
+@anim("FlagWave", 60, False, "Fahne schwenken (Typ King; Gegenstand in der rechten Hand bleibt sichtbar)", "Phase5")
+def flag_wave(f):
+    t = f / 60.0
+    env = ease(min(1.0, f / 10.0)) * ease(min(1.0, (60 - f) / 12.0))
+    sw = math.sin(2 * math.pi * 3 * t) * env
+    return P(spine=(-4 * env, 0, -6 * env), head=(-10 * env, -4 * env, -12 * env),
+             uarm_R=arm(-100 * env, 22 * env + 10 * sw), larm_R=arm(-8 * env, 0, 32 * sw), hand_R=arm(0, 0, 0),
+             fing_R=curl(15 + 50 * env), thumb_R=curl(10 + 40 * env), uarm_L=arm(4 * env, 10 * env),
+             eyes=(1.0 - 0.1 * env, -0.004 * env, 0.004 * env))
+
+
 # ---------------------------------- per-clip game data ----------------------------------
 # Everything the game needs besides the bone curves. Exported to robot_config.json ("clips") and the viewer.
 # Expression/display keys: [frame, name]; "$base" = the look's own choice. Emission keys: [frame, factor], linear.
@@ -4401,7 +4779,8 @@ CLIP_EXPRESSIONS = {
     "SitDown": [[0, "$base"], [31, "Cute"]], "PickUp": [[0, "$base"], [21, "Love"]],
 }
 for _names, _expr in (
-        (("Celebrate", "DanceBob", "DanceShuffle", "DanceDisco", "DanceSway", "Wave", "Talk", "NodYes"), "Happy"),
+        (("Celebrate", "DanceBob", "DanceShuffle", "DanceDisco", "DanceSway", "Wave", "Talk", "NodYes", "HatTip",
+          "FlagWave"), "Happy"),
         (("DanceRobot",), "Pixel"), (("DanceWave", "DanceSpin", "DanceMoonwalk", "DoubleJump", "Vault"), "Excited"),
         (("Electrocuted",), "Glitch"), (("GasCough",), "Crying"), (("IdleYawn",), "Sleepy"), (("Sleep",), "Sleeping"),
         (("Interact", "TerminalTyping", "CrouchWalk", "CrouchDeep"), "Focused"),
@@ -4649,12 +5028,22 @@ class GroupTrees:
 ACCEPTED_OVERLAPS = {("*", "Head", "Socket_Neck"), ("*", "Eyes", "Socket_Neck"),
                      # held items are gripped by the fingers
                      ("*", "Fingers_R", "Prop_R"), ("*", "Prop_R", "Thumb_R"),
-                     ("*", "Fingers_L", "Prop_L"), ("*", "Prop_L", "Thumb_L")}
+                     ("*", "Fingers_L", "Prop_L"), ("*", "Prop_L", "Thumb_L"),
+                     # the hat rides on the right hand
+                     ("HatTip", "Fingers_R", "Socket_Head"), ("HatTip", "Hand_R", "Socket_Head"),
+                     ("HatTip", "Socket_Head", "Thumb_R")}
 
 
 # Clips in which a held item (Prop_R) is hidden by the game: climbing, hanging, thinking with the hand at the chin.
 HIDE_HELD_ITEM = {"Think", "LedgeGrab", "HangIdle", "ShimmyLeft", "ShimmyRight", "HangSwing", "ClimbUp", "LadderUp",
-                  "LadderDown", "Vault", "PickUp", "TerminalTyping", "Clap", "Wave", "EdgeBalance"}
+                  "LadderDown", "Vault", "PickUp", "TerminalTyping", "Clap", "Wave", "EdgeBalance", "HatTip"}
+# Joints that open on purpose: the hat leaves the head in "HatTip".
+ACCEPTED_DETACH = {("HatTip", "Socket_Head", "Head")}
+
+
+def type_emotes():
+    """Clips that belong to one robot type (ROBOT_TYPES[...]["emote"]): checked and played only with that type."""
+    return {spec["emote"]: name for name, spec in ROBOT_TYPES.items() if spec.get("emote")}
 
 
 def run_qa(ob, arm_ob, actions, label="Classic", quiet=False, clips=None):
@@ -4719,8 +5108,8 @@ def run_qa(ob, arm_ob, actions, label="Classic", quiet=False, clips=None):
                  if not ((a, b) in allowed or (a, b) in baseline or (name, a, b) in ACCEPTED_OVERLAPS or
                          ("*", a, b) in ACCEPTED_OVERLAPS or (name in HIDE_HELD_ITEM and "Prop_R" in (a, b)))]
         joint_pairs = [(child, par) for child, par in joints
-                       if (min(child, par), max(child, par)) in baseline or (child, par) in baseline or
-                       (par, child) in baseline]
+                       if ((min(child, par), max(child, par)) in baseline or (child, par) in baseline or
+                           (par, child) in baseline) and (name, child, par) not in ACCEPTED_DETACH]
         pa, pb = topo.pair_index(pairs)
         ja, jb = topo.pair_index(joint_pairs)
         for f in range(0, frames + 1):
@@ -5185,11 +5574,12 @@ def set_look(ob, tex_dir, skin=DEFAULT_SKIN, expression="Normal", display="Statu
                 nt.nodes["FinishRough"].outputs[0].default_value = rough
                 nt.nodes["FinishMetal"].outputs[0].default_value = metal
             suffix = "" if skin == DEFAULT_SKIN else "_" + skin
+            # "base_"/"emit_": half-size textures the comparison job left behind in this worker
             for nd in nt.nodes:
-                if nd.type == "TEX_IMAGE" and nd.image.name.startswith("T_Robot_BaseColor"):
+                if nd.type == "TEX_IMAGE" and nd.image.name.startswith(("T_Robot_BaseColor", "base_")):
                     nd.image = bpy.data.images.load(os.path.join(tex_dir, "T_Robot_BaseColor%s.png" % suffix),
                                                     check_existing=True)
-                elif nd.type == "TEX_IMAGE" and nd.image.name.startswith("T_Robot_Emission"):
+                elif nd.type == "TEX_IMAGE" and nd.image.name.startswith(("T_Robot_Emission", "emit_")):
                     nd.image = bpy.data.images.load(os.path.join(tex_dir, "T_Robot_Emission%s.png" % suffix),
                                                     check_existing=True)
 
@@ -5542,7 +5932,7 @@ def srgb_hex(c):
 
 BADGE_LABELS = {"HazardStripes": "Warnstreifen", "Cross": "Kreuz", "Cloud": "Wolke", "Number": "Nummer",
                 "Biohazard": "Biohazard", "Glyph": "Schriftzeichen", "RacingStripes": "Rennstreifen",
-                "Target": "Zielmarke"}
+                "Target": "Zielmarke", "Star": "Stern", "Gear": "Zahnrad", "Leaf": "Blatt"}
 LINE_LABELS = {"Circuit": "Leiterbahnen", "Rings": "Ringe", "Seams": "Kanten", "Bolt": "Blitze", "Joints": "Gelenke"}
 MATERIAL_LABELS = {"Wood": "Holz", "Stone": "Stein", "Sand": "Sand", "Paper": "Papier", "Concrete": "Beton",
                    "Brass": "Messing", "Circuit": "Platine"}
@@ -5735,10 +6125,14 @@ def make_jobs(type_names, actions_available, args, n_proc):
     all_types = ["Classic"] + type_names
     total = sum(a.frames + 1 for a in ANIMS) * len(all_types)
     limit = max(120, -(-total // (2 * n_proc)))
+    owner = type_emotes()
+    unchecked = sorted(c for c, t in owner.items() if t not in all_types)
+    if unchecked:
+        LOG.info("  type emotes without QA in this run (owner type not checked): %s", ", ".join(unchecked))
     for t in all_types:
         for g in GROUPS:
             part, size, k = [], 0, 0
-            for a in [a for a in ANIMS if a.group == g] + [None]:
+            for a in [a for a in ANIMS if a.group == g and owner.get(a.name, t) == t] + [None]:
                 if part and (a is None or size + a.frames + 1 > limit):
                     jobs.append({"id": "qa:%s:%s:%d" % (t, g, k), "lane": "qa", "kind": "qa", "type": t,
                                  "clips": [c.name for c in part], "cost": size})
@@ -5947,11 +6341,13 @@ def merge_qa(results, type_names):
         actions = {}
         for r in parts[t]:
             actions.update(r["actions"])
-        missing = [a.name for a in ANIMS if a.name not in actions]
+        owner = type_emotes()
+        missing = [a.name for a in ANIMS if a.name not in actions and owner.get(a.name, t) == t]
         if missing:
             raise RuntimeError("QA of %s is missing clips %s" % (t, missing))
         min_z, height = rest.pop()
-        qa[t] = {"rest_min_z": min_z, "rest_height": height, "actions": {a.name: actions[a.name] for a in ANIMS}}
+        qa[t] = {"rest_min_z": min_z, "rest_height": height,
+                 "actions": {a.name: actions[a.name] for a in ANIMS if a.name in actions}}
     return qa
 
 
@@ -6245,6 +6641,10 @@ def viewer_config():
         "zones": [{"id": z, "texture": ZONE_TEXTURES[i // 4], "channel": i % 4, "parts": list(parts)}
                   for i, (z, parts) in enumerate(PAINT_ZONES.items())],
         "glowParts": list(GLOW_PARTS),
+        # particle emitters of accessories; position/direction in character space (Unity local: right, up, forward)
+        "emitters": [dict(e, position=char_space(Vector(e["position"])), direction=char_space(Vector(e["direction"])))
+                     for e in EMITTERS],
+        "springBones": list(SPRINGS),
         "linePaint": LINE_PAINT,
         "layers": [catalog_entry(n, LAYER_TEXTURES, i, LAYER_DEFAULTS.get(n)) for i, n in enumerate(LAYERS)],
         "materials": [catalog_entry(n, MATERIAL_TEXTURES, i, MATERIAL_DEFAULTS[n]) for i, n in enumerate(MATERIALS)],

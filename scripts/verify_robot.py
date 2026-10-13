@@ -37,11 +37,16 @@ if os.path.exists(_report):
 TEXTURES = ["T_Robot_BaseColor.png", "T_Robot_MetallicSmoothness.png", "T_Robot_Normal.png", "T_Robot_Emission.png",
             "T_Robot_Occlusion.png", "T_Robot_ColorMask.png", "T_Robot_LightMask.png", "T_Robot_EyeAtlas.png", "T_Robot_DisplayAtlas.png",
             "T_Robot_DisplayFlipbook.png"]
-MASK_TEXTURES = ["T_Robot_BadgeMask.png", "T_Robot_BadgeMask2.png", "T_Robot_LineMask.png", "T_Robot_LineMask2.png",
+MASK_TEXTURES = ["T_Robot_BadgeMask.png", "T_Robot_BadgeMask2.png", "T_Robot_BadgeMask3.png", "T_Robot_LineMask.png", "T_Robot_LineMask2.png",
                  "T_Robot_ZoneMask.png", "T_Robot_ZoneMask2.png",       # 1.10: RGBA masks (alpha = a mask channel)
                  "T_Robot_LayerMask.png", "T_Robot_LayerMask2.png", "T_Robot_MaterialMask.png",
                  "T_Robot_MaterialMask2.png"]                            # 1.11
+START_SET_1_12 = {"Miner", "Samurai", "Steam", "Signal", "Wood", "Celest"}
 START_SET_1_11 = {"Rust", "Moss", "Arctic", "Inferno", "Circuit"}
+# 1.12 Bolt-On: attachments that a robot type must carry (so that the QA of all types covers them in every clip)
+ATTACHMENTS_1_12 = {"AccHead": {"MinerHelmet", "Kabuto", "Spikes", "Ears", "Dish", "Chimney", "Halo", "Sprout"},
+                    "AccEar": {"LensEye", "Gears", "Dial"}, "AccFace": {"LensRims", "SpaceRing"},
+                    "AccBack": {"Pouches"}}
 START_SET_1_10 = {"Classic", "Shadow", "Hazard", "Medic", "Volt", "Gold", "Candy"}
 MAIN_MATERIALS = {"M_Robot", "M_RobotEyes", "M_RobotDisplay"}
 import math  # noqa: E402
@@ -232,7 +237,7 @@ def verify_modular():
     meshes = [o for o in new if o.type == "MESH"]
     arms = [o for o in new if o.type == "ARMATURE"]
     check("fbx modular: all part meshes + rig", len(meshes) == expected and len(arms) == 1, (len(meshes), expected))
-    sockets = [b for b in ("Socket_Head", "Socket_Neck", "Socket_Back", "Prop_L", "Prop_R")
+    sockets = [b for b in ("Socket_Head", "Socket_Neck", "Socket_Back", "Prop_L", "Prop_R", "Cape", "Antenna")
                if arms and b not in arms[0].data.bones]
     check("fbx modular: socket bones present", not sockets, sockets)
 
@@ -388,7 +393,7 @@ def verify_paintjob():
            or any(b["id"] not in badges for b in sk["badges"]) or (sk["lines"] and sk["lines"]["pattern"] not in lines)
            or not set(sk["zones2"]) <= zones or len(sk["armor2"]) != 3]
     check("skins: data valid (finish, badges, lines, zones, armor2)", not bad, bad or len(skins))
-    check("skins: at least 47 (20 from 1.7, 18 new in 1.10, 9 in 1.11)", len(skins) >= 47, len(skins))
+    check("skins: at least 62 (20 from 1.7, 18 new in 1.10, 9 in 1.11, 15 in 1.12)", len(skins) >= 62, len(skins))
     layers = {e["id"] for e in cfg["layers"]}
     materials = {e["id"] for e in cfg["materials"]}
     bad = [n for n, sk in skins.items() if (sk["material"] and sk["material"]["id"] not in materials)
@@ -444,6 +449,56 @@ def verify_paintjob():
         check("previews: skin sheet, silhouettes and icons", not missing, missing[:5] or len(need))
 
 
+def verify_bolton():
+    """1.12: attachments covered by the types, start set, parts of skins, emitters, spring bones, type emotes."""
+    cfg = json.load(open(os.path.join(OUT, "robot_config.json"), encoding="utf-8"))
+    slots = {sl["id"]: set(sl["variants"]) for sl in cfg["slots"]}
+    missing = ["%s_%s" % (sl, v) for sl, vs in ATTACHMENTS_1_12.items() for v in sorted(vs)
+               if v not in slots.get(sl, ())]
+    check("attachments: 14 new variants exist", not missing, missing)
+    types = {t["name"]: t for t in cfg["robotTypes"]}
+    carried = {(sl, v) for t in types.values() for sl, v in t["variants"].items()}
+    uncovered = ["%s_%s" % (sl, v) for sl, vs in ATTACHMENTS_1_12.items() for v in sorted(vs) if (sl, v) not in carried]
+    check("attachments: each one carried by a robot type (QA coverage)", not uncovered, uncovered)
+    skins = {sk["name"]: sk for sk in cfg["skins"]}
+    bad = ["%s %s=%s" % (n, sl, v) for n, sk in skins.items() for sl, v in (sk.get("parts") or {}).items()
+           if v not in slots.get(sl, ())]
+    check("skins: parts name existing slot variants", not bad, bad)
+    start12 = {n for n, sk in skins.items() if sk["startSet"] and sk["stage"] == "1.12"}
+    check("skins: start set of stage 1.12", start12 == START_SET_1_12, sorted(start12 ^ START_SET_1_12))
+    arm = bpy.data.objects.get("Robot_Armature")
+    bones = set(arm.data.bones.keys()) if arm else set()
+    em = cfg.get("emitters", [])
+    bad = [e["id"] for e in em if e["bone"] not in bones or e["variant"] not in slots.get(e["slot"], ())]
+    check("emitters: chimney smoke on an existing socket", any(e["id"] == "ChimneySmoke" for e in em) and not bad,
+          bad or [e["id"] for e in em])
+    springs = cfg.get("springBones", [])
+    check("springs: spring bones in the rig", bool(springs) and set(springs) <= bones, springs)
+    clips = cfg.get("clips", {})
+    emotes = {t["name"]: t["emote"] for t in types.values() if t.get("emote")}
+    check("emotes: type emotes are clips (Gentleman HatTip, King FlagWave)",
+          emotes.get("Gentleman") == "HatTip" and emotes.get("King") == "FlagWave" and
+          all(c in clips for c in emotes.values()), emotes)
+    if arm is None or "Run" not in bpy.data.actions or "Cape" not in bones:
+        return
+    # the cape lifts in the run (wind) and swings; loops close without a jump
+    pb = arm.pose.bones["Cape"]
+    angles = []
+    for name in ("Idle", "Run"):
+        set_action(arm, bpy.data.actions[name])
+        lo, hi = 1e9, -1e9
+        first = None
+        act = bpy.data.actions[name]
+        for f in range(int(act.frame_range[0]), int(act.frame_range[1]) + 1):
+            bpy.context.scene.frame_set(f)
+            a = math.degrees(pb.rotation_quaternion.angle)
+            first = a if first is None else first
+            lo, hi = min(lo, a), max(hi, a)
+        angles.append((name, round(lo, 1), round(hi, 1), round(abs(a - first), 3)))
+    run = angles[1]
+    check("springs: cape lifts in Run (> 10 deg), loops close", run[2] > 10 and all(x[3] < 0.5 for x in angles), angles)
+
+
 def main():
     print("== verify %s" % bpy.data.filepath)
     ref = verify_blend()
@@ -455,6 +510,7 @@ def main():
     verify_clip_data()
     verify_looks()
     verify_paintjob()
+    verify_bolton()
     ok = all(r["ok"] for r in results)
     os.makedirs(os.path.join(OUT, "logs"), exist_ok=True)
     with open(os.path.join(OUT, "logs", "verify_report.json"), "w", encoding="utf-8") as fh:

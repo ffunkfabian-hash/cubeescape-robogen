@@ -1,6 +1,6 @@
 # Techniken des Roboter-Generators – Übertrag auf Cubegen
 
-Stand: Generator 1.11.0 „Weathering“. Diese Datei sammelt, **wie** der Generator arbeitet und was sich dabei bewährt
+Stand: Generator 1.12.0 „Bolt-On“. Diese Datei sammelt, **wie** der Generator arbeitet und was sich dabei bewährt
 oder als Falle erwiesen hat. Ziel: Der Modell-Editor von Cubegen soll genauso leistungsfähig werden. Jede Technik
 nennt die Fundstelle im Generator und was Cubegen davon übernehmen sollte. Pflegen bei jeder Generator-Version
 (neue Technik → neuer Abschnitt, geänderte Messwerte → hier ändern).
@@ -9,8 +9,8 @@ nennt die Fundstelle im Generator und was Cubegen davon übernehmen sollte. Pfle
 
 | Technik | Fundstelle | Wirkung | Für Cubegen |
 |---|---|---|---|
-| Skin = Daten | `data/skins.json`, `load_skins()` | 38 Skins ohne Code, jeder weitere kostet Minuten | Looks/Paletten der Modelle als Datei statt Code |
-| Einmal backen, linear zusammensetzen | `bake_layers()`, `compose_skin()` | 38 Skins für den Preis von 6 Backs | Farbvarianten nie einzeln backen |
+| Skin = Daten | `data/skins.json`, `load_skins()` | 62 Skins ohne Code, jeder weitere kostet Minuten | Looks/Paletten der Modelle als Datei statt Code |
+| Einmal backen, linear zusammensetzen | `bake_layers()`, `compose_skin()` | 62 Skins für den Preis von 6 Backs | Farbvarianten nie einzeln backen |
 | Masken statt Textursätze | `pattern_masks()`, Zonen-Attribute | Abzeichen, Leuchtlinien, Zweitfarbe zur Laufzeit | Varianten im Spiel per Shader statt Textur je Variante |
 | Lackzonen aus Bauteil-Namen | `paint_zone()`, `PAINT_ZONES` | Zweitfarbe exakt an Teilgrenzen | Teile benennen, Zonen als Flächenattribut |
 | Abzeichen an Ankerpunkten | `badge_anchors()`, `BADGE_PLACES` | Decals sitzen auf jedem Bauteil-Typ | Decal-Bibliothek mit Ankern je Modellfamilie |
@@ -21,6 +21,12 @@ nennt die Fundstelle im Generator und was Cubegen davon übernehmen sollte. Pfle
 | Viewer: Daten-Texturen roh laden | `RobotScene.pixels()` | Masken mit Alphakanal bleiben intakt | Jede Laufzeit-Vorschau mit RGBA-Masken |
 | SceneKit: ≤ 23 Shader-Argumente | `makeBodyMaterial()` | sonst stilles Pink | Uniforms packen (Vektoren, Bitmasken) |
 | Berichtsvergleich als Gate | `robot_report.json` (`qa`, `clips`, `type_bounds`) | Modelländerungen fallen sofort auf | Golden-Bericht je Teststufe |
+| Aufsätze über Typen prüfen | `ROBOT_TYPES`, `verify_bolton()` | 14 neue Aufsätze in allen 71 Clips geprüft | Jede Variante in mindestens einer geprüften Kombination |
+| Rand an Schale anschmiegen | `conform_front()` | Helmring folgt der gerundeten Kopfschale | Anbauteile per Strahl auf die Trägerfläche legen |
+| Federknochen gebacken | `SPRINGS`, `bake_springs()` | Umhang/Antenne schwingen ohne Laufzeit-Physik | Nachschwingen als Kurven, nicht als Physik |
+| Socket reitet auf der Hand | `ATTACHMENTS`, `bake_attachment()` | Hut lüften trotz zu kurzer Arme | Requisiten per Matrix-Kette an Knochen hängen |
+| Abzeichen je Look packen | `RobotScene.badgeTexture()` | beliebig viele Abzeichen, ein Sampler | Nur die gewählten Kanäle zur Laufzeit packen |
+| Emitter als Daten | `EMITTERS`, `robot_config.json` › `emitters` | Schornsteinrauch im Viewer, Vorlage fürs Spiel | Partikelpunkte mit Socket statt Partikel im Modell |
 
 ## 1. Skin = Daten
 
@@ -43,7 +49,7 @@ statt als Python-Konstanten; jede Formatänderung mit Migration und Fixture.
 
 - Jede Körperfarbe hängt linear von der Palette ab: `Basis = C + Σ w_k · Palette_k`. Ein Back mit schwarzer Palette
   liefert `C`, je drei Palettenfarben ein Back (eine pro RGB-Kanal) liefert die Gewichtskarten `w_k`. Danach entsteht
-  jeder Skin per numpy (`compose_skin()`), 38 Skins in etwa 5 s bei 1024².
+  jeder Skin per numpy (`compose_skin()`), 38 Skins in etwa 5 s bei 1024² (1.10).
 - Gegenprobe im Volllauf (`--check-compose`): Der Standard-Skin wird zusätzlich direkt gebacken, Abweichung 4e-7,
   Abbruch ab 2e-3. Bricht ein Material die Linearität (z. B. Palettenfarbe in einer Potenz), fällt das sofort auf.
 - Ein Back je zusammengefügter Kopie (`joined_copy()`): Cycles öffnet je ausgewähltem Objekt eine eigene Sitzung,
@@ -62,7 +68,7 @@ Statt eines Textursatzes je Skin liefert der Generator Masken (alle 2048², RGBA
 | Textur | Kanäle | Herkunft |
 |---|---|---|
 | `T_Robot_ColorMask` / `LightMask` | Panzerung, Mechanik, Metall / Lichter | Material je Fläche |
-| `T_Robot_BadgeMask`, `…2` | 8 Abzeichen | Decals an Ankerpunkten, prozedurale Streifen |
+| `T_Robot_BadgeMask`, `…2`, `…3` | 11 Abzeichen | Decals an Ankerpunkten, prozedurale Streifen |
 | `T_Robot_LineMask`, `…2` | Leiterbahnen, Ringe, Kanten, Blitze / Gelenke | ImageMagick-Kacheln, Normalen, Flächenattribut |
 | `T_Robot_ZoneMask`, `…2` | 8 Lackzonen | Flächenattribut `paint_zone` |
 
@@ -191,16 +197,55 @@ als Maskenkanäle liefern; Zonen über benannte Teile und Flächenattribute; Dec
 **Für Cubegen:** dasselbe Muster für Modellsets – ein kleines Unity-Testprojekt je Generator, das Import, Kollision,
 Materialien und Screenshots automatisch prüft.
 
-## 10. Prüfen
+## 10. Aufsätze, Federknochen, Typ-Emotes (1.12)
+
+- **QA-Abdeckung über Typen:** Die QA prüft Robotertypen (feste Kombinationen) gegen alle Clips. Jeder neue Aufsatz
+  muss deshalb in mindestens einem Typ stecken; `verify_robot.py` prüft das (`ATTACHMENTS_1_12`). So fanden sich in
+  der ersten Runde: Grubenhelm im Augen-Display (die Augen wandern beim Hochschauen nach oben → Helm 2,7 cm höher),
+  Rucksack-Rolle am Hinterkopf beim Ducken (nach unten verlegt), Zifferblatt/Zahnräder an der winkenden und denkenden
+  Hand (Hand streift das rechte Ohr mit < 1 cm → Ohr-Aufsätze nur links).
+- **Abstände messen statt raten:** kleines Skript, das je Frame den kleinsten Abstand zwischen Hand-Vertices und
+  einem Aufsatz misst (BVH `find_nearest`). Der Vergleichswert ist das Grundmodell: Klassische Ohrscheibe 9,5 mm in
+  Wave – mehr Platz gibt es dort nicht.
+- **Anschmiegen per Strahl (`conform_front`):** Ein Ring um das Visier wird flach um y = 0 gebaut und dann Vertex
+  für Vertex auf die Vorderseite der Kopfschale gelegt (Strahl entlang +Y gegen deren BVH, fester Abstand). Ein
+  skalierter Torus hätte an den gerundeten Seiten 5 cm frei geschwebt.
+- **Absichtlich schwebende Teile** (Heiligenschein) stehen in `FLOATING_PARTS`; sonst meldet die Verbindungsprüfung
+  sie – starr am Socket folgen sie trotzdem jeder Bewegung.
+- **Federknochen gebacken:** Punktmasse an der Knochenspitze folgt der (zur Schwerkraft geneigten) Ruhelage als
+  gedämpfte Feder (Frequenz, Dämpfung je Knochen), Fahrtwind je Lauf-Clip. Die Elternmatrix je Frame kommt aus einer
+  eigenen Vorwärtskinematik über die gelösten Posen (`Solver.pose_matrix`, Blenders Formel
+  `Eltern · Ruhe-relativ · Basis`) – kein `frame_set`, das alle Meshes neu auswertet. Loops: vier Zyklen einschwingen,
+  den letzten behalten, die Restabweichung linear über den Zyklus verteilen. Begrenzung: nur weg vom Körper (Umhang
+  0–70°, seitlich ±7°, sonst heben sich die oberen Ecken in den Rucksack – DanceSpin, Vault).
+- **Requisit an der Hand (`bake_attachment`):** Socket-Matrix im Greif-Frame relativ zur Hand merken, danach je Frame
+  `Hand · Griff` und daraus die lokale Basis des Sockets zurückrechnen. Der Hut gleitet erst zur Hand (Pose-Kanal
+  `hat`: Neigung, Seitenversatz, Hub), weil die kurzen Arme den Zylinder nie erreichen.
+- **Typ-Emotes gehören zum Typ:** HatTip mit Krone, Kopfhörer oder Stacheln wäre Unsinn und kollidiert; die QA prüft
+  ein Typ-Emote nur mit seinem Typ (`type_emotes()`), das Spiel spielt es nur mit dessen Aufsatz.
+- **Abzeichen dynamisch packen (Viewer):** Statt aller Abzeichen-Masken mit One-Hot-Wählern zu sampeln, packt der
+  Viewer die zwei gewählten Kanäle bei jeder Änderung in eine Textur (R, G). Neue Abzeichen-Masken kosten so keinen
+  Sampler; Unity nutzt bis zur Spielintegration noch drei Masken mit Wählern.
+- **Emitter als Daten:** Rauch ist kein Mesh, sondern ein Punkt mit Socket, Position und Richtung im Charakterraum.
+  Der Viewer setzt ein `SCNParticleSystem` darauf (vormultipliziertes Weiß als Sprite, sonst Ringe; Vorlauf 2 s, damit
+  Standbilder schon eine Fahne zeigen).
+- **Falle Vorschau-Zustand:** Ein Render-Paket, das Texturen tauscht (Gegenüberstellung), muss seinen Zustand
+  zurücksetzen, den das nächste erwartet – `set_look` erkannte die Ersatz-Texturen nicht am Namen, und einzelne Typen
+  wurden zufällig im Classic-Look gerendert (seit 1.11, je nach Paketreihenfolge im Worker).
+
+**Für Cubegen:** Anbauteile als Varianten mit Socket, Prüfkombinationen, die jede Variante abdecken; nachschwingende
+Teile (Kabel, Fahnen, Antennen) gebacken; Requisiten über Matrix-Ketten; Partikelpunkte als Daten.
+
+## 11. Prüfen
 
 - Teststufen `quick` / `standard` / `full` mit Zeitbudget; Worker-Pakete für QA und Renders.
 - **Bericht als Gate:** `qa`, `clips`, `type_bounds`, Dreiecke, Bones vor und nach der Änderung vergleichen – ohne
   gewollte Modelländerung identisch (1.10: alles identisch mit 1.9, obwohl Materialien, Masken und Renders neu sind).
-- `verify_robot.py` prüft unabhängig (222 Prüfungen, davon 1.10: Skin-Daten, Masken mit Pixeln, Zonen
+- `verify_robot.py` prüft unabhängig (seit 1.12 über 240 Prüfungen, davon 1.10: Skin-Daten, Masken mit Pixeln, Zonen
   überlappungsfrei, Gesichter, Flipbook, Icons, Bögen); `viewer/test_viewer.sh` prüft Migrationen, unbekannte IDs,
   Round Trip und Export.
 
-## 11. Checkliste für den Cubegen-Modell-Editor
+## 12. Checkliste für den Cubegen-Modell-Editor
 
 - [ ] Looks/Paletten als versionierte Datendatei mit Loader-Prüfung und Migration
 - [ ] Farbvarianten aus einmal gebackenen Gewichtskarten zusammensetzen, Gegenprobe im Volllauf
@@ -214,3 +259,5 @@ Materialien und Screenshots automatisch prüft.
 - [ ] Bericht-Gate: Geometrie-/QA-Kennzahlen vor und nach jeder Änderung vergleichen
 - [ ] Unity-Testprojekt je Generator: Import, Blickrichtung, Materialien, Screenshots automatisch (Muster: `unity/`)
 - [ ] Verwitterung als normierte Felder mit Regler (Rost, Moos, Frost, Schmutz) und Werkstoff-Muster mit Grundfarbe
+- [ ] Anbauteile: jede Variante in einer geprüften Kombination, Anschmiegen per Strahl, Emitter als Daten
+- [ ] Nachschwingen gebacken (Feder je Knochen, Loops geschlossen), Requisiten per Matrix-Kette

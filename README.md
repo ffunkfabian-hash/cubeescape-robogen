@@ -1,12 +1,13 @@
-# Cube Escape – Roboter-Charakter (Generator 1.11.0)
+# Cube Escape – Roboter-Charakter (Generator 1.12.0)
 
 Der spielbare Roboter aus dem Cube-Escape-Keyart, vollständig per Skript erzeugt: Geometrie mit Bauteil-Varianten
 und Accessoires, Materialien, gebackene Texturen (Detail- und Ausdrucks-Texturen per ImageMagick), Rig mit Bein- und
-Arm-IK, 69 Animationen, maschinenlesbare Clip-Daten fürs Spiel, automatische QA, Vorschaurender, `.blend`,
-Unity-fertige `.fbx` (Standard, modular und je Robotertyp) und ein eigener **Robot Viewer** zum Anpassen: 69
-Animationen in 8 Gruppen, 47 Skins als Daten (Palette mit Zweitfarbe, Oberfläche, Werkstoff, Abzeichen,
-Leuchtlinien, Schichten wie Rost, Moos, Frost, Glutrisse, Tarnung, Abnutzung), 33 Augen-Ausdrücke, 16 Display-Motive
-und 3 animierte, 20 Accessoires, 14 Robotertypen, Skin-Bogen im Stil der Konzeptbilder und UI-Icons.
+Arm-IK, 71 Animationen, maschinenlesbare Clip-Daten fürs Spiel, automatische QA, Vorschaurender, `.blend`,
+Unity-fertige `.fbx` (Standard, modular und je Robotertyp) und ein eigener **Robot Viewer** zum Anpassen: 71
+Animationen in 8 Gruppen (darunter zwei Typ-Emotes), 62 Skins als Daten (Palette mit Zweitfarbe, Oberfläche,
+Werkstoff, Abzeichen, Leuchtlinien, Schichten wie Rost, Moos, Frost, Glutrisse, Tarnung, Abnutzung), 33
+Augen-Ausdrücke, 16 Display-Motive und 3 animierte, 34 Accessoires (Umhang und Antenne schwingen nach, der Schornstein
+raucht), 24 Robotertypen, Skin-Bogen im Stil der Konzeptbilder und UI-Icons.
 **Das Spielprojekt wurde nicht verändert** – dieser Ordner steht für sich.
 
 ![Robotertypen](docs/images/types.png)
@@ -20,14 +21,14 @@ und 3 animierte, 20 Accessoires, 14 Robotertypen, Skin-Bogen im Stil der Konzept
 | `output/RobotViewer.app` | **Robot Viewer** – macOS-App zum Anpassen und Ansehen (Doppelklick) |
 | `data/skins.json` | **Skins als Daten** (Format `CubeEscapeRobotSkins` 1): Palette, Zweitfarben-Zonen, Oberfläche, Werkstoff, Schichten, Abnutzung, Abzeichen, Leuchtlinien, Teile, Ausdruck, Display, Stufe/Startset |
 | `data/concept_palettes.json`, `docs/concepts/` | Farbpunkte der Konzeptbögen (`scripts/concept_palettes.py`) und die Bögen selbst |
-| `output/CubeEscape_Robot.fbx` | Unity: Standard-Look als 1 Mesh (3 Materialien) + Rig + 69 Takes |
+| `output/CubeEscape_Robot.fbx` | Unity: Standard-Look als 1 Mesh (3 Materialien) + Rig + 71 Takes |
 | `output/CubeEscape_Robot_Modular.fbx` | Unity: alle Bauteil-Varianten und Accessoires als einzelne Meshes am selben Rig (ohne Animation) |
 | `output/Types/CubeEscape_Robot_<Typ>.fbx` | Unity: jeder Robotertyp fertig kombiniert als 1 Mesh + Rig (ohne Animation, Clips aus der Haupt-FBX) |
 | `output/Looks/<Typ>.robotlook.json`, `output/robot_look.schema.json` | Look je Robotertyp im Spielstand-Format (Version 2) und JSON-Schema dazu |
 | `output/CubeEscape_Robot.blend` | Blender-Szene: Standard-Mesh, `Robot_Parts` (alle Teile), Rig, NLA-Spur je Animation |
 | `output/robot_config.json` | Slots, Varianten, Robotertypen (mit Maßen), Skins, Ausdrücke, Display-Motive, Atlas-Zellen und **Clip-Daten** (für Unity) |
 | `output/ANIMATIONS.md` | automatisch erzeugte Clip-Liste (Frames, Loop, Grundtempo, Höhe, Schritt-Frames, Unity-Hinweise) |
-| `output/Textures/` | 2048² PNGs: BaseColor/Emission je Skin, MetallicSmoothness, Normal, Occlusion, ColorMask, LightMask, **Masken** (Badge ×2, Line ×2, Zone ×2, Layer ×2, Material ×2), Eye-Atlas (2048 × 2560), Display-Atlas, Display-Flipbook |
+| `output/Textures/` | 2048² PNGs: BaseColor/Emission je Skin, MetallicSmoothness, Normal, Occlusion, ColorMask, LightMask, **Masken** (Badge ×3, Line ×2, Zone ×2, Layer ×2, Material ×2), Eye-Atlas (2048 × 2560), Display-Atlas, Display-Flipbook |
 | `output/Icons/` | UI-Icons 256²: `Skins/`, `Expressions/`, `Displays/`, `Badges/`, `Accessories/` |
 | `output/ViewerData/` | Daten für den Viewer (Geometrie, Rig, Animationen, Texturen) |
 | `output/Previews/` | Ansichten, Typen, Skins, **Skin-Bogen** (`skin_sheet.png`), **Silhouetten**, **Gegenüberstellung** der Schichten, Werkstoffe und Abnutzung (`weathering.png`), Ausdrücke, Kontaktbögen je Phase, GIFs |
@@ -53,8 +54,8 @@ und 3 animierte, 20 Accessoires, 14 Robotertypen, Skin-Bogen im Stil der Konzept
 | Stufe | Texturen | QA | Renders | Ausgabe | 1.8.0 | 1.9.0 |
 |---|---|---|---|---|---|---|
 | `quick` | 512, AO 16 Samples | Standard-Roboter, alle Clips, parallel | keine | `output/_quick` | 25 s | **10–11 s** (15 s neben laufendem Unity-Editor) |
-| `standard` | 1024, AO 32 Samples | alle 14 Typen, alle Clips, parallel | Ansichten, Skins, Ausdrücke, Typen (¼ Samples) | `output/_standard` | 133 s | **54–68 s** |
-| `full` | 2048, AO 64 Samples | alle 14 Typen, alle Clips, parallel | alles inkl. Animationsbögen und GIFs | `output` | 655 s | **211 s** |
+| `standard` | 1024, AO 32 Samples | alle 24 Typen, alle Clips, parallel | Ansichten, Skins, Ausdrücke, Typen (¼ Samples) | `output/_standard` | 133 s | **54–68 s** |
+| `full` | 2048, AO 64 Samples | alle 24 Typen, alle Clips, parallel | alles inkl. Animationsbögen und GIFs | `output` | 655 s | **211 s** |
 
 Gemessen am 12.10.2026 auf dem Apple M5 (4 Performance- + 6 Effizienzkerne, 8 GPU-Kerne), ruhige Maschine, warmer
 Cache; 1.7.0 brauchte rund 40 min. Jeder Lauf schreibt Schrittzeiten, Systemlast zu Beginn und Ende, Prozess-Sekunden
@@ -111,7 +112,7 @@ Hauptprozess (gleiches Ergebnis).
   selbst auf alle GPU-Kerne. Die Neural Engine nutzt Blender nicht.
 - **QA:** Kollisionsbäume nur für Teilepaare, deren Hüllquader sich berühren – der Test läuft für alle Paare eines
   Frames in einem numpy-Aufruf; Koordinaten werden als `float32` gelesen (natives Format, 3× schneller). Eine QA
-  aller 14 Typen kostet in einem Prozess 245 s, mit 9 Workern rund 72 s: Mehr als Faktor 3,4 geben 4 Performance-
+  aller 14 Typen (1.9) kostet in einem Prozess 245 s, mit 9 Workern rund 72 s: Mehr als Faktor 3,4 geben 4 Performance-
   und 6 Effizienzkerne unter Volllast nicht her.
 - **ImageMagick mit `MAGICK_THREAD_LIMIT=1`:** parallele Aufrufe bremsten sich über ihre OpenMP-Threads gegenseitig
   aus (Montage aus 28 Kacheln 3,8 → 1,6 s); die Texturen bleiben bitgleich.
@@ -176,18 +177,24 @@ Fahrplan: [docs/FAHRPLAN.md](docs/FAHRPLAN.md); Techniken und Lehren (für Cubeg
 `output/RobotViewer.app` öffnen (beim ersten Start ggf. Rechtsklick → Öffnen, die App ist nur lokal signiert).
 
 - **Robotertyp:** Classic, Scout, Worker, Retro, Heavy, Party, Agent, Gentleman, Punk, King, DJ, Gardener, Mechanic,
-  Runner (schmalste Silhouette) – fertige Looks auf Knopfdruck, „Zufall“ würfelt einen.
+  Runner (schmalste Silhouette); seit 1.12 Miner, Samurai, Steam, Signal, Celest, Sapling, Astronaut, Clockwork,
+  Vertex, Spike – fertige Looks auf Knopfdruck, „Zufall“ würfelt einen. Gentleman und King haben ein eigenes Emote
+  (HatTip, FlagWave).
 - **Bauteile:** Kopf (Classic, Dome, Boxy, TV), Hände (Mitt, Claw), Füße (Boots, Round, Mech), Schulterpanzer
   (Round, Slim, Square), Rucksack (Classic, Battery).
-- **Accessoires (20):** Kopf (Antenne, Propellermütze – Propeller dreht sich, Kopfhörer, Zylinder, Krone, Irokese),
-  Gesicht (Sonnenbrille, Monokel, Schnurrbart, Schutzbrille), Hals (Fliege, Schal, Medaille, Glöckchen), Rücken
-  (Jetpack, Umhang, Flügel), Hand (Schraubenschlüssel, Blume, Fahne – in Kletter-/Hänge-Clips automatisch ausgeblendet).
-- **Farben:** 38 Skins als Startpunkt (★ = Startset), Thema darunter; ein Skin setzt Farben, Oberfläche, Zweitfarbe,
+- **Accessoires (34):** Kopf (Antenne – schwingt nach, Propellermütze – Propeller dreht sich, Kopfhörer, Zylinder,
+  Krone, Irokese; 1.12: Grubenhelm mit Stirnlampe, Samurai-Helm, Stacheln, Ohren, Satellitenschüssel, Schornstein mit
+  Rauch, Heiligenschein, Blattspross), Gesicht (Sonnenbrille, Monokel, Schnurrbart, Schutzbrille; 1.12: Linsenringe,
+  Helmring), Ohren (1.12, am linken Ohr: Linsenauge, Zahnräder, Zifferblatt), Hals (Fliege, Schal, Medaille,
+  Glöckchen), Rücken (Jetpack, Umhang – schwingt nach, Flügel; 1.12: Rucksack mit Taschen), Hand (Schraubenschlüssel,
+  Blume, Fahne – in Kletter-/Hänge-Clips automatisch ausgeblendet).
+- **Farben:** 62 Skins als Startpunkt (★ = Startset), Thema darunter; ein Skin setzt Farben, Oberfläche, Zweitfarbe,
   Abzeichen und Leuchtlinien, Retro/Orbit/Tank auch eigene Teile. Danach frei: Panzerung, Mechanik, Metall, Lichter,
   Augen, Display, Visier, Stoff; Oberfläche Standard/Matt/Satin/Glanz/Candy/Chrom.
 - **Zweitfarbe:** Farbe und Lackzonen (Kopf, Ohren, Brust, Schultern, Arme, Hüfte, Beine, Füße).
 - **Abzeichen:** bis zu zwei mit eigener Farbe – Warnstreifen, Kreuz, Wolke, Nummer, Biohazard, Schriftzeichen,
-  Rennstreifen, Zielmarke (Ohrscheibe, Brust, Schulter, Oberschenkel, Rücken, Hinterkopf je nach Abzeichen).
+  Rennstreifen, Zielmarke, Stern, Zahnrad, Blatt (Ohrscheibe, Brust, Schulter, Oberschenkel, Rücken, Hinterkopf je nach
+  Abzeichen). Der Viewer packt die beiden gewählten Abzeichen in eine Textur – beliebig viele Abzeichen-Masken.
 - **Leuchtlinien:** Leiterbahnen, Ringe, Kanten, Blitze, Gelenke mit Farbe und Stärke.
 - **Werkstoff:** Holz, Stein (mit Gravurbändern), Sand, Papier, Beton, Messing, Platine – Muster auf der Panzerung mit
   eigener Musterfarbe und eigener Rauheit; beim Wählen wird eine passende Panzerfarbe gesetzt.
@@ -199,13 +206,13 @@ Fahrplan: [docs/FAHRPLAN.md](docs/FAHRPLAN.md); Techniken und Lehren (für Cubeg
   passt sich der Ausdruck der Animation an, dann blinzelt der Roboter auch (alle 2,5–6 s, `robot_config.json` › `blink`).
 - **Brust-Display:** 16 Motive (Status, Heart, Battery, Smiley, Wave, Cube, Hello, Music, Lightning, Warning, Thermo,
   Clock, Signal, Star, Planet, Loading) und 3 animierte (Heartbeat, Spinner, Talk); optional passend zur Animation.
-- **Animation:** alle 69 Clips nach Gruppen, Play/Pause (Leertaste), Zeitleiste, Tempo, Wiederholen. Unter dem Clip
+- **Animation:** alle 71 Clips nach Gruppen, Play/Pause (Leertaste), Zeitleiste, Tempo, Wiederholen. Unter dem Clip
   stehen seine Spieldaten (Grundtempo, Höhe, Root Motion, Schritt-Frames, aktuelles Ereignis). Augen, Display,
   „Strom“ (Death schaltet ab, Respawn an) und ausgeblendete Hand-Gegenstände kommen aus den Clip-Daten.
 - **Hilfsobjekte:** Kante, Stange, Leiter oder Kiste an der Stelle, die der Clip voraussetzt – damit sieht man, ob
   Hände und Füße wirklich greifen.
 - **Ansicht:** Iso, Front, Side, Back, Face, Drehteller, Boden; Maus/Trackpad dreht und zoomt.
-- **Look laden/speichern** (`*.robotlook.json`, Version 3; Version 1 und 2 werden übernommen, unbekannte Teile/Namen
+- **Look laden/speichern** (`*.robotlook.json`, Version 4; Versionen 1 bis 3 werden übernommen, unbekannte Teile/Namen
   durch Standardwerte ersetzt und gemeldet), **Screenshot** (1600 × 1600 PNG), **GIF** (15 fps, 600 px) und **Video**
   (MP4, 30 fps, 1080 px) der laufenden Animation.
 - **Vergleich A/B:** „Als B merken“ stellt den aktuellen Look rechts daneben (gleicher Clip, gleiche Ansicht),
@@ -231,13 +238,14 @@ Clip). `viewer/test_viewer.sh` nutzt das für Migrations-, Round-Trip- und Expor
 | Standard-Mesh | 11 852 Dreiecke, starres Skinning, 3 Materialien (Körper-Atlas, Augen, Display) |
 | Modular | 35 Teil-Objekte: `Robot_Body` + je Slot/Variante, gemeinsamer Textur-Atlas |
 | Je Robotertyp | 1 Mesh, 3–4 Materialien (Fabric nur bei Stoff-Accessoires), Maße in `robot_config.json` › `typeBounds` |
-| Bones | 28: Root, Pelvis, Spine, Head, Eyes, Shoulder/UpperArm/LowerArm/Hand/Fingers/Thumb/Prop _L/_R, UpperLeg/LowerLeg/Foot _L/_R, Socket_Head/Neck/Back |
+| Bones | 30: Root, Pelvis, Spine, Head, Eyes, Shoulder/UpperArm/LowerArm/Hand/Fingers/Thumb/Prop _L/_R, UpperLeg/LowerLeg/Foot _L/_R, Socket_Head/Neck/Back, Federknochen Cape und Antenna (1.12) |
 | Achsen | Blender: Blick −Y, links = +X. FBX: Forward Z, Up Y → Unity Blick +Z (seit 1.10.1, im Unity-Testbett gemessen) |
 
 ## Anpassbarkeit – wie es technisch funktioniert
 
 - **Varianten:** Jedes Bauteil hängt starr an genau einem Bone; alle Varianten nutzen dieselben Gelenkpunkte. Darum
-  funktionieren alle 69 Animationen mit jeder Kombination – die QA prüft jeden der 14 Robotertypen gegen jeden Clip.
+  funktionieren alle 71 Animationen mit jeder Kombination – die QA prüft jeden der 24 Robotertypen gegen jeden Clip
+  (Typ-Emotes nur mit ihrem Typ). Jeder Aufsatz steckt in mindestens einem Typ, so ist er in allen Clips geprüft.
 - **Farben ohne neue Texturen:** `T_Robot_ColorMask.png` – R Panzerung, G Mechanik, B Metall; `T_Robot_LightMask.png`
   – Lichter; Rest auf Körper-Flächen = Visier. Ein Shader färbt mit `Farbe × Helligkeit(Albedo) / Helligkeit(Classic-Farbe)` um; Schmutz,
   Kratzer, AO und Decals bleiben erhalten. Alternativ fertige Texturen je Skin (`T_Robot_BaseColor_<Skin>.png`).
@@ -262,10 +270,19 @@ Clip). `viewer/test_viewer.sh` nutzt das für Migrations-, Round-Trip- und Expor
 - **Stoff-Accessoires:** Material `M_RobotFabric` = Körper-Atlas × Stofffarbe.
 - **Zylinder:** Krempe und Hut sind glänzend schwarz wie das Visier (bei jedem Skin), das Hutband hat die Stofffarbe.
 - **Sockets:** `Socket_Head`, `Socket_Neck`, `Socket_Back` (Accessoires), `Prop_L/R` (Werkzeuge in der Hand).
+- **Nachschwingen (1.12):** Umhang und Antennenstab hängen an Federknochen (`Cape`, `Antenna`). Der Generator rechnet
+  je Clip eine gedämpfte Feder (Punktmasse an der Knochenspitze, Ruhelage zur Schwerkraft geneigt, Fahrtwind in den
+  Lauf-Clips) und backt das Ergebnis als Knochenkurven – im Spiel läuft keine Physik. Begrenzt auf „weg vom Körper“,
+  Loops schließen ohne Sprung (`SPRINGS`, `CLIP_WIND`).
+- **Typ-Emotes (1.12):** `robotTypes[].emote` – Gentleman `HatTip` (der Hut gleitet zur Hand und reitet beim
+  Verbeugen auf ihr, `ATTACHMENTS`), King `FlagWave` (Fahne bleibt sichtbar). Ein Typ-Emote gehört zu seinem Typ:
+  QA und Spiel nutzen es nur mit dessen Kopf-/Hand-Accessoire.
+- **Partikel-Emitter (1.12):** `robot_config.json` › `emitters` (Schornsteinrauch: Socket, Position, Richtung im
+  Charakterraum); der Viewer zeigt den Rauch, das Spiel setzt dort ein Partikelsystem an.
 
 ## Animationen
 
-69 Clips in acht Gruppen, vollständige Liste mit Frames, Grundtempo, Höhe, Schritt-Frames und Unity-Hinweisen in
+71 Clips in acht Gruppen, vollständige Liste mit Frames, Grundtempo, Höhe, Schritt-Frames und Unity-Hinweisen in
 `output/ANIMATIONS.md`:
 
 - **Basis:** Idle, Walk, Run, Jump, Fall, Land, Crouch, Interact, Push, Death
@@ -276,7 +293,7 @@ Clip). `viewer/test_viewer.sh` nutzt das für Migrations-, Round-Trip- und Expor
   Talk, Listen, Celebrate, EdgeBalance
 - **Phase 4 – Tänze (120 BPM):** DanceBob, DanceRobot, DanceWave, DanceShuffle, DanceDisco, DanceSpin (Root Motion)
 - **Phase 5 – Emotes:** Wave, Bow, Clap, Think, Point, Shrug, NodYes, ShakeNo, SitDown, SitIdle, Sleep,
-  DanceMoonwalk, DanceSway
+  DanceMoonwalk, DanceSway; Typ-Emotes HatTip (Gentleman) und FlagWave (King)
 - **Phase 6 – Klettern & Hängen:** LedgeGrab, HangIdle, ShimmyLeft, ShimmyRight, HangSwing, ClimbUp (Root Motion),
   LadderUp, LadderDown (in-place, Controller steigt ≈ 0,28 m/s), Vault. Die Hände greifen per **Arm-IK** feste Punkte:
   Kante mit Oberseite 1,20 m über Root und Vorderkante 0,22 m vor Root, Griffe bei ±0,35 m; ClimbUp endet 1,20 m höher
@@ -301,7 +318,7 @@ Charakterraum `[rechts, oben, vorn]` in Metern (= Unity-Local-Space), Winkel in 
 | `prop` | Geometrie, die der Clip voraussetzt (Kante, Stange, Leiter, Kiste) |
 | `expression`, `display` | Augen-Ausdruck und Display-Motiv über die Zeit (`$base` = gewählter Look) |
 | `emission` | „Strom“-Faktor für Augen, Display und Lichter (Death → 0, Respawn fährt hoch, Electrocuted flackert) |
-| `hideHeldItem` | Hand-Gegenstand ausblenden (Klettern, Hängen, Think, Wave, Clap, PickUp, TerminalTyping, Vault, EdgeBalance) |
+| `hideHeldItem` | Hand-Gegenstand ausblenden (Klettern, Hängen, Think, Wave, Clap, PickUp, TerminalTyping, Vault, EdgeBalance, HatTip) |
 
 ## Unity-Testpaket
 
@@ -318,7 +335,8 @@ Materialien, Prefabs (Standard, modular, je Typ) und einen Animator mit allen Cl
   Clips mit Länge = Frames / fps, Loop-Flags aus `robot_config.json`, Root Motion nur für Drehungen und ClimbUp,
   ClimbUp endet 1,20 m höher und 0,36 m vorn (+Z), der Roboter schaut nach +Z, Idle-Frame 0 steht auf y = 0 mit
   1,2–1,5 m Höhe, kein Clip unter dem Boden (jeder 4. Frame), Texturen (Farbe sRGB, Daten linear, Alpha keine
-  Transparenz, Augen-Atlas ohne Skalierung), ein Prefab je Typ, alle Typ-Looks ohne Warnung, alle Skins anwendbar.
+  Transparenz, Augen-Atlas ohne Skalierung), ein Prefab je Typ, alle Typ-Looks ohne Warnung, alle Skins anwendbar;
+  seit 1.12 Federknochen und Emitter-Sockets vorhanden, Umhang schwingt im Run, Antenne im Jump, HatTip hebt den Hut.
 - **Screenshots** mit URP und Bloom: alle Skins, alle Typen, alle Ausdrücke, Frames aus Walk, ClimbUp, DanceRobot
   und Death → `output/UnityTestbed/unity_skins.png` usw.
 - **EditMode-Tests** (Unity Test Framework): Look-Format mit denselben Fixtures wie der Viewer (v1, v2, unbekannte
@@ -373,7 +391,8 @@ seit Version 3 `skin`, `armor2`, `zones2`, `badges` (höchstens 2), `lines`; sei
 Oberflächen, Abzeichen, Mustern und Zonen sind **ewige IDs**. Versionen 1 bis 3 werden
 beim Laden übernommen (ein v2-Look behält seine Farben und heißt Skin „Custom“, v3 bekommt keinen Werkstoff, keine
 Schichten und die gebackene Abnutzung), unbekannte IDs durch Standardwerte
-ersetzt, neuere Versionen abgelehnt – dieselben Regeln gehören in die Spielstand-Migration.
+ersetzt, neuere Versionen abgelehnt – dieselben Regeln gehören in die Spielstand-Migration. Ein neuer Slot (1.12:
+`AccEar`) braucht keine neue Version: fehlt er im Look, gilt sein Standard „None“.
 
 ## Offene Punkte
 
@@ -386,18 +405,20 @@ ersetzt, neuere Versionen abgelehnt – dieselben Regeln gehören in die Spielst
 | Draw Calls | Standard und je Robotertyp: 1 Mesh, 3–4 Materialien; modular 1 Mesh je Teil | bei frei kombinierbaren Looks die Teile zur Laufzeit zu einem Skinned Mesh kombinieren |
 | Spieler-Looks | Format, Schema, Migration und Beispiele fertig, Viewer getestet | im Spiel in den Spielstand übernehmen (`SaveData`-Migration) |
 | Robot Viewer | Universal-App ab macOS 13, lokal (ad hoc) signiert | für Weitergabe mit einer Apple-Developer-ID signieren und notarisieren |
-| Masken im Spiel | 6 RGBA-Masken à 2048² (Abzeichen, Linien, Zonen) | für Unity packen: Zonen und Gelenke als ID-Kanal, Masken in 1024² (der Viewer macht es beim Laden schon so) |
+| Masken im Spiel | seit 1.12 elf RGBA-Masken à 2048² (Abzeichen ×3, Linien, Zonen, Schichten, Werkstoffe) | für Unity packen: Zonen und Gelenke als ID-Kanal, die zwei gewählten Abzeichen in eine Textur (wie der Viewer seit 1.12), Felder in 1024², nur genutzte Werkstoff-Kanäle laden |
 | Leuchten im Spiel | Skin-Karten nutzen Bloom (Schwelle über der Beleuchtung) | URP-Bloom so einstellen, dass nur Emission strahlt |
-| Masken-Speicher | seit 1.11 zehn RGBA-Masken à 2048² | für Unity packen (Zonen/Gelenke als ID, Felder in 1024², nur genutzte Werkstoff-Kanäle laden) |
+| Rauch im Spiel | `emitters` (Schornstein) mit Socket, Position, Richtung; Viewer zeigt ihn | Partikelsystem am Socket, nur wenn der Aufsatz sichtbar ist |
 
 ## Qualitätssicherung (automatisch bei jedem Lauf)
 
 - **Bauteile:** alle Teile berühren ihre Konfiguration (keine schwebenden Teile; das Augen-Display ist bewusst
   ein Decal 1,5 mm vor dem Visier), starres Skinning, Transformationen = Identität.
-- **Animationen × Robotertypen:** für alle 14 Typen jeder der 69 Clips Frame für Frame: kein Vertex unter dem Boden,
-  keine neuen Überschneidungen nicht benachbarter Körperteile, kein gelöstes Gelenk, Loops schließen exakt.
+- **Animationen × Robotertypen:** für alle 24 Typen jeder der 71 Clips Frame für Frame (Typ-Emotes nur mit ihrem
+  Typ): kein Vertex unter dem Boden, keine neuen Überschneidungen nicht benachbarter Körperteile, kein gelöstes
+  Gelenk, Loops schließen exakt. Die Typen tragen zusammen jeden Aufsatz, so ist jeder in jedem Clip geprüft.
   Bewusst erlaubt: Stoff am Hals darf vom gesenkten Kinn eingedrückt werden; Hand-Gegenstände berühren die Finger
-  (Griff) und werden in den oben genannten Clips ausgeblendet.
+  (Griff) und werden in den oben genannten Clips ausgeblendet; in HatTip liegt der Hut in der Hand und verlässt den
+  Kopf. Ohr-Aufsätze sitzen nur links: die rechte Hand streift das rechte Ohr in Wave und Think mit unter 1 cm.
 - **Kontakt mit der Umgebung:** Hängen, Hangeln und Hochziehen wurden gegen die Kante geprüft (kein Körperteil in der
   Kante, nur Daumen/Handflächen liegen bis ≈ 2 cm an); im Viewer mit „Hilfsobjekte“ sichtbar.
 - **Export:** `verify_robot.py` öffnet die `.blend`, importiert alle FBX (Standard, modular, je Typ), vergleicht alle

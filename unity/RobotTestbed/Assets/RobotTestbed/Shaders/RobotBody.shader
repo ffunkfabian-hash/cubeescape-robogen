@@ -14,6 +14,7 @@ Shader "CubeEscape/RobotBody"
         _LightMask ("Light mask", 2D) = "black" {}
         _BadgeMask ("Badge mask 1", 2D) = "black" {}
         _BadgeMask2 ("Badge mask 2", 2D) = "black" {}
+        _BadgeMask3 ("Badge mask 3", 2D) = "black" {}
         _LineMask ("Line mask 1", 2D) = "black" {}
         _LineMask2 ("Line mask 2", 2D) = "black" {}
         _ZoneMask ("Zone mask 1", 2D) = "black" {}
@@ -38,6 +39,8 @@ Shader "CubeEscape/RobotBody"
         _BadgeA1 ("Badge A channels (mask 2)", Vector) = (0, 0, 0, 0)
         _BadgeB0 ("Badge B channels (mask 1)", Vector) = (0, 0, 0, 0)
         _BadgeB1 ("Badge B channels (mask 2)", Vector) = (0, 0, 0, 0)
+        _BadgeA2 ("Badge A channels (mask 3)", Vector) = (0, 0, 0, 0)
+        _BadgeB2 ("Badge B channels (mask 3)", Vector) = (0, 0, 0, 0)
         _BadgeAColor ("Badge A colour", Vector) = (0, 0, 0, 0)
         _BadgeBColor ("Badge B colour", Vector) = (0, 0, 0, 0)
         _LineSel0 ("Line pattern (mask 1)", Vector) = (0, 0, 0, 0)
@@ -94,6 +97,7 @@ Shader "CubeEscape/RobotBody"
             TEXTURE2D(_LightMask);
             TEXTURE2D(_BadgeMask);
             TEXTURE2D(_BadgeMask2);
+            TEXTURE2D(_BadgeMask3);
             TEXTURE2D(_LineMask);
             TEXTURE2D(_LineMask2);
             TEXTURE2D(_ZoneMask);
@@ -106,7 +110,8 @@ Shader "CubeEscape/RobotBody"
             CBUFFER_START(UnityPerMaterial)
                 float4 _BaseMap_ST;
                 float4 _Armor, _Armor2, _Mech, _Metal, _Lights, _Visor, _FabricColor, _RefA, _RefB, _Finish;
-                float4 _ZoneSel0, _ZoneSel1, _BadgeA0, _BadgeA1, _BadgeB0, _BadgeB1, _BadgeAColor, _BadgeBColor;
+                float4 _ZoneSel0, _ZoneSel1, _BadgeA0, _BadgeA1, _BadgeB0, _BadgeB1, _BadgeA2, _BadgeB2, _BadgeAColor,
+                    _BadgeBColor;
                 float4 _LineSel0, _LineSel1, _LineColor;
                 float4 _MaterialSel0, _MaterialSel1, _MaterialColor, _LayerAmount, _LayerAmount2;
                 float4 _RustColor, _MossColor, _FrostColor, _EmberColor, _CamoColor, _LayerRough, _LayerMetal, _BareMetal;
@@ -200,9 +205,9 @@ Shader "CubeEscape/RobotBody"
                         float pm = saturate(dot(SAMPLE(_MaterialMask, uv), _MaterialSel0) + dot(SAMPLE(_MaterialMask2, uv), _MaterialSel1));
                         c = lerp(c, lerp(_MaterialColor.rgb * ratio, c, pm), mk.r);
                     }
-                    float4 b0 = SAMPLE(_BadgeMask, uv), b1 = SAMPLE(_BadgeMask2, uv);
-                    c = lerp(c, _BadgeAColor.rgb * ratio, saturate(dot(b0, _BadgeA0) + dot(b1, _BadgeA1)));
-                    c = lerp(c, _BadgeBColor.rgb * ratio, saturate(dot(b0, _BadgeB0) + dot(b1, _BadgeB1)));
+                    float4 b0 = SAMPLE(_BadgeMask, uv), b1 = SAMPLE(_BadgeMask2, uv), b2 = SAMPLE(_BadgeMask3, uv);
+                    c = lerp(c, _BadgeAColor.rgb * ratio, saturate(dot(b0, _BadgeA0) + dot(b1, _BadgeA1) + dot(b2, _BadgeA2)));
+                    c = lerp(c, _BadgeBColor.rgb * ratio, saturate(dot(b0, _BadgeB0) + dot(b1, _BadgeB1) + dot(b2, _BadgeB2)));
                     float patchy = 0.6 + 0.6 * grime;
                     float cv = COVER(lay.r, _LayerAmount.x);
                     c = lerp(c, _RustColor.rgb * patchy * ratioAll, cv);

@@ -6,7 +6,8 @@ Creates deterministic detail textures that the Blender shaders project onto the 
     T_Src_Brushed.png     tileable brushed-metal streaks
     T_Src_Scratches.png   tileable fine scratches (worn paint, bump)
     T_Src_Decals.png      RGBA decal atlas: status display UI, cube emblem, unit code, hazard stripes
-    T_Src_Badges.png      RGBA badge atlas (BADGE_ART): cross, cloud, number, biohazard, glyph, crash-test target
+    T_Src_Badges.png      RGBA badge atlas (BADGE_ART): cross, cloud, number, biohazard, glyph, crash-test target,
+                          star, gear, leaf
     T_Src_Circuit.png     tileable circuit traces (glow line pattern "Circuit")
     T_Src_Bolt.png        tileable zigzag lightning lines (glow line pattern "Bolt")
     T_Src_Cracks.png      tileable crack field (layer "Embers": bright on the cracks, fading away from them)
@@ -255,7 +256,7 @@ DISPLAY_ANIMS = [("Heartbeat", 8, 10), ("Spinner", 8, 12), ("Talk", 8, 12)]     
 
 # Badge artwork (white on transparent, 4 x 4 cells of 256 px); the generator projects these as decals.
 BADGE_CELL = 256
-BADGE_ART = ["Cross", "Cloud", "Number", "Biohazard", "Glyph", "Target"]
+BADGE_ART = ["Cross", "Cloud", "Number", "Biohazard", "Glyph", "Target", "Star", "Gear", "Leaf"]
 
 
 def _star(cx, cy, r_out, r_in, n=5, rot=-90):
@@ -626,6 +627,30 @@ def _badge_draws(name):
         return ["-fill", "white", "-draw", _pie(c, c, 96, 0, 90), "-draw", _pie(c, c, 96, 180, 270),
                 "-fill", "none", "-stroke", "white", "-strokewidth", 14, "-draw", "circle %d,%d %d,%d" % (
                     c, c, c + 104, c), "-stroke", "none"]
+    if name == "Star":                          # Celest: five-pointed star with a small sparkle
+        return ["-fill", "white", "-draw", _star(c - 8, c + 10, 104, 44), "-draw", _star(c + 84, c - 82, 30, 9, n=4)]
+    if name == "Gear":                          # Clockwork: gear wheel with a hole
+        pts = []
+        for i in range(48):
+            a = 2 * math.pi * i / 48
+            r = 104 if (i // 3) % 2 == 0 else 80
+            pts.append("%d,%d" % (c + r * math.cos(a), c + r * math.sin(a)))
+        return ["-fill", "white", "-draw", "polygon " + " ".join(pts), "-fill", "black",
+                "-draw", "circle %d,%d %d,%d" % (c, c, c + 34, c)]
+    if name == "Leaf":                          # Arbor: leaf with a stem and a midrib
+        pts = []
+        for i in range(41):
+            t = i / 40.0
+            w = 70 * math.sin(math.pi * t) ** 0.8
+            pts.append((c - 100 + 200 * t, w))
+        outline = [(x, c - w) for x, w in pts] + [(x, c + w) for x, w in reversed(pts)]
+        rot = lambda x, y: (c + (x - c) * 0.766 + (y - c) * 0.643, c - (x - c) * 0.643 + (y - c) * 0.766)
+        poly = " ".join("%d,%d" % rot(x, y) for x, y in outline)
+        x0, y0 = rot(c - 124, c)
+        x1, y1 = rot(c + 60, c)
+        return ["-fill", "white", "-draw", "polygon " + poly, "-stroke", "black", "-strokewidth", 9,
+                "-draw", "line %d,%d %d,%d" % (rot(c - 90, c) + (x1, y1)), "-stroke", "white", "-strokewidth", 14,
+                "-draw", "line %d,%d %d,%d" % ((x0, y0) + rot(c - 98, c)), "-stroke", "none"]
     raise ValueError(name)
 
 

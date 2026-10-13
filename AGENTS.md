@@ -12,7 +12,17 @@ Gilt für alle Agenten (Claude Code, Codex, …). Langform: `README.md` (Teststu
 - Neue Abzeichen/Muster/Zonen: Maske im Generator, Formel in `decorate_skin()` **und** im Viewer-Shader gleich halten,
   Eintrag in `robot_config.json`, Prüfung in `verify_robot.py`.
 - Viewer-Shader: Look-Werte gehören in die Parameter-Textur (`writeParams`, `P(i)`), nicht in neue Shader-Argumente –
-  SceneKit zeichnet sonst kommentarlos pink (`docs/TECHNIK.md` › 8).
+  SceneKit zeichnet sonst kommentarlos pink (`docs/TECHNIK.md` › 8). Abzeichen packt der Viewer je Look in eine
+  Textur; neue Abzeichen-Masken brauchen dort keinen Sampler, in Unity einen Wähler mehr.
+
+## Aufsätze und Bewegung
+
+- Jeder Aufsatz (Accessoire-Variante) steckt in mindestens einem Robotertyp – nur so prüft die QA ihn in allen Clips
+  (`verify_robot.py` › `verify_bolton`). Neue Slots am Ende von `ACCESSORY_SLOTS`; alte Looks bekommen „None“.
+- Schwebende Teile nur absichtlich (`FLOATING_PARTS`), Partikel nie als Mesh, sondern als `EMITTERS`.
+- Nachschwingen nur gebacken (`SPRINGS`); Grenzen so, dass nichts in den Körper schwingt.
+- Typ-Emotes (`robotTypes[].emote`) gehören zu ihrem Typ: QA und Spiel nur mit diesem Typ. Gewollte Ausnahmen der QA
+  stehen benannt in `ACCEPTED_OVERLAPS` / `ACCEPTED_DETACH`, nie pauschal.
 
 ## Sprache
 

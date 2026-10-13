@@ -27,7 +27,9 @@ namespace RobotTestbed
         static readonly int[] LayerColor = { Shader.PropertyToID("_RustColor"), Shader.PropertyToID("_MossColor"),
             Shader.PropertyToID("_FrostColor"), Shader.PropertyToID("_EmberColor"), Shader.PropertyToID("_CamoColor") };
         static readonly int[] BadgeSel = { Shader.PropertyToID("_BadgeA0"), Shader.PropertyToID("_BadgeA1"),
-            Shader.PropertyToID("_BadgeB0"), Shader.PropertyToID("_BadgeB1") };
+            Shader.PropertyToID("_BadgeA2"), Shader.PropertyToID("_BadgeB0"), Shader.PropertyToID("_BadgeB1"),
+            Shader.PropertyToID("_BadgeB2") };
+        const int BadgeMasks = 3;
         static readonly int[] BadgeColor = { Shader.PropertyToID("_BadgeAColor"), Shader.PropertyToID("_BadgeBColor") };
 
         MaterialPropertyBlock block;
@@ -129,9 +131,9 @@ namespace RobotTestbed
                     block.SetVector(Zone1, zones[1]);
                     for (int b = 0; b < 2; b++)
                     {
-                        var sel = b < look.Badges.Count ? cfg.Selector("badges", look.Badges[b].id) : new Vector4[2];
-                        block.SetVector(BadgeSel[2 * b], sel[0]);
-                        block.SetVector(BadgeSel[2 * b + 1], sel[1]);
+                        var sel = b < look.Badges.Count ? cfg.Selector("badges", look.Badges[b].id) : new Vector4[BadgeMasks];
+                        for (int t = 0; t < BadgeMasks; t++)
+                            block.SetVector(BadgeSel[BadgeMasks * b + t], t < sel.Length ? sel[t] : Vector4.zero);
                         block.SetVector(BadgeColor[b], b < look.Badges.Count ? look.Badges[b].color : Vector4.zero);
                     }
                     block.SetVector(LineSel0, lines[0]);

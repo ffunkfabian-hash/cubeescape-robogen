@@ -22,7 +22,7 @@ namespace RobotTestbed.Editor
         {
             "T_Robot_BaseColor.png", "T_Robot_Emission.png", "T_Robot_MetallicSmoothness.png", "T_Robot_Normal.png",
             "T_Robot_Occlusion.png", "T_Robot_ColorMask.png", "T_Robot_LightMask.png", "T_Robot_BadgeMask.png",
-            "T_Robot_BadgeMask2.png", "T_Robot_LineMask.png", "T_Robot_LineMask2.png", "T_Robot_ZoneMask.png",
+            "T_Robot_BadgeMask2.png", "T_Robot_BadgeMask3.png", "T_Robot_LineMask.png", "T_Robot_LineMask2.png", "T_Robot_ZoneMask.png",
             "T_Robot_ZoneMask2.png", "T_Robot_LayerMask.png", "T_Robot_LayerMask2.png", "T_Robot_MaterialMask.png",
             "T_Robot_MaterialMask2.png", "T_Robot_EyeAtlas.png", "T_Robot_DisplayAtlas.png", "T_Robot_DisplayFlipbook.png",
         };
@@ -229,6 +229,7 @@ namespace RobotTestbed.Editor
                 m.SetTexture("_LightMask", Tex("T_Robot_LightMask.png"));
                 m.SetTexture("_BadgeMask", Tex("T_Robot_BadgeMask.png"));
                 m.SetTexture("_BadgeMask2", Tex("T_Robot_BadgeMask2.png"));
+                m.SetTexture("_BadgeMask3", Tex("T_Robot_BadgeMask3.png"));
                 m.SetTexture("_LineMask", Tex("T_Robot_LineMask.png"));
                 m.SetTexture("_LineMask2", Tex("T_Robot_LineMask2.png"));
                 m.SetTexture("_ZoneMask", Tex("T_Robot_ZoneMask.png"));
@@ -325,6 +326,50 @@ namespace RobotTestbed.Editor
             return p;
         }
 
+        /// <summary>1.12: spring bones, emitters and type emotes arrive in Unity and move.</summary>
+        static void CheckBoltOn(Prefabs p, HashSet<string> bones)
+        {
+            var cfg = p.Config;
+            var springs = cfg.List("springBones").Select(o => (string)o).ToList();
+            var emitters = cfg.List("emitters").Cast<Dictionary<string, object>>().ToList();
+            var need = springs.Concat(emitters.Select(e => (string)e["bone"])).Where(b => !bones.Contains(b)).ToList();
+            Check("fbx: spring bones and emitter sockets present (" + springs.Count + " + " + emitters.Count + ")",
+                  springs.Count > 0 && emitters.Count > 0 && need.Count == 0, string.Join(",", need));
+            // largest deviation from the rest pose (Idle frame 0) during a clip
+            float Swing(string type, string clip, string bone, out float moved)
+            {
+                moved = 0f;
+                var c = p.Clips.FirstOrDefault(x => x.name == clip);
+                var idle = p.Clips.FirstOrDefault(x => x.name == "Idle");
+                if (c == null || idle == null || !p.Types.TryGetValue(type, out var prefab)) return -1f;
+                var go = UnityEngine.Object.Instantiate(prefab);
+                try
+                {
+                    var t = go.GetComponentsInChildren<Transform>(true).First(x => x.name == bone);
+                    idle.SampleAnimation(go, 0f);
+                    Quaternion r0 = t.localRotation;
+                    Vector3 p0 = t.position;
+                    float worst = 0f;
+                    for (float s = 0f; s <= c.length + 1e-4f; s += 2f / 30f)
+                    {
+                        c.SampleAnimation(go, s);
+                        worst = Mathf.Max(worst, Quaternion.Angle(r0, t.localRotation));
+                        moved = Mathf.Max(moved, (t.position - p0).magnitude);
+                    }
+                    return worst;
+                }
+                finally { UnityEngine.Object.DestroyImmediate(go); }
+            }
+            float cape = Swing("King", "Run", "Cape", out _);
+            float antenna = Swing("Scout", "Jump", "Antenna", out _);
+            Check("springs: cape lifts in Run (> 10 deg), antenna swings in Jump (> 3 deg)", cape > 10f && antenna > 3f,
+                  "cape " + cape.ToString("0.0", CultureInfo.InvariantCulture) + " deg, antenna " +
+                  antenna.ToString("0.0", CultureInfo.InvariantCulture) + " deg");
+            Swing("Gentleman", "HatTip", "Socket_Head", out float hat);
+            Check("emotes: HatTip lifts the hat of the Gentleman (> 0.2 m)", hat > 0.2f,
+                  hat.ToString("0.00", CultureInfo.InvariantCulture) + " m");
+        }
+
         static void RunChecks(Prefabs p)
         {
             var cfg = p.Config;
@@ -356,6 +401,7 @@ namespace RobotTestbed.Editor
             CheckTextures();
             Check("prefabs: one per robot type", p.Types.Count == cfg.List("robotTypes").Count, p.Types.Count);
             CheckPose(p);
+            CheckBoltOn(p, bones);
             CheckLooks(p);
         }
 

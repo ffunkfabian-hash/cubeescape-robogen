@@ -153,6 +153,20 @@ struct DisplayAnimation: Decodable {
     let fps: Double
 }
 
+/// Particle emitter of an accessory (1.12): position/direction in character space (right, up, forward).
+struct EmitterInfo: Decodable {
+    let id: String
+    let kind: String
+    let slot: String
+    let variant: String
+    let bone: String
+    let position: [Float]
+    let direction: [Float]
+
+    /// Character space -> SceneKit (robot looks +Z, its right is -X).
+    static func scn(_ v: [Float]) -> SIMD3<Float> { SIMD3(-v[0], v[1], v[2]) }
+}
+
 struct FlipbookInfo: Decodable {
     let texture: String
     let grid: [Int]
@@ -261,6 +275,8 @@ struct RobotConfig: Decodable {
     let blink: BlinkInfo?
     let displayAnimations: [DisplayAnimation]?
     let flipbook: FlipbookInfo?
+    // since generator 1.12
+    let emitters: [EmitterInfo]?
 
     /// Static motifs and animated ones (flipbook).
     var allDisplays: [String] { displays + (displayAnimations ?? []).map(\.name) }

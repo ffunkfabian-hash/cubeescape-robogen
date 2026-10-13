@@ -88,6 +88,14 @@ Modell, QA, Clip-Daten und Typ-Maße sind identisch mit 1.9. Techniken für Cube
 (normiert: Stärke = bedeckter Anteil), Werkstoffe Holz, Stein, Sand, Papier, Beton, Messing, Platine, Abnutzung je
 Skin, 47 Skins (9 neue), Gegenüberstellung `Previews/weathering.png`, Look-Format 4, Viewer und Unity-Testpaket.
 
+**1.12 Bolt-On veröffentlicht** (13.10., v1.12.0): 14 Aufsätze (Grubenhelm mit Stirnlampe, Samurai-Helm, Stacheln,
+Ohren, Satellitenschüssel, Schornstein mit Rauch, Heiligenschein, Blattspross; neuer Slot Ohren mit Linsenauge,
+Zahnrädern, Zifferblatt; Linsenringe, Helmring; Rucksack mit Taschen), 10 neue Robotertypen, die zusammen jeden
+Aufsatz tragen – so prüft die QA jeden in allen 71 Clips, ohne Durchdringung. 62 Skins (15 neue, Forest mit Moos und
+Spross), Abzeichen Stern, Zahnrad, Blatt (dritte Maske; der Viewer packt die gewählten Abzeichen je Look).
+Nachschwingen für Umhang und Antenne als gebackene Federknochen, Typ-Emotes HatTip (Gentleman) und FlagWave (King),
+Schornsteinrauch als Emitter-Daten. Kletter-Ausblendung um HatTip ergänzt.
+
 ## Spiel-Versionen
 
 Fünf Spielversionen holen den Roboter ins Spiel; jede ist für sich spielbar. Die Nummern werden beim Start vergeben (je Auftrag Minor +1), hier gezählt ab 0.44.
@@ -109,8 +117,10 @@ Neunzehn weitere Punkte (zwei Vorschläge vom 12. Oktober 2026 wurden in Generat
 - [ ] **Treffer-Kapseln pro Knochen** als Daten für Treffererkennung und eine spätere Ragdoll – vor Spiel 0.44 (Daten), genutzt ab 0.48
 - [x] **Animierte Display-Motive** wie Herzschlag, Ladekreisel, Sprechen als Flipbook-Atlas – umgesetzt in Generator 1.10 (Heartbeat, Spinner, Talk)
 - [x] **Abnutzungsstufen** von sauber bis verbeult als Masken-Kanal – umgesetzt in Generator 1.11 (Regler 0 sauber, 0,5 gebacken, 1 verbeult)
-- [ ] **Typ-eigene Emotes:** Gentleman lüftet den Hut, King schwenkt die Fahne – Generator 1.12
-- [ ] **Nachschwingen** für Umhang und Antenne – Generator 1.12
+- [x] **Typ-eigene Emotes:** Gentleman lüftet den Hut, King schwenkt die Fahne – umgesetzt in Generator 1.12 (HatTip:
+  der Hut reitet auf der Hand; FlagWave; je Typ in `robotTypes[].emote`, QA nur mit dem eigenen Typ)
+- [x] **Nachschwingen** für Umhang und Antenne – umgesetzt in Generator 1.12 (gebackene Federknochen `Cape`,
+  `Antenna`, Fahrtwind in den Lauf-Clips)
 - [ ] **Servo-Geräusch-Ereignisse** aus der Gelenkgeschwindigkeit berechnet (in die Clip-Daten wie die Fußschritte) – vor Spiel 0.44
 - [x] **Viewer:** GIF- oder Video-Export und A/B-Vergleich zweier Looks – umgesetzt in Generator 1.10 (GIF und MP4, auch per Kommandozeile)
 - [x] **Unity-Testpaket** in einem separaten, leeren Unity-Projekt; das Spiel bleibt unberührt – umgesetzt in Generator 1.10.1 (`unity/run_testbed.sh`: 20 Prüfungen, 8 EditMode-Tests, Screenshots aller Skins und Typen); fand gleich einen Fehler: der Roboter schaute in Unity nach −Z

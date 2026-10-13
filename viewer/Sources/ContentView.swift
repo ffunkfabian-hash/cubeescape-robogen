@@ -3,6 +3,13 @@ import SceneKit
 import SwiftUI
 import UniformTypeIdentifiers
 
+/// Clip position for the timeline. Its own object: published every frame on the model, it made SwiftUI rebuild the
+/// whole sidebar 60 times a second (the viewer stuttered); only the playback bar observes this one.
+@MainActor
+final class Playhead: ObservableObject {
+    @Published var progress = 0.0
+}
+
 @MainActor
 final class ViewerModel: ObservableObject {
     let data: RobotData
@@ -20,7 +27,8 @@ final class ViewerModel: ObservableObject {
     @Published var turntable = false { didSet { pushPlayback() } }
     @Published var showFloor = true { didSet { robot.showFloor = showFloor } }
     @Published var showProps = true { didSet { robot.showProps = showProps } }
-    @Published var progress = 0.0
+    let playhead = Playhead()
+    var progress: Double { playhead.progress }
     @Published var status = ""
 
     init(data: RobotData) {
@@ -33,7 +41,10 @@ final class ViewerModel: ObservableObject {
         clip = data.doc.animations.first { $0.name == "Idle" }
         robot.play(clip)
         robot.onFrame = { [weak self] p in
-            DispatchQueue.main.async { self?.progress = p }
+            DispatchQueue.main.async {
+                guard let head = self?.playhead, abs(head.progress - p) > 0.002 else { return }
+                head.progress = p
+            }
         }
     }
 
@@ -287,19 +298,7 @@ struct ContentView: View {
                         Toggle("Hilfsobjekte", isOn: $model.showProps).toggleStyle(.button)
                             .help("Kante, Stange, Leiter oder Kiste aus den Clip-Daten einblenden")
                     }
-                    if let c = model.clip {
-                        HStack {
-                            Button(model.playing ? "Pause" : "Play") { model.playing.toggle() }
-                                .keyboardShortcut(.space, modifiers: [])
-                            Text(c.name).font(.headline)
-                            Slider(value: Binding(get: { model.progress }, set: { model.seek($0) }))
-                                .frame(width: 220)
-                            Text("Tempo")
-                            Slider(value: $model.speed, in: 0.1...2.0).frame(width: 110)
-                            Text(String(format: "%.1fx", model.speed)).monospacedDigit()
-                        }
-                    }
-                    if !model.clipInfo.isEmpty { Text(model.clipInfo).font(.caption).monospacedDigit() }
+                    PlaybackBar(model: model, playhead: model.playhead)
                     if !model.status.isEmpty { Text(model.status).font(.caption).foregroundStyle(.secondary) }
                 }
                 .padding(10)
@@ -571,5 +570,29 @@ struct Sidebar: View {
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color(nsColor: .controlBackgroundColor).opacity(0.6), in: RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+
+/// Play/pause, timeline, tempo and the clip's game data: the only view that follows the clip position every frame.
+struct PlaybackBar: View {
+    @ObservedObject var model: ViewerModel
+    @ObservedObject var playhead: Playhead
+
+    var body: some View {
+        if let c = model.clip {
+            HStack {
+                Button(model.playing ? "Pause" : "Play") { model.playing.toggle() }
+                    .keyboardShortcut(.space, modifiers: [])
+                Text(c.name).font(.headline)
+                Slider(value: Binding(get: { playhead.progress }, set: { model.seek($0) }))
+                    .frame(width: 220)
+                Text("Tempo")
+                Slider(value: $model.speed, in: 0.1...2.0).frame(width: 110)
+                Text(String(format: "%.1fx", model.speed)).monospacedDigit()
+            }
+        }
+        let info = model.clipInfo
+        if !info.isEmpty { Text(info).font(.caption).monospacedDigit() }
     }
 }

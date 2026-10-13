@@ -3,6 +3,13 @@
 Versionen des Roboter-Generators (zählen getrennt von Cube Escape und Cubegen). Jede Version hat einen Tag
 `v<Version>` und einen Release-Branch `release/<Version>`.
 
+## 1.12.2 „Bolt-On“ – 2026-10-13
+
+* **Behoben: Viewer ruckelte.** Die Abspielposition war ein veröffentlichter Wert des Hauptmodells und wurde jedes
+  Bild gesetzt – SwiftUI baute dadurch 60-mal pro Sekunde die ganze Seitenleiste (62 Skins, Slots, Regler) neu auf.
+  Die Position liegt jetzt in einem eigenen kleinen Objekt (`Playhead`), das nur die Abspielleiste beobachtet, und
+  wird nur bei sichtbarer Änderung gesetzt.
+
 ## 1.12.1 „Bolt-On“ – 2026-10-13
 
 * **Behoben: Viewer stürzte ab** (`Sidebar.badgeRow`), wenn die Liste der Abzeichen kürzer wurde – Skin mit weniger

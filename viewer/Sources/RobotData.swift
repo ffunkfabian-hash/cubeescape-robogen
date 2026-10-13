@@ -95,6 +95,10 @@ struct Skin: Decodable, Identifiable {
     let finish: String?
     let badges: [Badge]?
     let lines: Lines?
+    // since generator 1.13
+    struct Special: Decodable { let id: String; let color: [Double]; let color2: [Double]; let strength: Double
+                                let speed: Double }
+    let special: Special?
     let parts: [String: String]?
     let expression: String?
     let display: String?
@@ -151,6 +155,18 @@ struct DisplayAnimation: Decodable {
     let row: Int
     let frames: Int
     let fps: Double
+}
+
+/// Special material (1.13): defaults and the description for the later URP material.
+struct SpecialInfo: Decodable, Identifiable {
+    let id: String
+    let label: String
+    let description: String
+    let urp: String
+    let color: [Double]
+    let color2: [Double]
+    let strength: Double
+    let speed: Double
 }
 
 /// Particle emitter of an accessory (1.12): position/direction in character space (right, up, forward).
@@ -277,6 +293,8 @@ struct RobotConfig: Decodable {
     let flipbook: FlipbookInfo?
     // since generator 1.12
     let emitters: [EmitterInfo]?
+    // since generator 1.13
+    let specials: [SpecialInfo]?
 
     /// Static motifs and animated ones (flipbook).
     var allDisplays: [String] { displays + (displayAnimations ?? []).map(\.name) }

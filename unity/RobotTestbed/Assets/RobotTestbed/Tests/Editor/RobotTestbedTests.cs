@@ -70,6 +70,23 @@ namespace RobotTestbed.Tests
         }
 
         [Test]
+        public void V4LookGetsNoSpecialMaterial()
+        {
+            var l = Load("look_v4.json", new List<string>());
+            Assert.AreEqual("Gentleman", l.Name);
+            Assert.AreEqual("None", l.Special);
+        }
+
+        [Test]
+        public void UnknownSpecialMaterialFallsBack()
+        {
+            var warnings = new List<string>();
+            var l = Load("look_v5_unknown_special.json", warnings);
+            Assert.AreEqual("None", l.Special);
+            Assert.IsTrue(warnings.Exists(w => w.Contains("Spezialmaterial")));
+        }
+
+        [Test]
         public void FutureLookVersionIsRejected()
         {
             Assert.Throws<FormatException>(() => Load("look_future_version.json", new List<string>()));

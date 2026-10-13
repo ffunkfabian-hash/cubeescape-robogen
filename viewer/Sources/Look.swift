@@ -83,13 +83,52 @@ struct LayerLook: Codable, Equatable {
     var color: RGB
 }
 
+/// Special material (version 5): "None" or an ID from robot_config.json > specials; a runtime effect on top of the
+/// skin (glass, hologram, glitch, iridescence, sketch, rainbow, galaxy).
+struct SpecialLook: Codable, Equatable {
+    var id: String = "None"
+    var color = RGB(1, 1, 1)
+    var color2 = RGB(1, 1, 1)
+    var strength: Double = 1.0
+    var speed: Double = 1.0
+
+    enum CodingKeys: String, CodingKey { case id, color, color2, strength, speed }
+
+    init(id: String = "None", color: RGB = RGB(1, 1, 1), color2: RGB = RGB(1, 1, 1), strength: Double = 1.0,
+         speed: Double = 1.0) {
+        self.id = id; self.color = color; self.color2 = color2; self.strength = strength; self.speed = speed
+    }
+
+    /// Missing fields take their defaults (hand-written or older looks).
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let d = SpecialLook()
+        id = try c.decodeIfPresent(String.self, forKey: .id) ?? d.id
+        color = try c.decodeIfPresent(RGB.self, forKey: .color) ?? d.color
+        color2 = try c.decodeIfPresent(RGB.self, forKey: .color2) ?? d.color2
+        strength = try c.decodeIfPresent(Double.self, forKey: .strength) ?? d.strength
+        speed = try c.decodeIfPresent(Double.self, forKey: .speed) ?? d.speed
+    }
+
+    /// "None" is written as {"id": "None"} like the generator writes it.
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        guard id != "None" else { return }
+        try c.encode(color, forKey: .color)
+        try c.encode(color2, forKey: .color2)
+        try c.encode(strength, forKey: .strength)
+        try c.encode(speed, forKey: .speed)
+    }
+}
+
 /// Everything the player can customise. Saved/loaded as JSON ("Look", schema: robot_look.schema.json).
 /// Names of skins, variants, expressions, displays, badges and line patterns are permanent IDs. Older files are
 /// migrated on load: version 1 (viewer 1.6, without format/version) and version 2 (1.7-1.9, without skin, badges
 /// and lines) take the defaults for missing fields; a version 2 look keeps its colours and gets skin "Custom".
 struct Look: Codable, Equatable {
     static let format = "CubeEscapeRobotLook"
-    static let currentVersion = 4
+    static let currentVersion = 5
     static let wearDefault = 0.5
     static let maxBadges = 2
 
@@ -117,10 +156,12 @@ struct Look: Codable, Equatable {
     var material = MaterialLook()
     var layers: [LayerLook] = []
     var wear: Double = Look.wearDefault
+    var special = SpecialLook()
 
     enum CodingKeys: String, CodingKey {
         case format, version, name, variants, armor, mech, metal, lights, screen, eyes, visor, fabric, finish, glow,
-             expression, display, autoExpression, autoDisplay, skin, armor2, zones2, badges, lines, material, layers, wear
+             expression, display, autoExpression, autoDisplay, skin, armor2, zones2, badges, lines, material, layers, wear,
+             special
     }
 
     init() {}
@@ -163,6 +204,8 @@ struct Look: Codable, Equatable {
         material = try c.decodeIfPresent(MaterialLook.self, forKey: .material) ?? MaterialLook()
         layers = try c.decodeIfPresent([LayerLook].self, forKey: .layers) ?? []
         wear = try c.decodeIfPresent(Double.self, forKey: .wear) ?? Look.wearDefault
+        // version 5: no special material
+        special = try c.decodeIfPresent(SpecialLook.self, forKey: .special) ?? SpecialLook()
     }
 
     func encode(to encoder: Encoder) throws {
@@ -189,6 +232,7 @@ struct Look: Codable, Equatable {
         try c.encode(material, forKey: .material)
         try c.encode(layers, forKey: .layers)
         try c.encode(wear, forKey: .wear)
+        try c.encode(special, forKey: .special)
     }
 
     /// Replaces unknown IDs with defaults (e.g. a look saved by a newer generator) and clamps values.
@@ -251,6 +295,14 @@ struct Look: Codable, Equatable {
             l.layers.append(LayerLook(id: ly.id, amount: min(max(ly.amount, 0), 1), color: ly.color.clamped))
         }
         l.wear = min(max(wear, 0), 1)
+        if special.id != "None" && !(config.specials ?? []).contains(where: { $0.id == special.id }) {
+            warnings.append("Spezialmaterial „\(special.id)“ unbekannt")
+            l.special = SpecialLook()
+        }
+        l.special.strength = min(max(special.strength, 0), 1)
+        l.special.speed = min(max(special.speed, 0), 4)
+        l.special.color = l.special.color.clamped
+        l.special.color2 = l.special.color2.clamped
         l.glow = min(max(glow, 0.2), 2.5)
         for kp in [\Look.armor, \.mech, \.metal, \.lights, \.screen, \.eyes, \.visor, \.fabric] {
             l[keyPath: kp] = l[keyPath: kp].clamped
@@ -273,6 +325,8 @@ struct Look: Codable, Equatable {
         material = s.material.map { MaterialLook(id: $0.id, color: RGB($0.color)) } ?? MaterialLook()
         layers = (s.layers ?? []).map { LayerLook(id: $0.id, amount: $0.amount, color: RGB($0.color)) }
         wear = s.wear ?? Look.wearDefault
+        special = s.special.map { SpecialLook(id: $0.id, color: RGB($0.color), color2: RGB($0.color2),
+                                              strength: $0.strength, speed: $0.speed) } ?? SpecialLook()
         if let ln = s.lines {
             lines = LineLook(pattern: ln.pattern, color: RGB(ln.color), strength: ln.strength)
         } else {

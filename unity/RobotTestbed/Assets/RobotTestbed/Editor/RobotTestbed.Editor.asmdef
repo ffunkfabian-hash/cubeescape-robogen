@@ -1,7 +1,15 @@
 {
   "name": "RobotTestbed.Editor",
   "rootNamespace": "RobotTestbed.Editor",
-  "references": ["RobotTestbed", "Unity.RenderPipelines.Universal.Runtime", "Unity.RenderPipelines.Core.Runtime"],
-  "includePlatforms": ["Editor"],
+  "references": [
+    "RobotTestbed",
+    "Unity.RenderPipelines.Universal.Runtime",
+    "Unity.RenderPipelines.Core.Runtime",
+    "UnityEditor.TestRunner",
+    "UnityEngine.TestRunner"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
   "autoReferenced": true
 }

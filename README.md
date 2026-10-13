@@ -1,11 +1,12 @@
-# Cube Escape – Roboter-Charakter (Generator 1.12.0)
+# Cube Escape – Roboter-Charakter (Generator 1.13.0)
 
 Der spielbare Roboter aus dem Cube-Escape-Keyart, vollständig per Skript erzeugt: Geometrie mit Bauteil-Varianten
 und Accessoires, Materialien, gebackene Texturen (Detail- und Ausdrucks-Texturen per ImageMagick), Rig mit Bein- und
 Arm-IK, 71 Animationen, maschinenlesbare Clip-Daten fürs Spiel, automatische QA, Vorschaurender, `.blend`,
 Unity-fertige `.fbx` (Standard, modular und je Robotertyp) und ein eigener **Robot Viewer** zum Anpassen: 71
-Animationen in 8 Gruppen (darunter zwei Typ-Emotes), 62 Skins als Daten (Palette mit Zweitfarbe, Oberfläche,
-Werkstoff, Abzeichen, Leuchtlinien, Schichten wie Rost, Moos, Frost, Glutrisse, Tarnung, Abnutzung), 33
+Animationen in 8 Gruppen (darunter zwei Typ-Emotes), 71 Skins als Daten (Palette mit Zweitfarbe, Oberfläche,
+Werkstoff, Abzeichen, Leuchtlinien, Schichten wie Rost, Moos, Frost, Glutrisse, Tarnung, Abnutzung, Spezialmaterialien
+Glas, Hologramm, Glitch, Schillern, Skizze, Regenbogen, Galaxie), 33
 Augen-Ausdrücke, 16 Display-Motive und 3 animierte, 34 Accessoires (Umhang und Antenne schwingen nach, der Schornstein
 raucht), 24 Robotertypen, Skin-Bogen im Stil der Konzeptbilder und UI-Icons.
 **Das Spielprojekt wurde nicht verändert** – dieser Ordner steht für sich.
@@ -22,13 +23,14 @@ raucht), 24 Robotertypen, Skin-Bogen im Stil der Konzeptbilder und UI-Icons.
 | `data/skins.json` | **Skins als Daten** (Format `CubeEscapeRobotSkins` 1): Palette, Zweitfarben-Zonen, Oberfläche, Werkstoff, Schichten, Abnutzung, Abzeichen, Leuchtlinien, Teile, Ausdruck, Display, Stufe/Startset |
 | `data/concept_palettes.json`, `docs/concepts/` | Farbpunkte der Konzeptbögen (`scripts/concept_palettes.py`) und die Bögen selbst |
 | `output/CubeEscape_Robot.fbx` | Unity: Standard-Look als 1 Mesh (3 Materialien) + Rig + 71 Takes |
+| `output/LOD/`, `output/Types/LOD/` | Unity: Detailstufen LOD1/LOD2 (≈ 6 000 / 2 500 Dreiecke) je FBX, gleiches Rig, ohne Takes |
 | `output/CubeEscape_Robot_Modular.fbx` | Unity: alle Bauteil-Varianten und Accessoires als einzelne Meshes am selben Rig (ohne Animation) |
 | `output/Types/CubeEscape_Robot_<Typ>.fbx` | Unity: jeder Robotertyp fertig kombiniert als 1 Mesh + Rig (ohne Animation, Clips aus der Haupt-FBX) |
 | `output/Looks/<Typ>.robotlook.json`, `output/robot_look.schema.json` | Look je Robotertyp im Spielstand-Format (Version 2) und JSON-Schema dazu |
 | `output/CubeEscape_Robot.blend` | Blender-Szene: Standard-Mesh, `Robot_Parts` (alle Teile), Rig, NLA-Spur je Animation |
 | `output/robot_config.json` | Slots, Varianten, Robotertypen (mit Maßen), Skins, Ausdrücke, Display-Motive, Atlas-Zellen und **Clip-Daten** (für Unity) |
 | `output/ANIMATIONS.md` | automatisch erzeugte Clip-Liste (Frames, Loop, Grundtempo, Höhe, Schritt-Frames, Unity-Hinweise) |
-| `output/Textures/` | 2048² PNGs: BaseColor/Emission je Skin, MetallicSmoothness, Normal, Occlusion, ColorMask, LightMask, **Masken** (Badge ×3, Line ×2, Zone ×2, Layer ×2, Material ×2), Eye-Atlas (2048 × 2560), Display-Atlas, Display-Flipbook |
+| `output/Textures/` | 2048² PNGs: BaseColor/Emission je Skin, MetallicSmoothness, Normal, Occlusion, ColorMask, LightMask, **Masken** (Badge ×3, Line ×2, Zone ×2, Layer ×2, Material ×2), Eye-Atlas (2048 × 2560), Display-Atlas, Display-Flipbook; `Unity/T_Robot_U_*.png`: die Masken für Unity gepackt (10 statt 14 Texturen, ≤ 1024²) |
 | `output/Icons/` | UI-Icons 256²: `Skins/`, `Expressions/`, `Displays/`, `Badges/`, `Accessories/` |
 | `output/ViewerData/` | Daten für den Viewer (Geometrie, Rig, Animationen, Texturen) |
 | `output/Previews/` | Ansichten, Typen, Skins, **Skin-Bogen** (`skin_sheet.png`), **Silhouetten**, **Gegenüberstellung** der Schichten, Werkstoffe und Abnutzung (`weathering.png`), Ausdrücke, Kontaktbögen je Phase, GIFs |
@@ -42,6 +44,7 @@ raucht), 24 Robotertypen, Skin-Bogen im Stil der Konzeptbilder und UI-Icons.
 | `viewer/` | Quellcode des Viewers (SwiftUI + SceneKit), `build.sh`, `test_viewer.sh` und Test-Looks in `tests/` |
 | `docs/TECHNIK.md` | **Techniken und Lehren** des Generators – Übertrag auf den Cubegen-Modell-Editor |
 | `unity/RobotTestbed/`, `unity/run_testbed.sh` | **Unity-Testpaket:** eigenes URP-Projekt (nie das Spiel), importiert die Ausgabe, prüft und rendert sie |
+| `.agents/skills/` | Skills für Agenten: `rg-unity-testbed`, `rg-unity-integration` (`.claude/skills` verweist darauf) |
 | `output/UnityTestbed/` | Bericht des Testpakets: `report.json`, `tests.xml`, Logs, Screenshots und Bögen `unity_*.png` |
 
 ## Neu erzeugen
@@ -191,6 +194,9 @@ Fahrplan: [docs/FAHRPLAN.md](docs/FAHRPLAN.md); Techniken und Lehren (für Cubeg
 - **Farben:** 62 Skins als Startpunkt (★ = Startset), Thema darunter; ein Skin setzt Farben, Oberfläche, Zweitfarbe,
   Abzeichen und Leuchtlinien, Retro/Orbit/Tank auch eigene Teile. Danach frei: Panzerung, Mechanik, Metall, Lichter,
   Augen, Display, Visier, Stoff; Oberfläche Standard/Matt/Satin/Glanz/Candy/Chrom.
+- **Spezialmaterial (1.13):** Glas/Kristall, Hologramm (wandernde Scanlinien), Glitch, Schillern, Skizze, Regenbogen
+  und Galaxie (animiert) mit zwei Farben, Stärke und Tempo; Wirkung zur Laufzeit über dem Skin, Visier und Lichter
+  bleiben. Die Beschreibung fürs spätere URP-Material steht in `robot_config.json` › `specials` (`urp`).
 - **Zweitfarbe:** Farbe und Lackzonen (Kopf, Ohren, Brust, Schultern, Arme, Hüfte, Beine, Füße).
 - **Abzeichen:** bis zu zwei mit eigener Farbe – Warnstreifen, Kreuz, Wolke, Nummer, Biohazard, Schriftzeichen,
   Rennstreifen, Zielmarke, Stern, Zahnrad, Blatt (Ohrscheibe, Brust, Schulter, Oberschenkel, Rücken, Hinterkopf je nach
@@ -212,7 +218,7 @@ Fahrplan: [docs/FAHRPLAN.md](docs/FAHRPLAN.md); Techniken und Lehren (für Cubeg
 - **Hilfsobjekte:** Kante, Stange, Leiter oder Kiste an der Stelle, die der Clip voraussetzt – damit sieht man, ob
   Hände und Füße wirklich greifen.
 - **Ansicht:** Iso, Front, Side, Back, Face, Drehteller, Boden; Maus/Trackpad dreht und zoomt.
-- **Look laden/speichern** (`*.robotlook.json`, Version 4; Versionen 1 bis 3 werden übernommen, unbekannte Teile/Namen
+- **Look laden/speichern** (`*.robotlook.json`, Version 5; Versionen 1 bis 4 werden übernommen, unbekannte Teile/Namen
   durch Standardwerte ersetzt und gemeldet), **Screenshot** (1600 × 1600 PNG), **GIF** (15 fps, 600 px) und **Video**
   (MP4, 30 fps, 1080 px) der laufenden Animation.
 - **Vergleich A/B:** „Als B merken“ stellt den aktuellen Look rechts daneben (gleicher Clip, gleiche Ansicht),
@@ -279,6 +285,14 @@ Clip). `viewer/test_viewer.sh` nutzt das für Migrations-, Round-Trip- und Expor
   QA und Spiel nutzen es nur mit dessen Kopf-/Hand-Accessoire.
 - **Partikel-Emitter (1.12):** `robot_config.json` › `emitters` (Schornsteinrauch: Socket, Position, Richtung im
   Charakterraum); der Viewer zeigt den Rauch, das Spiel setzt dort ein Partikelsystem an.
+- **Spezialmaterialien (1.13):** Laufzeit-Effekt über dem fertigen Skin (`robot_config.json` › `specials`, Skin-Feld
+  `special`): Glas (Tönung, Alpha 0,35 → 0,95 am Rand, Randglanz), Hologramm (Leuchten mit Fresnel, 40 Scanlinien je
+  Meter), Glitch (12 Bänder je Meter, Zufall je Band und Takt), Schillern (Farbton aus Blickwinkel und Höhe),
+  Skizze (Papier, Tuschekontur, Schraffur im Dunkeln), Regenbogen und Galaxie (animiert, nur Panzerung). Visier und
+  Lichter bleiben. Gebacken wird nichts; ohne Effekt zeigt der Skin seine Palette.
+- **Detailstufen und Treffer-Kapseln (1.13):** LOD1/LOD2 je FBX (Decimate „Collapse“, Teile bleiben starr an ihren
+  Knochen); `hitCapsules`: 15 Kapseln (Becken, Rumpf, Kopf, Arme, Hände, Beine, Füße) im Charakterraum der Ruhepose,
+  Radius = 93. Perzentil des Abstands zur Knochenachse, je Kapsel die Abdeckung ihrer Vertices.
 
 ## Animationen
 
@@ -312,6 +326,7 @@ Charakterraum `[rechts, oben, vorn]` in Metern (= Unity-Local-Space), Winkel in 
 | `naturalSpeed` | Grundtempo eines In-place-Clips. Animator-Tempo = Spielgeschwindigkeit / `naturalSpeed` |
 | `footsteps`, `feet` | Frames mit Fußaufsatz (für Schritt-Sounds/Staub) und Bodenkontakt-Bereiche je Fuß |
 | `events` | Ereignisse wie `TakeOff` (Jump 10), `Press` (Interact 19), `Thud` (Death 37), `Clap`, `Grab`, `Arrive` |
+| `servo` | Servo-Geräusche (1.13): `[Frame, Gruppe, Stärke 0–1, Dauer]` je Bewegungsansatz von Kopf, Rumpf, Armen, Beinen – aus der Gelenkgeschwindigkeit gemessen |
 | `rootMotion` | Weg (`move`) und Drehung (`turnRight`) vom ersten zum letzten Frame |
 | `height` | kleinste/größte Körperhöhe im Clip (Kapselhöhe beim Ducken, Sitzen, Hängen) |
 | `hands` | Fingergelenke L/R je Frame (Kletter-, Hänge-, Schiebe-Clips) – zum Ausrichten an Kanten |
@@ -336,17 +351,24 @@ Materialien, Prefabs (Standard, modular, je Typ) und einen Animator mit allen Cl
   ClimbUp endet 1,20 m höher und 0,36 m vorn (+Z), der Roboter schaut nach +Z, Idle-Frame 0 steht auf y = 0 mit
   1,2–1,5 m Höhe, kein Clip unter dem Boden (jeder 4. Frame), Texturen (Farbe sRGB, Daten linear, Alpha keine
   Transparenz, Augen-Atlas ohne Skalierung), ein Prefab je Typ, alle Typ-Looks ohne Warnung, alle Skins anwendbar;
-  seit 1.12 Federknochen und Emitter-Sockets vorhanden, Umhang schwingt im Run, Antenne im Jump, HatTip hebt den Hut.
+  seit 1.12 Federknochen und Emitter-Sockets vorhanden, Umhang schwingt im Run, Antenne im Jump, HatTip hebt den Hut;
+  seit 1.13 gepackte Masken ≤ 1024², LOD1/LOD2 mit denselben Knochen und Dreiecksbudget, Treffer-Kapseln folgen ihren
+  Knochen (über die Bindposes in den Knochenraum, Run-Frame 10, > 80 % der Vertices).
 - **Screenshots** mit URP und Bloom: alle Skins, alle Typen, alle Ausdrücke, Frames aus Walk, ClimbUp, DanceRobot
   und Death → `output/UnityTestbed/unity_skins.png` usw.
-- **EditMode-Tests** (Unity Test Framework): Look-Format mit denselben Fixtures wie der Viewer (v1, v2, unbekannte
-  IDs, neuere Version), Kanalwahl der Masken, JSON-Leser, erzeugte Prefabs.
+- **EditMode-Tests** (Unity Test Framework): Look-Format mit denselben Fixtures wie der Viewer (v1–v4, unbekannte
+  IDs und Spezialmaterialien, neuere Version), Kanalwahl der Masken, JSON-Leser, erzeugte Prefabs. Seit 1.13 laufen sie
+  im selben Unity-Prozess wie die Pipeline (`TestbedTestRun`) – ein Unity-Start statt zwei.
 
 Das Projekt enthält Vorlagen für den späteren Einbau ins Spiel: `CubeEscape/RobotBody` (URP-Shader mit Zweitfarbe,
 Abzeichen, Leuchtlinien – dieselben Formeln wie Generator und Viewer), `CubeEscape/RobotScreen` (Augen/Display),
-`RobotLook` (Format 3 mit Migration), `RobotAppearance` (MaterialPropertyBlocks, Farben linear per `SetVector`),
-`RobotFace` (Atlas-Zellen, Ausdrucks-Stile, Flipbook, Blinzeln). Mit Cache dauert ein Lauf unter einer Minute; der
-erste Lauf lädt die Pakete und importiert alles (einige Minuten). Andere Ausgabe: `unity/run_testbed.sh output/_quick`.
+`RobotLook` (Format 5 mit Migration), `RobotAppearance` (MaterialPropertyBlocks, Farben linear per `SetVector`),
+`RobotFace` (Atlas-Zellen, Ausdrucks-Stile, Flipbook, Blinzeln). `RobotBody` liest seit 1.13 die gepackten Masken
+(`Textures/Unity`, Belegung in `robot_config.json` › `unityTextures`: Lackzonen als ID-Kanal mit Punktfilter, Abnutzung
+und Schmutz neben Metall/Glätte, Gelenk-Leuchtmuster und Tarnung im Hilfskanal). Mit Cache dauert ein Lauf rund eine
+halbe Minute; der erste Lauf in einem neuen Worktree importiert alles neu (einige Minuten) – vorher
+`unity/RobotTestbed/Library` aus dem alten Worktree kopieren. Andere Ausgabe: `unity/run_testbed.sh output/_quick`.
+Arbeitsanweisung für Agenten: Skill `rg-unity-testbed`; Übergabe an das Spiel: Skill `rg-unity-integration`.
 
 ## Unity-Integration (Empfehlung für später)
 
@@ -385,12 +407,12 @@ CrouchWalk/Walk/Run/RunFast/Sprint nach `naturalSpeed`. Als neue Variante neben 
 `RobotAnimator` einführen (Golden Rule). Für einen festen Robotertyp die FBX aus `output/Types/` nehmen (1 Mesh statt
 eines Meshes je Bauteil).
 
-**Spieler-Looks:** Format `CubeEscapeRobotLook` Version 4 (`robot_look.schema.json`, Beispiele in `output/Looks/`):
+**Spieler-Looks:** Format `CubeEscapeRobotLook` Version 5 (`robot_look.schema.json`, Beispiele in `output/Looks/`):
 seit Version 3 `skin`, `armor2`, `zones2`, `badges` (höchstens 2), `lines`; seit Version 4 `material`, `layers`
-(ID, Stärke, Farbe), `wear`. Namen von Skins, Bauteilen, Ausdrücken, Motiven,
-Oberflächen, Abzeichen, Mustern und Zonen sind **ewige IDs**. Versionen 1 bis 3 werden
-beim Laden übernommen (ein v2-Look behält seine Farben und heißt Skin „Custom“, v3 bekommt keinen Werkstoff, keine
-Schichten und die gebackene Abnutzung), unbekannte IDs durch Standardwerte
+(ID, Stärke, Farbe), `wear`; seit Version 5 `special` (ID, zwei Farben, Stärke, Tempo). Namen von Skins, Bauteilen,
+Ausdrücken, Motiven, Oberflächen, Abzeichen, Mustern, Zonen und Spezialmaterialien sind **ewige IDs**. Versionen 1
+bis 4 werden beim Laden übernommen (ein v2-Look behält seine Farben und heißt Skin „Custom“, v3 bekommt keinen
+Werkstoff, keine Schichten und die gebackene Abnutzung, v4 kein Spezialmaterial), unbekannte IDs durch Standardwerte
 ersetzt, neuere Versionen abgelehnt – dieselben Regeln gehören in die Spielstand-Migration. Ein neuer Slot (1.12:
 `AccEar`) braucht keine neue Version: fehlt er im Look, gilt sein Standard „None“.
 
@@ -402,10 +424,11 @@ ersetzt, neuere Versionen abgelehnt – dieselben Regeln gehören in die Spielst
 | Tempo Laufen | Clips bis Sprint ≈ 4,2 m/s; Spiel: 5 bzw. 8 m/s | Animator-Tempo = Geschwindigkeit / `naturalSpeed` (Sprint bei 8 m/s ≈ 1,9-fach) oder Spieltempo senken (Design-Entscheidung) |
 | Ducken | CrouchDeep ≈ 1,00 m, tiefer geht es mit dem großen Kopf nicht ohne Überschneidung; Spiel-Kapsel 0,65 m | Duck-Kapsel auf ≈ 1,0 m anheben (Design-Entscheidung) |
 | Kapselbreite | Rumpf + Schultern 0,70 m (Runner) bis 0,77 m, mit Armen 0,73–0,87 m (`typeBounds`); Kapsel 0,6 m | Überstand akzeptieren (üblich) oder Radius 0,35 |
-| Draw Calls | Standard und je Robotertyp: 1 Mesh, 3–4 Materialien; modular 1 Mesh je Teil | bei frei kombinierbaren Looks die Teile zur Laufzeit zu einem Skinned Mesh kombinieren |
+| Draw Calls | Standard und je Robotertyp: 1 Mesh, 3–4 Materialien, LOD1/LOD2 (1.13); modular 1 Mesh je Teil | bei frei kombinierbaren Looks die Teile zur Laufzeit zu einem Skinned Mesh kombinieren |
 | Spieler-Looks | Format, Schema, Migration und Beispiele fertig, Viewer getestet | im Spiel in den Spielstand übernehmen (`SaveData`-Migration) |
 | Robot Viewer | Universal-App ab macOS 13, lokal (ad hoc) signiert | für Weitergabe mit einer Apple-Developer-ID signieren und notarisieren |
-| Masken im Spiel | seit 1.12 elf RGBA-Masken à 2048² (Abzeichen ×3, Linien, Zonen, Schichten, Werkstoffe) | für Unity packen: Zonen und Gelenke als ID-Kanal, die zwei gewählten Abzeichen in eine Textur (wie der Viewer seit 1.12), Felder in 1024², nur genutzte Werkstoff-Kanäle laden |
+| Masken im Spiel | seit 1.13 für Unity gepackt (`Textures/Unity`, 10 Texturen ≤ 1024², Testbett-Shader nutzt sie) | im Spiel übernehmen; später die zwei gewählten Abzeichen je Look in eine Textur packen (wie der Viewer) |
+| Spezialmaterialien im Spiel | Viewer und Vorschau zeigen alle sieben, `specials[].urp` beschreibt das URP-Material | Spielversion „Spektrum“: URP-Varianten (Glas/Hologramm transparent) mit Fallback |
 | Leuchten im Spiel | Skin-Karten nutzen Bloom (Schwelle über der Beleuchtung) | URP-Bloom so einstellen, dass nur Emission strahlt |
 | Rauch im Spiel | `emitters` (Schornstein) mit Socket, Position, Richtung; Viewer zeigt ihn | Partikelsystem am Socket, nur wenn der Aufsatz sichtbar ist |
 

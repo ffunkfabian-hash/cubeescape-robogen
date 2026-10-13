@@ -41,6 +41,8 @@ MASK_TEXTURES = ["T_Robot_BadgeMask.png", "T_Robot_BadgeMask2.png", "T_Robot_Bad
                  "T_Robot_ZoneMask.png", "T_Robot_ZoneMask2.png",       # 1.10: RGBA masks (alpha = a mask channel)
                  "T_Robot_LayerMask.png", "T_Robot_LayerMask2.png", "T_Robot_MaterialMask.png",
                  "T_Robot_MaterialMask2.png"]                            # 1.11
+START_SET_1_13 = {"Glass", "Ghost", "Aurora", "Rainbow"}
+SPECIALS_1_13 = ["Glass", "Hologram", "Glitch", "Iridescent", "Sketch", "Rainbow", "Galaxy"]
 START_SET_1_12 = {"Miner", "Samurai", "Steam", "Signal", "Wood", "Celest"}
 START_SET_1_11 = {"Rust", "Moss", "Arctic", "Inferno", "Circuit"}
 # 1.12 Bolt-On: attachments that a robot type must carry (so that the QA of all types covers them in every clip)
@@ -499,6 +501,58 @@ def verify_bolton():
     check("springs: cape lifts in Run (> 10 deg), loops close", run[2] > 10 and all(x[3] < 0.5 for x in angles), angles)
 
 
+def verify_spectral():
+    """1.13: special materials, look format 5, Unity mask packs, detail levels, hit capsules, servo events."""
+    cfg = json.load(open(os.path.join(OUT, "robot_config.json"), encoding="utf-8"))
+    specials = [sp["id"] for sp in cfg.get("specials", [])]
+    check("specials: 7 special materials with description and URP note", specials[:7] == SPECIALS_1_13 and
+          all(sp["description"] and sp["urp"] for sp in cfg["specials"]), specials)
+    skins = {sk["name"]: sk for sk in cfg["skins"]}
+    bad = [n for n, sk in skins.items() if sk.get("special") and sk["special"]["id"] not in specials]
+    check("skins: special materials known", not bad, bad)
+    used = {sk["special"]["id"] for sk in skins.values() if sk.get("special")}
+    check("skins: every special material used by a skin", used == set(specials), sorted(set(specials) - used))
+    start13 = {n for n, sk in skins.items() if sk["startSet"] and sk["stage"] == "1.13"}
+    check("skins: start set of stage 1.13", start13 == START_SET_1_13, sorted(start13 ^ START_SET_1_13))
+    check("skins: at least 71 (9 new in 1.13)", len(skins) >= 71, len(skins))
+    looks = [json.load(open(os.path.join(OUT, "Looks", f), encoding="utf-8")) for f in os.listdir(os.path.join(OUT, "Looks"))]
+    check("looks: format version 5 with a special field", looks and all(lk["version"] == 5 and "special" in lk
+                                                                         for lk in looks), len(looks))
+    # Unity mask packs: present, at most 1024², zone ID consistent with the zone masks
+    tex = os.path.join(OUT, "Textures")
+    ut = [u["file"] for u in cfg.get("unityTextures", [])]
+    missing = [u for u in ut if not os.path.exists(os.path.join(tex, u))]
+    check("unity: 10 packed mask textures present", len(ut) == 10 and not missing, missing)
+    if not missing and ut:
+        aux = mask_planes(tex, "Unity/T_Robot_U_Aux.png")
+        n = aux.shape[0]
+        check("unity: packed masks at most 1024²", n <= 1024, n)
+        z1, z2 = mask_planes(tex, "T_Robot_ZoneMask.png"), mask_planes(tex, "T_Robot_ZoneMask2.png")
+        zones = np.concatenate([z1, z2], axis=-1)
+        step = zones.shape[0] // n
+        zs = zones[::step, ::step]
+        want = np.where(zs.max(axis=-1) > 0.5, zs.argmax(axis=-1) + 1, 0)
+        got = np.round(aux[..., 1] * 8).astype(int)
+        check("unity: zone ID channel matches the zone masks (> 98 %)", float((want == got).mean()) > 0.98,
+              round(float((want == got).mean()), 4))
+    # detail levels
+    rep = json.load(open(os.path.join(OUT, "logs", "robot_report.json"), encoding="utf-8"))
+    lods = rep.get("lods", {})
+    bad = [k for k, v in lods.items() if not (v["LOD1"] <= 6300 and v["LOD2"] <= 2650 and v["LOD2"] < v["LOD1"] < v["LOD0"])]
+    files = [os.path.join(OUT, "LOD", "CubeEscape_Robot_LOD%d.fbx" % i) for i in (1, 2)]
+    check("lod: LOD1/LOD2 for the robot and every type within 6000/2500 triangles",
+          len(lods) == 1 + len(cfg["robotTypes"]) and not bad and all(os.path.exists(f) for f in files), bad or len(lods))
+    caps = cfg.get("hitCapsules", [])
+    cov = [c["coverage"] for c in caps]
+    check("capsules: 15 hit capsules covering their bones (mean > 80 %, each > 60 %)",
+          len(caps) == 15 and sum(cov) / len(cov) > 0.8 and min(cov) > 0.6, {c["bone"]: c["coverage"] for c in caps})
+    clips = cfg["clips"]
+    walk = {e[1] for e in clips["Walk"]["servo"]}
+    check("servo: events in every clip's data, legs in Walk, none in Idle",
+          all("servo" in c for c in clips.values()) and {"Leg_L", "Leg_R"} <= walk and not clips["Idle"]["servo"],
+          sorted(walk))
+
+
 def main():
     print("== verify %s" % bpy.data.filepath)
     ref = verify_blend()
@@ -511,6 +565,7 @@ def main():
     verify_looks()
     verify_paintjob()
     verify_bolton()
+    verify_spectral()
     ok = all(r["ok"] for r in results)
     os.makedirs(os.path.join(OUT, "logs"), exist_ok=True)
     with open(os.path.join(OUT, "logs", "verify_report.json"), "w", encoding="utf-8") as fh:

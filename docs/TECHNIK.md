@@ -1,6 +1,6 @@
 # Techniken des Roboter-Generators – Übertrag auf Cubegen
 
-Stand: Generator 1.12.0 „Bolt-On“. Diese Datei sammelt, **wie** der Generator arbeitet und was sich dabei bewährt
+Stand: Generator 1.13.0 „Spectral“. Diese Datei sammelt, **wie** der Generator arbeitet und was sich dabei bewährt
 oder als Falle erwiesen hat. Ziel: Der Modell-Editor von Cubegen soll genauso leistungsfähig werden. Jede Technik
 nennt die Fundstelle im Generator und was Cubegen davon übernehmen sollte. Pflegen bei jeder Generator-Version
 (neue Technik → neuer Abschnitt, geänderte Messwerte → hier ändern).
@@ -27,6 +27,12 @@ nennt die Fundstelle im Generator und was Cubegen davon übernehmen sollte. Pfle
 | Socket reitet auf der Hand | `ATTACHMENTS`, `bake_attachment()` | Hut lüften trotz zu kurzer Arme | Requisiten per Matrix-Kette an Knochen hängen |
 | Abzeichen je Look packen | `RobotScene.badgeTexture()` | beliebig viele Abzeichen, ein Sampler | Nur die gewählten Kanäle zur Laufzeit packen |
 | Emitter als Daten | `EMITTERS`, `robot_config.json` › `emitters` | Schornsteinrauch im Viewer, Vorlage fürs Spiel | Partikelpunkte mit Socket statt Partikel im Modell |
+| Spezialmaterial als Laufzeit-Effekt | `SPECIALS`, `preview_special_nodes()`, Viewer-Shader | 7 Effekte ohne neue Texturen, gleiche Formeln in Vorschau und Viewer | Effekte als Daten mit Beschreibung fürs Zielmaterial |
+| Masken für Unity packen | `unity_textures()`, `UNITY_TEXTURES` | 14 → 10 Texturen, ¼ Pixel, Zonen als ID | Laufzeit-Masken packen, Belegung als Daten |
+| LOD per Collapse | `make_lod()`, `export_lods()` | 6 000 / 2 500 Dreiecke, gleiche Knochen | Detailstufen automatisch je Modell |
+| Treffer-Kapseln gemessen | `hit_capsules()` | 15 Kapseln, 95–100 % Abdeckung | Kollisionsformen aus der Geometrie messen |
+| Servo-Ereignisse | `servo_events()` | Klang-Ereignisse aus Gelenkgeschwindigkeit | Ereignisse aus Bewegung ableiten statt setzen |
+| Ein Unity-Start | `TestbedTestRun` | Testbett 25–30 → 12 s | Tests im selben Batch-Prozess wie der Import |
 
 ## 1. Skin = Daten
 
@@ -236,7 +242,42 @@ Materialien und Screenshots automatisch prüft.
 **Für Cubegen:** Anbauteile als Varianten mit Socket, Prüfkombinationen, die jede Variante abdecken; nachschwingende
 Teile (Kabel, Fahnen, Antennen) gebacken; Requisiten über Matrix-Ketten; Partikelpunkte als Daten.
 
-## 11. Prüfen
+## 11. Spezialmaterialien, Unity-Packen, LOD, Kapseln, Servo (1.13)
+
+- **Spezialmaterial = Laufzeit-Effekt über dem Skin.** Nichts wird gebacken; der Skin liefert die Grundfarbe, der
+  Effekt mischt sie. Formeln (h = Höhe, x = Seite in m, f = (1 − |n·v|)³, s = Stärke, t = Zeit × Tempo):
+  Glas `mix(c, A, 0,6 s)`, Alpha `0,35 + 0,6 f`, Rand `B · f · 0,25`; Hologramm Farbe `A · 0,15`, Leuchten
+  `A (0,35 + 1,6 f) · Scan`, `Scan = 0,65 + 0,35 · step(0,5, frac(40 h − 0,5 t))`, Alpha `(0,25 + 0,6 f) · Scan`;
+  Glitch Band `floor(12 h) + 13 floor(6 t)`, Zufall > 0,78 → A, > 0,9 → B; Schillern Farbton `frac(1,2 f + 0,35 h)`,
+  Sättigung 0,55; Skizze Kontur `smoothstep(0,25, 0,5, 1 − |n·v|)`, Schraffur `step(0,7, frac(45 (x + h)))` wo
+  `1 − 1,6 · Helligkeit` > 0; Regenbogen `frac(0,8 h + 0,3 x + 0,15 t)`; Galaxie Wertrauschen (3 Oktaven, Maßstab 3)
+  zwischen A und B, Sterne auf einem 120/m-Zellraster. Visier und Lichter (nichts in der Farbmaske) bleiben.
+- **Vorschau und Viewer gleich halten:** Blender bekommt je Effekt einen Knotenzweig, Wertknoten `SpecialW_<id>`
+  schalten ihn (0/1); der Viewer rechnet dieselben Formeln im Metal-Shader (Modus = Position in `specials`). Glas und
+  Hologramm brauchen in SceneKit `transparencyMode = .dualLayer` und eine Transparenz knapp unter 1, sonst bleibt das
+  Material im opaken Durchgang; Alpha kommt aus `_surface.diffuse.a` / `_surface.transparent`.
+- **Beschreibung fürs Zielmaterial als Daten:** jeder Eintrag in `specials` trägt `urp` – so muss die spätere
+  Spielversion nichts aus dem Code lesen.
+- **Masken für Unity packen (`unity_textures`):** wie der Viewer beim Laden: Farbmaske + Lichter, Metall + Abnutzung +
+  Schmutz + Glätte, Hilfstextur (Gelenk-Leuchtmuster, Zonen-ID, Tarnung), dann Schichten, Linien, Werkstoffe,
+  Abzeichen je RGBA – höchstens 1024² (2×2-Mittel). Die Zonen-ID entsteht aus den Zonenmasken (Maximum > 0,5) und wird
+  im Shader mit Punktfilter und Mip 0 gelesen; `verify_robot.py` vergleicht sie mit den Masken (> 98 % gleich).
+- **LOD per Decimate „Collapse“:** Inseln bleiben getrennt, also bleiben starre Teile an ihrem Knochen; danach
+  „Smooth by Angle“ (38°), weil die gewichteten Normalen verloren gehen. Dreiecksbudget je Stufe, Export ohne Takes.
+- **Treffer-Kapseln messen:** je Knochen Achse aus dem Rig, Radius = 93. Perzentil des Abstands zur Achse, Enden
+  0,3 r innerhalb des 2./98. Perzentils entlang der Achse (kastige Teile haben ihre Ecken an den Enden – mit voller
+  Kürzung um r deckten Hand und Unterschenkel nur 55 %). Im Spiel einmal über die Bindposes in den Knochenraum.
+- **Servo-Ereignisse aus Bewegung:** Summe der Winkelgeschwindigkeit je Gelenkgruppe; Ansatz, wenn sie über 90°/s und
+  über das 1,8-Fache des letzten Tiefpunkts steigt, Ende unter 60 % der Spitze – so bekommt jeder Schritt und jeder
+  Winkschwung ein eigenes Ereignis (ein fester Ein/Aus-Schwellwert lieferte bei gleichmäßiger Bewegung nur eines).
+- **Unity-Testbett in einem Start:** die EditMode-Tests laufen per `TestRunnerApi` synchron im Pipeline-Prozess
+  (`TestbedTestRun`); der zweite Unity-Start kostete mehr als die eigentliche Arbeit (Lauf ohne Änderungen 25–30 →
+  12 s). Import parallel (`EditorSettings.refreshImportMode = OutOfProcessPerQueue`).
+
+**Für Cubegen:** Effektmaterialien als Daten mit Zielbeschreibung; Laufzeit-Masken packen; LOD und Kollisionsformen
+automatisch messen und prüfen; Unity-Prüfungen in einem Prozess bündeln.
+
+## 12. Prüfen
 
 - Teststufen `quick` / `standard` / `full` mit Zeitbudget; Worker-Pakete für QA und Renders.
 - **Bericht als Gate:** `qa`, `clips`, `type_bounds`, Dreiecke, Bones vor und nach der Änderung vergleichen – ohne
@@ -245,7 +286,7 @@ Teile (Kabel, Fahnen, Antennen) gebacken; Requisiten über Matrix-Ketten; Partik
   überlappungsfrei, Gesichter, Flipbook, Icons, Bögen); `viewer/test_viewer.sh` prüft Migrationen, unbekannte IDs,
   Round Trip und Export.
 
-## 12. Checkliste für den Cubegen-Modell-Editor
+## 13. Checkliste für den Cubegen-Modell-Editor
 
 - [ ] Looks/Paletten als versionierte Datendatei mit Loader-Prüfung und Migration
 - [ ] Farbvarianten aus einmal gebackenen Gewichtskarten zusammensetzen, Gegenprobe im Volllauf
@@ -261,3 +302,5 @@ Teile (Kabel, Fahnen, Antennen) gebacken; Requisiten über Matrix-Ketten; Partik
 - [ ] Verwitterung als normierte Felder mit Regler (Rost, Moos, Frost, Schmutz) und Werkstoff-Muster mit Grundfarbe
 - [ ] Anbauteile: jede Variante in einer geprüften Kombination, Anschmiegen per Strahl, Emitter als Daten
 - [ ] Nachschwingen gebacken (Feder je Knochen, Loops geschlossen), Requisiten per Matrix-Kette
+- [ ] Effektmaterialien (Glas, Hologramm …) als Laufzeit-Effekt mit Zielbeschreibung; Masken für die Engine packen
+- [ ] LOD-Stufen und Kollisionsformen automatisch erzeugen und in der Engine prüfen

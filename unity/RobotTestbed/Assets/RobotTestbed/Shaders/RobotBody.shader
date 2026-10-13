@@ -1,28 +1,26 @@
 // Cube Escape robot body (URP, forward). Same formulas as the generator (decorate_skin) and the viewer shader:
 // recolour by colour mask -> second armour colour in paint zones -> badges -> glow lines (albedo tint + emission).
+// Since 1.13 the masks come packed (Textures/Unity, robot_config.json > unityTextures): zones as one ID channel,
+// wear/grime next to metal/smoothness, joints and camo in the aux texture - the layout the viewer packs on load.
 // Colours are linear (set with SetVector, never SetColor - that would convert from sRGB a second time).
 Shader "CubeEscape/RobotBody"
 {
     Properties
     {
         _BaseMap ("Base colour (Classic skin)", 2D) = "white" {}
-        _MetallicSmoothness ("Metallic (R) Smoothness (A)", 2D) = "black" {}
+        _MetalWear ("Metallic (R) wear (G) grime (B) smoothness (A)", 2D) = "black" {}
         _BumpMap ("Normal", 2D) = "bump" {}
         _OcclusionMap ("Occlusion", 2D) = "white" {}
         _EmissionMap ("Emission (Classic)", 2D) = "black" {}
-        _ColorMask ("Colour mask (armour, mechanics, metal)", 2D) = "black" {}
-        _LightMask ("Light mask", 2D) = "black" {}
-        _BadgeMask ("Badge mask 1", 2D) = "black" {}
-        _BadgeMask2 ("Badge mask 2", 2D) = "black" {}
-        _BadgeMask3 ("Badge mask 3", 2D) = "black" {}
-        _LineMask ("Line mask 1", 2D) = "black" {}
-        _LineMask2 ("Line mask 2", 2D) = "black" {}
-        _ZoneMask ("Zone mask 1", 2D) = "black" {}
-        _ZoneMask2 ("Zone mask 2", 2D) = "black" {}
-        _LayerMask ("Layer mask 1 (rust, moss, frost, embers)", 2D) = "black" {}
-        _LayerMask2 ("Layer mask 2 (camo, wear, grime)", 2D) = "black" {}
-        _MaterialMask ("Material mask 1", 2D) = "white" {}
-        _MaterialMask2 ("Material mask 2", 2D) = "white" {}
+        _ColorLight ("Colour mask (armour, mechanics, metal) + lights (A)", 2D) = "black" {}
+        _Aux ("Joints (R), zone ID (G), camo (B)", 2D) = "black" {}
+        _BadgeMask ("Badges 1-4", 2D) = "black" {}
+        _BadgeMask2 ("Badges 5-8", 2D) = "black" {}
+        _BadgeMask3 ("Badges 9-12", 2D) = "black" {}
+        _LineMask ("Glow lines 1-4", 2D) = "black" {}
+        _LayerMask ("Layers (rust, moss, frost, embers)", 2D) = "black" {}
+        _MaterialMask ("Materials 1-4", 2D) = "white" {}
+        _MaterialMask2 ("Materials 5-8", 2D) = "white" {}
         _Armor ("Armour", Vector) = (0.66, 0.685, 0.72, 0)
         _Armor2 ("Second armour colour", Vector) = (0.66, 0.685, 0.72, 0)
         _Mech ("Mechanics", Vector) = (0.075, 0.08, 0.092, 0)
@@ -33,7 +31,7 @@ Shader "CubeEscape/RobotBody"
         _RefA ("Classic luminance: armour, mechanics, metal, lights", Vector) = (0.68, 0.079, 0.39, 0.48)
         _RefB ("Classic luminance: visor, fabric", Vector) = (0.007, 0.71, 0, 0)
         _Finish ("Finish: roughness factor, metal offset", Vector) = (1, 0, 0, 0)
-        _ZoneSel0 ("Zones 1-4", Vector) = (0, 0, 0, 0)
+        _ZoneSel0 ("Zones 1-4 (1 = second colour)", Vector) = (0, 0, 0, 0)
         _ZoneSel1 ("Zones 5-8", Vector) = (0, 0, 0, 0)
         _BadgeA0 ("Badge A channels (mask 1)", Vector) = (0, 0, 0, 0)
         _BadgeA1 ("Badge A channels (mask 2)", Vector) = (0, 0, 0, 0)
@@ -44,7 +42,7 @@ Shader "CubeEscape/RobotBody"
         _BadgeAColor ("Badge A colour", Vector) = (0, 0, 0, 0)
         _BadgeBColor ("Badge B colour", Vector) = (0, 0, 0, 0)
         _LineSel0 ("Line pattern (mask 1)", Vector) = (0, 0, 0, 0)
-        _LineSel1 ("Line pattern (mask 2)", Vector) = (0, 0, 0, 0)
+        _LineSel1 ("Line pattern Joints (x, aux R)", Vector) = (0, 0, 0, 0)
         _LineColor ("Line colour (w = strength)", Vector) = (0, 0, 0, 0)
         _LinePaint ("Line albedo share", Float) = 0.85
         _MaterialSel0 ("Material channel (mask 1)", Vector) = (0, 0, 0, 0)
@@ -89,23 +87,20 @@ Shader "CubeEscape/RobotBody"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
 
             TEXTURE2D(_BaseMap); SAMPLER(sampler_BaseMap);
-            TEXTURE2D(_MetallicSmoothness);
+            TEXTURE2D(_MetalWear);
             TEXTURE2D(_BumpMap);
             TEXTURE2D(_OcclusionMap);
             TEXTURE2D(_EmissionMap);
-            TEXTURE2D(_ColorMask);
-            TEXTURE2D(_LightMask);
+            TEXTURE2D(_ColorLight);
+            TEXTURE2D(_Aux);
             TEXTURE2D(_BadgeMask);
             TEXTURE2D(_BadgeMask2);
             TEXTURE2D(_BadgeMask3);
             TEXTURE2D(_LineMask);
-            TEXTURE2D(_LineMask2);
-            TEXTURE2D(_ZoneMask);
-            TEXTURE2D(_ZoneMask2);
             TEXTURE2D(_LayerMask);
-            TEXTURE2D(_LayerMask2);
             TEXTURE2D(_MaterialMask);
             TEXTURE2D(_MaterialMask2);
+            SAMPLER(sampler_point_repeat);         // the zone ID must not be filtered
 
             CBUFFER_START(UnityPerMaterial)
                 float4 _BaseMap_ST;
@@ -159,8 +154,9 @@ Shader "CubeEscape/RobotBody"
                 float2 uv = i.uv;
                 float3 c = SAMPLE(_BaseMap, uv).rgb;
                 float lum = max(dot(c, LUMA), 1e-5);
-                float4 mk = float4(SAMPLE(_ColorMask, uv).rgb, SAMPLE(_LightMask, uv).r);
-                float4 ms = SAMPLE(_MetallicSmoothness, uv);
+                float4 mk = SAMPLE(_ColorLight, uv);
+                float4 ms = SAMPLE(_MetalWear, uv);
+                float4 aux = SAMPLE(_Aux, uv);
                 float rough = 1.0 - ms.a;
                 float metal = ms.r;
                 float ml = 0.0, ember = 0.0;
@@ -183,11 +179,14 @@ Shader "CubeEscape/RobotBody"
                     rough = lerp(rough, lerp(rough, 0.04, 0.8), vis);
                     float ratio = clamp(lum / max(mk.r * _RefA.x + mk.b * _RefA.z, 1e-3), 0.2, 1.6);
                     float ratioAll = clamp(lum / max(mk.r * _RefA.x + mk.g * _RefA.y + mk.b * _RefA.z, 1e-3), 0.2, 1.6);
-                    float mz = saturate(dot(SAMPLE(_ZoneMask, uv), _ZoneSel0) + dot(SAMPLE(_ZoneMask2, uv), _ZoneSel1));
+                    int zone = (int)round(SAMPLE_TEXTURE2D_LOD(_Aux, sampler_point_repeat, uv, 0).g * 8.0);
+                    int zk = (zone - 1) % 4;
+                    float4 oneHot = float4(zk == 0, zk == 1, zk == 2, zk == 3);
+                    float mz = zone <= 0 ? 0.0 : dot(zone <= 4 ? _ZoneSel0 : _ZoneSel1, oneHot);      // like the viewer
                     c = lerp(c, _Armor2.rgb * ratio, mz);
                     float3 region = lerp(mk.r * _Armor.rgb + mk.g * _Mech.rgb + mk.b * _Metal.rgb, _Armor2.rgb, mz);
-                    float4 lay = SAMPLE(_LayerMask, uv), lay2 = SAMPLE(_LayerMask2, uv);
-                    float wearF = lay2.g, grime = lay2.b;
+                    float4 lay = SAMPLE(_LayerMask, uv);
+                    float wearF = ms.g, grime = ms.b;
                     if (_Wear < 0.5)
                     {
                         float clean = (0.5 - _Wear) * 2.0;
@@ -218,12 +217,12 @@ Shader "CubeEscape/RobotBody"
                     cv = COVER(lay.b, _LayerAmount.z);
                     c = lerp(c, _FrostColor.rgb * patchy * ratioAll, cv);
                     rough = lerp(rough, saturate(rough * _LayerRough.z), cv); metal = lerp(metal, saturate(metal + _LayerMetal.z), cv);
-                    c = lerp(c, _CamoColor.rgb * ratioAll, COVER(lay2.r, _LayerAmount2.x));
-                    c = lerp(c, _CamoColor.rgb * 0.45 * ratioAll, COVER(lay2.r, _LayerAmount2.x * 0.45));
+                    c = lerp(c, _CamoColor.rgb * ratioAll, COVER(aux.b, _LayerAmount2.x));
+                    c = lerp(c, _CamoColor.rgb * 0.45 * ratioAll, COVER(aux.b, _LayerAmount2.x * 0.45));
                     float charred = saturate((lay.a - (1.0 - min(1.0, _LayerAmount.w * 2.5))) / _LayerAmount2.y);
                     ember = saturate((lay.a - (1.0 - _LayerAmount.w * 0.3)) / 0.04);
                     c *= 1.0 - 0.88 * charred;
-                    ml = saturate(dot(SAMPLE(_LineMask, uv), _LineSel0) + dot(SAMPLE(_LineMask2, uv), _LineSel1));
+                    ml = saturate(dot(SAMPLE(_LineMask, uv), _LineSel0) + aux.r * _LineSel1.x);
                     c = c * (1.0 - ml * _LinePaint) + ml * _LinePaint * 0.6 * _LineColor.rgb;
                 }
                 float3 e = SAMPLE(_EmissionMap, uv).rgb;

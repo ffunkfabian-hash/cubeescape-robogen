@@ -287,7 +287,87 @@ final class RobotScene: NSObject, SCNSceneRendererDelegate {
         float rough = 1.0 - ms.a;
         float metalness = ms.r;
         \(body)
+        // 1.13 special materials (P(10): mode 1..7 = robot_config.json > specials order, strength, speed, armour
+        // only?; P(11)/P(12): colours; P(13): turntable cos/sin). Same formulas as preview_special_nodes().
+        float4 sp = P(10);
+        float spAlpha = 1.0;
+        if (sp.x > 0.5) {
+            int mode = int(sp.x + 0.5);
+            float st = sp.y, t = scn_frame.time * sp.z;
+            float3 A = P(11).rgb, B = P(12).rgb;
+            float4 tt = P(13);
+            float3 w = (scn_frame.inverseViewTransform * float4(_surface.position, 1.0)).xyz;
+            float x = tt.x * w.x - tt.y * w.z, h = w.y;     // robot space: x sideways, h height (m)
+            float facing = 1.0 - abs(dot(normalize(_surface.normal), normalize(_surface.view)));
+            float f = facing * facing * facing;
+            float lm = max(dot(c, float3(0.2126, 0.7152, 0.0722)), 1e-4);
+            float arm = \(fabric ? "0.0" : "mk.r") * st;
+            float keep = \(fabric ? "0.0" : "1.0 - saturate(mk.r + mk.g + mk.b)");   // visor and lights stay
+            float3 c0 = c;
+            float rough0 = rough, metal0 = metalness;
+            float3 em = float3(0.0);
+            if (mode == 1) {                // Glass
+                c = mix(c, A, 0.6 * st); em = B * f * 0.25; spAlpha = 0.35 + 0.6 * f; rough = 0.05; metalness = 0.0;
+            } else if (mode == 2) {         // Hologram: 40 scan lines per metre, moving up
+                float scan = 0.65 + 0.35 * step(0.5, fract(h * 40.0 - t * 0.5));
+                c = A * 0.15; em = A * (0.35 + 1.6 * f) * scan * st; spAlpha = (0.25 + 0.6 * f) * scan;
+                rough = 0.2; metalness = 0.0;
+            } else if (mode == 3) {         // Glitch: 12 bands per metre, new random values 6 times a second
+                float band = floor(h * 12.0) + floor(t * 6.0) * 13.0;
+                float r = fract(sin(band * 12.9898) * 43758.5453);
+                float g1 = step(0.78, r) * st;
+                float3 gc = mix(A, B, step(0.9, r));
+                c = mix(c, gc, g1); em = gc * g1 * 1.2;
+            } else if (mode == 4) {         // Iridescent
+                float hue = fract(1.2 * f + 0.35 * h);
+                float3 iri = saturate(abs(fmod(hue * 6.0 + float3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0);
+                iri = mix(float3(1.0), iri, 0.55);
+                c = mix(c, iri * (lm / 0.5), arm);
+            } else if (mode == 5) {         // Sketch
+                float outline = smoothstep(0.25, 0.5, facing);
+                float dark = saturate(1.0 - lm * 1.6);
+                float hatch = step(0.7, fract((x + h) * 45.0));
+                float ink = max(outline, hatch * dark) * st;
+                c = mix(mix(c, A, st), B, ink); rough = 1.0; metalness = 0.0;
+            } else if (mode == 6) {         // Rainbow (animated)
+                float hue = fract(0.8 * h + 0.3 * x + 0.15 * t);
+                float3 rb = saturate(abs(fmod(hue * 6.0 + float3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0);
+                rb = mix(float3(1.0), rb, 0.75);
+                c = mix(c, rb * (lm / 0.45), arm); em = rb * 0.15 * arm;
+            } else if (mode == 7) {         // Galaxy (animated): value noise, 3 octaves, plus a star grid
+                float3 q = float3(x, h, w.z) * 3.0 + float3(t * 0.02);
+                float n = 0.0, amp = 0.5;
+                for (int o = 0; o < 3; o++) {
+                    float3 i = floor(q), fr = fract(q);
+                    fr = fr * fr * (3.0 - 2.0 * fr);
+                    float v000 = fract(sin(dot(i, float3(12.9898, 78.233, 37.719))) * 43758.5453);
+                    float v100 = fract(sin(dot(i + float3(1, 0, 0), float3(12.9898, 78.233, 37.719))) * 43758.5453);
+                    float v010 = fract(sin(dot(i + float3(0, 1, 0), float3(12.9898, 78.233, 37.719))) * 43758.5453);
+                    float v110 = fract(sin(dot(i + float3(1, 1, 0), float3(12.9898, 78.233, 37.719))) * 43758.5453);
+                    float v001 = fract(sin(dot(i + float3(0, 0, 1), float3(12.9898, 78.233, 37.719))) * 43758.5453);
+                    float v101 = fract(sin(dot(i + float3(1, 0, 1), float3(12.9898, 78.233, 37.719))) * 43758.5453);
+                    float v011 = fract(sin(dot(i + float3(0, 1, 1), float3(12.9898, 78.233, 37.719))) * 43758.5453);
+                    float v111 = fract(sin(dot(i + float3(1, 1, 1), float3(12.9898, 78.233, 37.719))) * 43758.5453);
+                    float v = mix(mix(mix(v000, v100, fr.x), mix(v010, v110, fr.x), fr.y),
+                                  mix(mix(v001, v101, fr.x), mix(v011, v111, fr.x), fr.y), fr.z);
+                    n += v * amp; amp *= 0.5; q *= 2.0;
+                }
+                n = saturate((n - 0.15) / 0.7);
+                float3 neb = mix(A, B, n) * (0.4 + 0.8 * n);
+                float3 cellp = floor(float3(x, h, w.z) * 120.0);
+                float star = step(0.985, fract(sin(dot(cellp, float3(12.9898, 78.233, 37.719))) * 43758.5453));
+                star *= 0.6 + 0.4 * sin(t * 3.0 + dot(cellp, float3(1.7, 2.3, 3.1)));
+                c = mix(c, neb, arm); em = (neb * 0.5 + star * 2.0) * arm;
+            }
+            c = mix(c, c0, keep);
+            rough = mix(rough, rough0, keep);
+            metalness = mix(metalness, metal0, keep);
+            spAlpha = mix(spAlpha, 1.0, keep);
+            _surface.emission.rgb += em * (1.0 - keep);
+        }
         _surface.diffuse.rgb = c;
+        _surface.diffuse.a = spAlpha;
+        _surface.transparent = float4(spAlpha);
         _surface.roughness = rough;
         _surface.metalness = metalness;
         """]
@@ -693,8 +773,20 @@ final class RobotScene: NSObject, SCNSceneRendererDelegate {
             }
         }
         p[31] = RobotScene.f4(weathering?.bareMetal ?? [0.62, 0.63, 0.65])
+        let specials = cfg.specials ?? []
+        let mode = (specials.firstIndex { $0.id == look.special.id }).map { $0 + 1 } ?? 0
+        p[10] = SIMD4(Float(mode), Float(look.special.strength), Float(look.special.speed), 0)
+        p[11] = RobotScene.f4(look.special.color)
+        p[12] = RobotScene.f4(look.special.color2)
+        p[13] = params[13] == .zero ? SIMD4(1, 0, 0, 0) : params[13]       // turntable angle, kept across looks
         params = p
         writeParams()
+        // glass and hologram need blending (alpha from the shader); everything else stays in the opaque pass
+        let seeThrough = look.special.id == "Glass" || look.special.id == "Hologram"
+        for m in [bodyMat, fabricMat] {
+            m.transparencyMode = seeThrough ? .dualLayer : .default
+            m.transparency = seeThrough ? 0.999 : 1.0
+        }
         let matID = material?.id ?? "None"
         if matID != shownMaterial {
             shownMaterial = matID
@@ -912,7 +1004,12 @@ final class RobotScene: NSObject, SCNSceneRendererDelegate {
         if playing { clipTime += dt * speed }
         let spin = turntable
         lock.unlock()
-        if spin { robotRoot.simdEulerAngles.y += Float(dt * 0.6) }
+        if spin {
+            robotRoot.simdEulerAngles.y += Float(dt * 0.6)
+            let yaw = robotRoot.simdEulerAngles.y      // special materials use robot space (stay on the robot)
+            params[13] = SIMD4(cos(yaw), sin(yaw), 0, 0)
+            writeParams()
+        }
         for n in spinNodes { n.simdLocalRotate(by: simd_quatf(angle: Float(dt * 14), axis: [0, 0, 1])) }
         evaluate()
         updateDisplayAnimation(time)

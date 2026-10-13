@@ -20,11 +20,13 @@ namespace RobotTestbed.Editor
         public const string GenDir = "Assets/RobotTestbed/Generated";
         public static readonly string[] Textures =
         {
-            "T_Robot_BaseColor.png", "T_Robot_Emission.png", "T_Robot_MetallicSmoothness.png", "T_Robot_Normal.png",
-            "T_Robot_Occlusion.png", "T_Robot_ColorMask.png", "T_Robot_LightMask.png", "T_Robot_BadgeMask.png",
-            "T_Robot_BadgeMask2.png", "T_Robot_BadgeMask3.png", "T_Robot_LineMask.png", "T_Robot_LineMask2.png", "T_Robot_ZoneMask.png",
-            "T_Robot_ZoneMask2.png", "T_Robot_LayerMask.png", "T_Robot_LayerMask2.png", "T_Robot_MaterialMask.png",
-            "T_Robot_MaterialMask2.png", "T_Robot_EyeAtlas.png", "T_Robot_DisplayAtlas.png", "T_Robot_DisplayFlipbook.png",
+            "T_Robot_BaseColor.png", "T_Robot_Emission.png", "T_Robot_Normal.png", "T_Robot_Occlusion.png",
+            "T_Robot_EyeAtlas.png", "T_Robot_DisplayAtlas.png", "T_Robot_DisplayFlipbook.png",
+            // 1.13: the masks packed for Unity (robot_config.json > unityTextures)
+            "Unity/T_Robot_U_ColorLight.png", "Unity/T_Robot_U_MetalWear.png", "Unity/T_Robot_U_Aux.png",
+            "Unity/T_Robot_U_Layers.png", "Unity/T_Robot_U_Lines.png", "Unity/T_Robot_U_Material.png",
+            "Unity/T_Robot_U_Material2.png", "Unity/T_Robot_U_Badges.png", "Unity/T_Robot_U_Badges2.png",
+            "Unity/T_Robot_U_Badges3.png",
         };
         static readonly string[] RequiredBones =
         {
@@ -55,6 +57,8 @@ namespace RobotTestbed.Editor
                 if (string.IsNullOrEmpty(output) || !Directory.Exists(output))
                     throw new ArgumentException("ROBOT_OUTPUT must name the generator output folder");
                 Directory.CreateDirectory(ReportDir);
+                // textures and models import in parallel worker processes (Unity 6: out-of-process import)
+                EditorSettings.refreshImportMode = AssetDatabase.RefreshImportMode.OutOfProcessPerQueue;
                 var copied = CopyOutput(output);
                 Debug.Log("testbed: " + copied.Count + " files copied from " + output);
                 AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
@@ -67,7 +71,9 @@ namespace RobotTestbed.Editor
                 var prefabs = BuildPrefabs(mats);
                 RunChecks(prefabs);
                 TestbedShots.Render(prefabs);
-                code = Checks.All(c => c.ok) ? 0 : 1;
+                var (passed, failed) = TestbedTestRun.Run(ReportDir);      // same process: no second Unity start
+                Debug.Log("testbed: EditMode tests " + passed + " passed, " + failed + " failed");
+                code = Checks.All(c => c.ok) && failed == 0 && passed > 0 ? 0 : 1;
             }
             catch (Exception e)
             {
@@ -89,6 +95,8 @@ namespace RobotTestbed.Editor
                 (Path.Combine(output, "CubeEscape_Robot.fbx"), "CubeEscape_Robot.fbx"),
                 (Path.Combine(output, "CubeEscape_Robot_Modular.fbx"), "CubeEscape_Robot_Modular.fbx"),
                 (Path.Combine(output, "robot_config.json"), "robot_config.json"),
+                (Path.Combine(output, "LOD", "CubeEscape_Robot_LOD1.fbx"), "LOD/CubeEscape_Robot_LOD1.fbx"),
+                (Path.Combine(output, "LOD", "CubeEscape_Robot_LOD2.fbx"), "LOD/CubeEscape_Robot_LOD2.fbx"),
             };
             foreach (var t in Textures) files.Add((Path.Combine(output, "Textures", t), "Textures/" + t));
             foreach (var f in Directory.GetFiles(Path.Combine(output, "Types"), "*.fbx"))
@@ -221,23 +229,19 @@ namespace RobotTestbed.Editor
             foreach (var m in new[] { mats.Body, mats.Fabric })
             {
                 m.SetTexture("_BaseMap", Tex("T_Robot_BaseColor.png"));
-                m.SetTexture("_MetallicSmoothness", Tex("T_Robot_MetallicSmoothness.png"));
+                m.SetTexture("_MetalWear", Tex("Unity/T_Robot_U_MetalWear.png"));
                 m.SetTexture("_BumpMap", Tex("T_Robot_Normal.png"));
                 m.SetTexture("_OcclusionMap", Tex("T_Robot_Occlusion.png"));
                 m.SetTexture("_EmissionMap", Tex("T_Robot_Emission.png"));
-                m.SetTexture("_ColorMask", Tex("T_Robot_ColorMask.png"));
-                m.SetTexture("_LightMask", Tex("T_Robot_LightMask.png"));
-                m.SetTexture("_BadgeMask", Tex("T_Robot_BadgeMask.png"));
-                m.SetTexture("_BadgeMask2", Tex("T_Robot_BadgeMask2.png"));
-                m.SetTexture("_BadgeMask3", Tex("T_Robot_BadgeMask3.png"));
-                m.SetTexture("_LineMask", Tex("T_Robot_LineMask.png"));
-                m.SetTexture("_LineMask2", Tex("T_Robot_LineMask2.png"));
-                m.SetTexture("_ZoneMask", Tex("T_Robot_ZoneMask.png"));
-                m.SetTexture("_ZoneMask2", Tex("T_Robot_ZoneMask2.png"));
-                m.SetTexture("_LayerMask", Tex("T_Robot_LayerMask.png"));
-                m.SetTexture("_LayerMask2", Tex("T_Robot_LayerMask2.png"));
-                m.SetTexture("_MaterialMask", Tex("T_Robot_MaterialMask.png"));
-                m.SetTexture("_MaterialMask2", Tex("T_Robot_MaterialMask2.png"));
+                m.SetTexture("_ColorLight", Tex("Unity/T_Robot_U_ColorLight.png"));
+                m.SetTexture("_Aux", Tex("Unity/T_Robot_U_Aux.png"));
+                m.SetTexture("_BadgeMask", Tex("Unity/T_Robot_U_Badges.png"));
+                m.SetTexture("_BadgeMask2", Tex("Unity/T_Robot_U_Badges2.png"));
+                m.SetTexture("_BadgeMask3", Tex("Unity/T_Robot_U_Badges3.png"));
+                m.SetTexture("_LineMask", Tex("Unity/T_Robot_U_Lines.png"));
+                m.SetTexture("_LayerMask", Tex("Unity/T_Robot_U_Layers.png"));
+                m.SetTexture("_MaterialMask", Tex("Unity/T_Robot_U_Material.png"));
+                m.SetTexture("_MaterialMask2", Tex("Unity/T_Robot_U_Material2.png"));
             }
             mats.Fabric.SetFloat("_Fabric", 1f);
             mats.Eyes.SetTexture("_Atlas", Tex("T_Robot_EyeAtlas.png"));
@@ -326,6 +330,73 @@ namespace RobotTestbed.Editor
             return p;
         }
 
+        /// <summary>1.13: the detail levels import with the same bones and the triangle budgets.</summary>
+        static void CheckLods(Prefabs p)
+        {
+            var main = p.Main.GetComponentInChildren<SkinnedMeshRenderer>(true);
+            var detail = new List<string>();
+            bool ok = main != null;
+            int[] budget = { 6000, 2500 };
+            for (int i = 1; i <= 2; i++)
+            {
+                var go = AssetDatabase.LoadAssetAtPath<GameObject>(TestbedImport.ImportDir + "/LOD/CubeEscape_Robot_LOD" + i + ".fbx");
+                var smr = go != null ? go.GetComponentInChildren<SkinnedMeshRenderer>(true) : null;
+                if (smr == null || main == null) { ok = false; detail.Add("LOD" + i + " missing"); continue; }
+                int tris = smr.sharedMesh.triangles.Length / 3;
+                bool sameBones = smr.bones.Select(b => b.name).SequenceEqual(main.bones.Select(b => b.name));
+                ok &= tris <= budget[i - 1] * 1.05f && sameBones;
+                detail.Add("LOD" + i + " " + tris + " tris" + (sameBones ? "" : " (other bones)"));
+            }
+            Check("lod: LOD1/LOD2 with the main bones, about 6000/2500 triangles", ok, string.Join(", ", detail));
+        }
+
+        /// <summary>1.13: hit capsules (character space, rest pose) moved into bone space via the bind poses cover the
+        /// vertices of their bone in a running frame - the way the game would use them.</summary>
+        static void CheckCapsules(Prefabs p)
+        {
+            var caps = p.Config.List("hitCapsules").Cast<Dictionary<string, object>>().ToList();
+            var run = p.Clips.FirstOrDefault(c => c.name == "Run");
+            var go = (GameObject)PrefabUtility.InstantiatePrefab(p.Main);
+            try
+            {
+                var smr = go.GetComponentInChildren<SkinnedMeshRenderer>(true);
+                var bones = smr.bones;
+                var bind = smr.sharedMesh.bindposes;
+                Matrix4x4 rootToMesh = smr.transform.worldToLocalMatrix * go.transform.localToWorldMatrix;
+                Vector3 V(object o) { var l = (List<object>)o; return new Vector3((float)(double)l[0], (float)(double)l[1], (float)(double)l[2]); }
+                var local = new Dictionary<int, (Vector3 a, Vector3 b, float r)>();
+                foreach (var c in caps)
+                {
+                    int bi = Array.FindIndex(bones, t => t.name == (string)c["bone"]);
+                    if (bi < 0) continue;
+                    local[bi] = (bind[bi].MultiplyPoint3x4(rootToMesh.MultiplyPoint3x4(V(c["a"]))),
+                                 bind[bi].MultiplyPoint3x4(rootToMesh.MultiplyPoint3x4(V(c["b"]))), (float)(double)c["radius"]);
+                }
+                if (run != null) run.SampleAnimation(go, 10f / 30f);
+                var baked = new Mesh();
+                smr.BakeMesh(baked, true);
+                var verts = baked.vertices;
+                var weights = smr.sharedMesh.boneWeights;
+                var m = smr.transform.localToWorldMatrix;
+                int total = 0, inside = 0;
+                for (int v = 0; v < verts.Length; v++)
+                {
+                    if (!local.TryGetValue(weights[v].boneIndex0, out var cap)) continue;
+                    var bm = bones[weights[v].boneIndex0].localToWorldMatrix;
+                    Vector3 a = bm.MultiplyPoint3x4(cap.a), b = bm.MultiplyPoint3x4(cap.b), q = m.MultiplyPoint3x4(verts[v]);
+                    Vector3 ab = b - a;
+                    float u = ab.sqrMagnitude > 1e-9f ? Mathf.Clamp01(Vector3.Dot(q - a, ab) / ab.sqrMagnitude) : 0f;
+                    total++;
+                    if ((q - (a + u * ab)).magnitude <= cap.r + 0.005f) inside++;
+                }
+                UnityEngine.Object.DestroyImmediate(baked);
+                float cover = total > 0 ? (float)inside / total : 0f;
+                Check("capsules: " + local.Count + " hit capsules follow their bones (Run frame 10, > 80 % of the vertices)",
+                      local.Count >= 15 && cover > 0.8f, (cover * 100f).ToString("0.0", CultureInfo.InvariantCulture) + " %");
+            }
+            finally { UnityEngine.Object.DestroyImmediate(go); }
+        }
+
         /// <summary>1.12: spring bones, emitters and type emotes arrive in Unity and move.</summary>
         static void CheckBoltOn(Prefabs p, HashSet<string> bones)
         {
@@ -402,6 +473,8 @@ namespace RobotTestbed.Editor
             Check("prefabs: one per robot type", p.Types.Count == cfg.List("robotTypes").Count, p.Types.Count);
             CheckPose(p);
             CheckBoltOn(p, bones);
+            CheckLods(p);
+            CheckCapsules(p);
             CheckLooks(p);
         }
 
@@ -417,6 +490,9 @@ namespace RobotTestbed.Editor
                     bad.Add(t);
             }
             Check("textures: colour sRGB, data linear, alpha is no transparency", bad.Count == 0, string.Join(",", bad));
+            var big = Textures.Where(t => t.StartsWith("Unity/")).Select(t => (t, tex: Tex(t)))
+                .Where(x => x.tex == null || x.tex.width > 1024).Select(x => x.t).ToList();
+            Check("textures: packed Unity masks at most 1024²", big.Count == 0, string.Join(",", big));
             var eye = Tex("T_Robot_EyeAtlas.png");
             Check("textures: eye atlas keeps 2048 x 2560", eye != null && eye.width == 2048 && eye.height == 2560,
                   eye != null ? eye.width + "x" + eye.height : "missing");

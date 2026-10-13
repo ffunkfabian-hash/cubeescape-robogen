@@ -4,6 +4,16 @@ Gilt für alle Agenten (Claude Code, Codex, …). Langform: `README.md` (Teststu
 `CHANGELOG.md` (Versionen), `docs/FAHRPLAN.md` (Fahrplan; führend ist das Claude Doc, Link dort), `docs/TECHNIK.md`
 (Techniken und Lehren; Übertrag auf den Cubegen-Modell-Editor – bei jeder neuen Technik mitpflegen).
 
+## Skills
+
+Arbeitsanweisungen je Bereich in `.agents/skills/<name>/SKILL.md` (`.claude/skills` ist ein Link darauf; andere
+Agenten lesen die passende `SKILL.md` vor der Arbeit):
+
+| Aufgabe berührt … | Skill |
+|---|---|
+| Unity-Testpaket, Unity-Vorlagen (Shader, Look, Appearance), Unity-Laufzeit | `rg-unity-testbed` |
+| Übergabe an das Spiel (FBX, Masken, Look, Clip-Daten, Kapseln, Emitter) | `rg-unity-integration` |
+
 ## Skins und Masken
 
 - Skins sind Daten (`data/skins.json`), nie Code. IDs von Skins, Abzeichen (`BADGES`), Leuchtmustern
@@ -63,7 +73,7 @@ Unity- oder Blender-Läufe anderer Agenten verfälschen sie um ein Vielfaches).
 5. Sichtbare Änderungen ansehen: `Previews/skins.png`, `Previews/hero.png`, bei Animationen die Kontaktbögen.
 6. Bei Viewer-Änderungen `viewer/build.sh` und `viewer/test_viewer.sh`.
 7. Bei Änderungen an Export, Clips, Texturen, Masken oder Looks: `unity/run_testbed.sh` (eigenes Unity-Projekt, nie das
-   Spiel; Bericht `output/UnityTestbed/report.json`). Shader-Formeln in `decorate_skin()`, Viewer und
+   Spiel; Bericht `output/UnityTestbed/report.json`; Skill `rg-unity-testbed`). Shader-Formeln in `decorate_skin()`, Viewer und
    `unity/RobotTestbed/Assets/RobotTestbed/Shaders/RobotBody.shader` gleich halten.
 
 ## Plugins und Hooks (Claude Code)

@@ -18,17 +18,16 @@ if pgrep -f "Unity.*-projectPath $PROJ" >/dev/null; then echo "Unity already run
 mkdir -p "$REPORT"
 t0=$(date +%s)
 
-echo "> pipeline: import, prefabs, checks, shots (log: $REPORT/pipeline.log)"
+# one Unity start: import, prefabs, checks, shots and the EditMode tests (TestbedTestRun, since 1.13; a second
+# start only for the tests cost about 10 s)
+echo "> pipeline: import, prefabs, checks, shots, EditMode tests (log: $REPORT/pipeline.log)"
+rm -f "$REPORT/tests.xml" "$REPORT/report.json"
 code=0
 ROBOT_OUTPUT="$OUT" ROBOT_REPORT="$REPORT" "$UNITY" -batchmode -quit -projectPath "$PROJ" \
   -executeMethod RobotTestbed.Editor.TestbedPipeline.Run -logFile "$REPORT/pipeline.log" || code=$?
 t1=$(date +%s)
-
-echo "> EditMode tests (log: $REPORT/tests.log)"
 tcode=0
-"$UNITY" -batchmode -projectPath "$PROJ" -runTests -testPlatform EditMode \
-  -testResults "$REPORT/tests.xml" -logFile "$REPORT/tests.log" || tcode=$?
-t2=$(date +%s)
+t2=$t1
 
 if command -v magick >/dev/null && [ -d "$REPORT/shots" ]; then
   export MAGICK_THREAD_LIMIT=1
@@ -43,7 +42,7 @@ if command -v magick >/dev/null && [ -d "$REPORT/shots" ]; then
 fi
 
 # Unity keeps running the last good assemblies when scripts do not compile - that must fail the run
-if grep -h "error CS" "$REPORT/pipeline.log" "$REPORT/tests.log" 2>/dev/null | sort -u | head -5 | grep .; then
+if grep -h "error CS" "$REPORT/pipeline.log" 2>/dev/null | sort -u | head -5 | grep .; then
   echo "FAIL scripts do not compile (Unity used the previous assemblies)"
   code=3
 fi
@@ -62,11 +61,12 @@ else:
 xml = os.path.join(report, "tests.xml")
 if os.path.exists(xml):
     run = ET.parse(xml).getroot()
-    print("tests: %s passed, %s failed of %s, %s s" % (run.get("passed"), run.get("failed"), run.get("total"), tt))
+    print("tests: %s passed, %s failed of %s, %s s (in the pipeline process)" % (run.get("passed"), run.get("failed"),
+                                                                              run.get("total"), run.get("duration")))
     for case in run.iter("test-case"):
         if case.get("result") != "Passed":
             print("FAIL test %s" % case.get("fullname"))
 else:
-    print("tests: no results (exit %d) - see tests.log" % tcode)
+    print("tests: no results - see pipeline.log")
 PY
 [ "$code" -eq 0 ] && [ "$tcode" -eq 0 ]

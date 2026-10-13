@@ -10,7 +10,7 @@ namespace RobotTestbed
     public sealed class RobotLook
     {
         public const string Format = "CubeEscapeRobotLook";
-        public const int CurrentVersion = 4;
+        public const int CurrentVersion = 5;
         public const float WearDefault = 0.5f;
         public const int MaxBadges = 2;
         static readonly string[] ColorKeys = { "armor", "mech", "metal", "lights", "screen", "eyes", "visor", "fabric" };
@@ -41,11 +41,24 @@ namespace RobotTestbed
         public Vector4 MaterialColor = new Vector4(0.3f, 0.2f, 0.1f);
         public List<(string id, float amount, Vector4 color)> Layers = new List<(string, float, Vector4)>();
         public float Wear = WearDefault;
+        // version 5: special material (robot_config.json > specials), a runtime effect on top of the skin
+        public string Special = "None";
+        public Vector4 SpecialColor = Vector4.one, SpecialColor2 = Vector4.one;
+        public float SpecialStrength = 1f, SpecialSpeed = 1f;
 
         static Vector4 Rgb(object o)
         {
             var d = (Dictionary<string, object>)o;
             return new Vector4((float)(double)d["r"], (float)(double)d["g"], (float)(double)d["b"]);
+        }
+
+        void ReadSpecial(Dictionary<string, object> sd, Func<object, Vector4> color)
+        {
+            Special = (string)sd["id"];
+            if (sd.TryGetValue("color", out var c1)) SpecialColor = color(c1);
+            if (sd.TryGetValue("color2", out var c2)) SpecialColor2 = color(c2);
+            if (sd.TryGetValue("strength", out var st)) SpecialStrength = (float)(double)st;
+            if (sd.TryGetValue("speed", out var sv)) SpecialSpeed = (float)(double)sv;
         }
 
         static Vector4 Clamp01(Vector4 c) => new Vector4(Mathf.Clamp01(c.x), Mathf.Clamp01(c.y), Mathf.Clamp01(c.z));
@@ -101,6 +114,8 @@ namespace RobotTestbed
                                   ld2.TryGetValue("color", out var lc2) ? Rgb(lc2) : Vector4.zero));
                 }
             if (d.TryGetValue("wear", out var wr)) l.Wear = (float)(double)wr;
+            // version 5: no special material
+            if (d.TryGetValue("special", out var sp)) l.ReadSpecial((Dictionary<string, object>)sp, Rgb);
             var variants = d.TryGetValue("variants", out var vv) ? (Dictionary<string, object>)vv : new Dictionary<string, object>();
             l.Sanitize(config, variants, warnings);
             return l;
@@ -162,6 +177,13 @@ namespace RobotTestbed
             }
             Layers = kept;
             Wear = Mathf.Clamp01(Wear);
+            bool knownSpecial = false;
+            foreach (var s in config.Objects("specials")) knownSpecial |= (string)s["id"] == Special;
+            if (Special != "None" && !knownSpecial) { warnings.Add("Spezialmaterial " + Special + " unbekannt"); Special = "None"; }
+            SpecialStrength = Mathf.Clamp01(SpecialStrength);
+            SpecialSpeed = Mathf.Clamp(SpecialSpeed, 0f, 4f);
+            SpecialColor = Clamp01(SpecialColor);
+            SpecialColor2 = Clamp01(SpecialColor2);
             MaterialColor = Clamp01(MaterialColor);
             Glow = Mathf.Clamp(Glow, 0.2f, 2.5f);
             foreach (var k in ColorKeys) Colors[k] = Clamp01(Colors[k]);
@@ -216,6 +238,8 @@ namespace RobotTestbed
                     Layers.Add(((string)layer["id"], (float)(double)layer["amount"], RobotConfig.Vec(layer["color"])));
                 }
             Wear = skin.TryGetValue("wear", out var w) ? (float)(double)w : WearDefault;
+            Special = "None";
+            if (skin.TryGetValue("special", out var sp) && sp is Dictionary<string, object> sd) ReadSpecial(sd, o => RobotConfig.Vec(o));
             if (!parts) return;
             if (skin.TryGetValue("parts", out var p))
                 foreach (var kv in (Dictionary<string, object>)p) Variants[kv.Key] = (string)kv.Value;

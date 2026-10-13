@@ -1,7 +1,7 @@
 {
   "format": "CubeEscapeRobotSkins",
   "version": 1,
-  "note": "Skin = data: palette (linear RGB lists or sRGB '#rrggbb'), finish, badges, glow lines, optional parts, expression and display. IDs are permanent (saved looks); skins are never renamed or removed.",
+  "note": "Skin = data: palette (linear RGB lists or sRGB '#rrggbb'), finish, badges, glow lines, optional parts, expression, display and special material (1.13). IDs are permanent (saved looks); skins are never renamed or removed.",
   "skins": [
     {
       "id": "Classic",
@@ -1299,6 +1299,193 @@
       "badges": [{"id": "Leaf", "color": "#b3e62d"}],
       "parts": {"AccHead": "Sprout"},
       "expression": "Shy"
+    },
+    {
+      "id": "Glass",
+      "theme": "Transparent / Futuristisch",
+      "since": "1.13.0",
+      "stage": "1.13",
+      "startSet": true,
+      "concept": "A06 Glass",
+      "palette": {
+        "armor": "#9ed6f8",
+        "mech": "#0c3f67",
+        "metal": "#1870cb",
+        "eye": "#bff4ff",
+        "screen": "#9ee8ff",
+        "accent": "#129aea",
+        "visor": "#060709",
+        "fabric": "#129aea"
+      },
+      "finish": "Glanz",
+      "lines": {"pattern": "Seams", "color": "#5ccfff", "strength": 0.6},
+      "special": {"id": "Glass", "color": "#9ed6f8", "color2": "#e8f8ff"}
+    },
+    {
+      "id": "Ghost",
+      "theme": "Hologramm / Digital",
+      "since": "1.13.0",
+      "stage": "1.13",
+      "startSet": true,
+      "concept": "A14 Ghost, C12 Holo",
+      "palette": {
+        "armor": "#b3d7f6",
+        "mech": "#2347c8",
+        "metal": "#6f6cf6",
+        "eye": "#dcaafa",
+        "screen": "#b3d7f6",
+        "accent": "#dcaafa",
+        "visor": "#060709",
+        "fabric": "#6f6cf6"
+      },
+      "finish": "Glanz",
+      "expression": "Happy",
+      "special": {"id": "Hologram", "color": "#7f8cff", "color2": "#dcaafa"}
+    },
+    {
+      "id": "Aurora",
+      "theme": "Polarlicht / Schillern",
+      "since": "1.13.0",
+      "stage": "1.13",
+      "startSet": true,
+      "palette": {
+        "armor": "#e8eef2",
+        "mech": "#1d2a3a",
+        "metal": "#8aa2b8",
+        "eye": "#7affd8",
+        "screen": "#7affd8",
+        "accent": "#a07aff",
+        "visor": "#060709",
+        "fabric": "#2a8f8a"
+      },
+      "finish": "Glanz",
+      "special": {"id": "Iridescent", "strength": 0.85}
+    },
+    {
+      "id": "Rainbow",
+      "theme": "Farbe / Animiert",
+      "since": "1.13.0",
+      "stage": "1.13",
+      "startSet": true,
+      "concept": "C17 Rainbow",
+      "palette": {
+        "armor": "#e8e4f4",
+        "mech": "#5652cd",
+        "metal": "#c3a8f3",
+        "eye": "#f5b544",
+        "screen": "#f5b544",
+        "accent": "#694ed9",
+        "visor": "#060709",
+        "fabric": "#694ed9"
+      },
+      "finish": "Candy",
+      "display": "Heart",
+      "expression": "Happy",
+      "special": {"id": "Rainbow", "strength": 0.9, "speed": 1.0}
+    },
+    {
+      "id": "Prism",
+      "theme": "Kristall / Ohrenkopf",
+      "since": "1.13.0",
+      "stage": "1.13",
+      "startSet": false,
+      "palette": {
+        "armor": "#e6d4ff",
+        "mech": "#2a1f4a",
+        "metal": "#b49aff",
+        "eye": "#ffffff",
+        "screen": "#e0c8ff",
+        "accent": "#ff8af0",
+        "visor": "#060709",
+        "fabric": "#8a5cff"
+      },
+      "finish": "Glanz",
+      "parts": {"AccHead": "Ears"},
+      "special": {"id": "Glass", "color": "#d8c4ff", "color2": "#ff9af4"}
+    },
+    {
+      "id": "Ice",
+      "theme": "Eis / Frost",
+      "since": "1.13.0",
+      "stage": "1.13",
+      "startSet": false,
+      "concept": "C08 Ice",
+      "palette": {
+        "armor": "#bfe8ff",
+        "mech": "#0e82dc",
+        "metal": "#4bd4fa",
+        "eye": "#eef6fc",
+        "screen": "#bff4ff",
+        "accent": "#1fbbfa",
+        "visor": "#060709",
+        "fabric": "#1fbbfa"
+      },
+      "finish": "Glanz",
+      "layers": [{"id": "Frost", "amount": 0.4, "color": "#eef6fc"}],
+      "special": {"id": "Glass", "color": "#bfe8ff", "color2": "#eef6fc"}
+    },
+    {
+      "id": "Void",
+      "theme": "Leere / Glitch",
+      "since": "1.13.0",
+      "stage": "1.13",
+      "startSet": false,
+      "palette": {
+        "armor": "#1c1830",
+        "mech": "#08060f",
+        "metal": "#3a3060",
+        "eye": "#c05aff",
+        "screen": "#c05aff",
+        "accent": "#ff3df0",
+        "visor": "#060709",
+        "fabric": "#3a1f6a"
+      },
+      "finish": "Matt",
+      "expression": "Glitch",
+      "display": "Signal",
+      "special": {"id": "Glitch", "color": "#ff3df0", "color2": "#30f0ff"}
+    },
+    {
+      "id": "Nebula",
+      "theme": "Galaxie / Nebel",
+      "since": "1.13.0",
+      "stage": "1.13",
+      "startSet": false,
+      "concept": "C24 Nebula, C07 Void",
+      "palette": {
+        "armor": "#2e1d4c",
+        "mech": "#1f1855",
+        "metal": "#4f36b9",
+        "eye": "#a6ebfa",
+        "screen": "#a6ebfa",
+        "accent": "#f077f8",
+        "visor": "#060709",
+        "fabric": "#8531e9"
+      },
+      "finish": "Glanz",
+      "display": "Planet",
+      "special": {"id": "Galaxy", "color": "#2e1d6c", "color2": "#f077f8"}
+    },
+    {
+      "id": "Scribble",
+      "theme": "Skizze / Handgezeichnet",
+      "since": "1.13.0",
+      "stage": "1.13",
+      "startSet": false,
+      "concept": "C18 Scribble",
+      "palette": {
+        "armor": "#e6d8d0",
+        "mech": "#3a3430",
+        "metal": "#b7b2ad",
+        "eye": "#2a2622",
+        "screen": "#2a2622",
+        "accent": "#3a3430",
+        "visor": "#060709",
+        "fabric": "#bdafa6"
+      },
+      "finish": "Matt",
+      "expression": "Normal",
+      "special": {"id": "Sketch", "color": "#efe6dc", "color2": "#2a2622"}
     }
   ]
 }

@@ -12,11 +12,12 @@ ok() { echo "PASS $1"; }
 bad() { echo "FAIL $1"; fail=1; }
 
 "$BIN" --snapshot "$TMP/v1.png" --look "$HERE/tests/look_v1.json" --save-look "$TMP/v1_migrated.json" --size 300x300 >/dev/null
-# the current look version is 4 (1.10: skin, armor2, zones2, badges, lines; 1.11: material, layers, wear)
-python3 - "$TMP/v1_migrated.json" <<'PY' && ok "v1 look migrated to v4" || bad "v1 look migrated to v4"
+# the current look version is 5 (1.10: skin, armor2, zones2, badges, lines; 1.11: material, layers, wear;
+# 1.13: special)
+python3 - "$TMP/v1_migrated.json" <<'PY' && ok "v1 look migrated to v5" || bad "v1 look migrated to v5"
 import json, sys
 l = json.load(open(sys.argv[1]))
-assert l["format"] == "CubeEscapeRobotLook" and l["version"] == 4
+assert l["format"] == "CubeEscapeRobotLook" and l["version"] == 5 and l["special"]["id"] == "None"
 assert l["material"]["id"] == "None" and l["layers"] == [] and l["wear"] == 0.5
 assert l["skin"] == "Custom" and l["badges"] == [] and l["zones2"] == [] and l["lines"]["pattern"] == "None"
 assert l["variants"]["Head"] == "TV" and l["variants"]["Hands"] == "Claw" and l["variants"]["Feet"] == "Boots"
@@ -25,10 +26,10 @@ assert abs(l["visor"]["r"] - 0.006) < 1e-6
 PY
 
 "$BIN" --snapshot "$TMP/v2.png" --look "$HERE/tests/look_v2.json" --save-look "$TMP/v2_migrated.json" --size 300x300 >/dev/null
-python3 - "$HERE/tests/look_v2.json" "$TMP/v2_migrated.json" <<'PY' && ok "v2 look migrated to v4" || bad "v2 look migrated to v4"
+python3 - "$HERE/tests/look_v2.json" "$TMP/v2_migrated.json" <<'PY' && ok "v2 look migrated to v5" || bad "v2 look migrated to v5"
 import json, sys
 old, l = json.load(open(sys.argv[1])), json.load(open(sys.argv[2]))
-assert l["version"] == 4 and l["skin"] == "Custom" and l["badges"] == [] and l["lines"]["pattern"] == "None"
+assert l["version"] == 5 and l["skin"] == "Custom" and l["badges"] == [] and l["lines"]["pattern"] == "None"
 assert l["armor2"] == old["armor"] and l["zones2"] == []          # a v2 look keeps exactly its colours
 for k in ("armor", "mech", "metal", "lights", "screen", "eyes", "visor", "fabric", "finish", "expression"):
     assert l[k] == old[k], k
@@ -38,12 +39,28 @@ assert all(v == "None" for k, v in l["variants"].items() if k not in old["varian
 PY
 
 "$BIN" --snapshot "$TMP/v3.png" --look "$HERE/tests/look_v3.json" --save-look "$TMP/v3_migrated.json" --size 300x300 >/dev/null
-python3 - "$HERE/tests/look_v3.json" "$TMP/v3_migrated.json" <<'PY' && ok "v3 look migrated to v4" || bad "v3 look migrated to v4"
+python3 - "$HERE/tests/look_v3.json" "$TMP/v3_migrated.json" <<'PY' && ok "v3 look migrated to v5" || bad "v3 look migrated to v5"
 import json, sys
 old, l = json.load(open(sys.argv[1])), json.load(open(sys.argv[2]))
-assert l["version"] == 4 and l["skin"] == old["skin"] and l["badges"] == old["badges"] and l["lines"] == old["lines"]
+assert l["version"] == 5 and l["skin"] == old["skin"] and l["badges"] == old["badges"] and l["lines"] == old["lines"]
 assert l["material"]["id"] == "None" and l["layers"] == [] and l["wear"] == 0.5
 PY
+
+"$BIN" --snapshot "$TMP/v4.png" --look "$HERE/tests/look_v4.json" --save-look "$TMP/v4_migrated.json" --size 300x300 >/dev/null
+python3 - "$HERE/tests/look_v4.json" "$TMP/v4_migrated.json" <<'PY' && ok "v4 look migrated to v5" || bad "v4 look migrated to v5"
+import json, sys
+old, l = json.load(open(sys.argv[1])), json.load(open(sys.argv[2]))
+assert l["version"] == 5 and l["special"]["id"] == "None"
+for k in ("skin", "badges", "lines", "material", "layers", "wear", "armor", "finish", "expression"):
+    assert l[k] == old[k], k
+PY
+
+msg5="$("$BIN" --snapshot "$TMP/u5.png" --look "$HERE/tests/look_v5_unknown_special.json" --save-look "$TMP/u5.json" --size 300x300)"
+python3 - "$TMP/u5.json" <<'PY' && ok "unknown special material replaced" || bad "unknown special material replaced"
+import json, sys
+assert json.load(open(sys.argv[1]))["special"]["id"] == "None"
+PY
+case "$msg5" in *Spezialmaterial*) ok "special material warning reported" ;; *) bad "special material warning reported" ;; esac
 
 msg3="$("$BIN" --snapshot "$TMP/u3.png" --look "$HERE/tests/look_v3_unknown.json" --save-look "$TMP/u3.json" --size 300x300)"
 python3 - "$TMP/u3.json" <<'PY' && ok "unknown 1.10 IDs replaced" || bad "unknown 1.10 IDs replaced"

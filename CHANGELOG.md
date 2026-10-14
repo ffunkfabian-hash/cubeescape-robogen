@@ -3,6 +3,12 @@
 Versionen des Roboter-Generators (zählen getrennt von Cube Escape und Cubegen). Jede Version hat einen Tag
 `v<Version>` und einen Release-Branch `release/<Version>`.
 
+## 1.18.1 – 2026-10-14
+
+* Skill `rg-unity-integration`: Werte im Spiel als Materialinstanz je Roboter statt `MaterialPropertyBlock`
+  (Entscheidung von Cube Escape 0.57 „Undercoat“, Shader-Familie `CubeEscape/Surface`, Rezept ROBOT); `RobotBody` im
+  Testbett bleibt die Bildreferenz. Generator und Ausgabe unverändert.
+
 ## 1.18.0 „Ground Crew“ – 2026-10-14
 
 **Agenten-Werkzeuge ohne Modelländerung** (gemeinsamer Auftrag mit Cube Escape 0.56 „Pit Crew“ und Cubegen 0.23.0

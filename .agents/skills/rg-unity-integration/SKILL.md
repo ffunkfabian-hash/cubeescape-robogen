@@ -26,8 +26,10 @@ Skills (`ce-player-portals`, `ce-editor-assets`, `ce-world-story`, `ce-testing`)
 
 - **Import:** Generic Rig, Root `Root`; Bake Into Pose außer Drehungen/ClimbUp (Liste: `TestbedImport.RootRotation/
   RootPosition`); Loop aus `clips.<Name>.loop`. Masken linear, kein Alpha als Transparenz.
-- **Material:** `RobotBody`-Shader aus dem Testbett übernehmen, Werte per `MaterialPropertyBlock` (Vorlage
-  `RobotAppearance.Apply`), Farben linear `SetVector`. Kein Material je Look.
+- **Material:** Im Spiel zeichnet die Shader-Familie `CubeEscape/Surface` mit dem Rezept ROBOT (Cube Escape 0.57,
+  `Docs/MATERIALS.md` dort); `RobotBody` im Testbett bleibt die Bildreferenz. Werte als **Materialinstanz je Roboter**
+  (nicht je Look), nur bei einer Look-Änderung gesetzt; das Glühen (`SetPower`) setzt eine Zahl ohne Allokation.
+  Kein `MaterialPropertyBlock` – er nimmt Renderer aus SRP Batcher und GPU Resident Drawer. Farben linear `SetVector`.
 - **Look im Spielstand:** Format und Migration 1:1 aus `RobotLook.cs` (gleiche Fixtures wie `viewer/tests/`);
   unbekannte IDs → Standard mit Warnung, neuere Version ablehnen. Spiel-Migration zusätzlich nach Spielregeln
   (`SaveData.CurrentVersion`, neue Fixture).

@@ -3,7 +3,7 @@
 Versionen des Roboter-Generators (zählen getrennt von Cube Escape und Cubegen). Jede Version hat einen Tag
 `v<Version>` und einen Release-Branch `release/<Version>`.
 
-## 1.18.0 „Ground Crew“ – unveröffentlicht
+## 1.18.0 „Ground Crew“ – 2026-10-14
 
 **Agenten-Werkzeuge ohne Modelländerung** (gemeinsamer Auftrag mit Cube Escape 0.56 „Pit Crew“ und Cubegen 0.23.0
 „Wingman“). Generator, Ausgaben und QA sind unverändert; nur die Versionsnummer steht in `robot_config.json` und den

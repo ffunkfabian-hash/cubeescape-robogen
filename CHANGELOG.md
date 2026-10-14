@@ -34,6 +34,13 @@ Versionen des Roboter-Generators (zählen getrennt von Cube Escape und Cubegen).
   `viewer/tests/look_v6_finish_lack.json`, `look_v6_unknown_finish.json` (alte unverändert).
 * Modell, Rig, Clips, QA, Clip-Daten, Typ-Maße, LODs und Kapseln unverändert (Bericht `qa`/`clips`/`type_bounds`/
   `triangles`/`lods`/`hit_capsules` identisch zu 1.19).
+* **Render-Cache (Fehler behoben):** Der Szenen-Abdruck nahm nur unverknüpfte Sockel auf; die Werte der
+  Value-Knoten `FinishRough`/`FinishMetal` (und `TintColor`, `EyeColor` …) stehen im verknüpften Ausgang. Ein warmer
+  Cache lieferte deshalb nach der Oberflächen-Änderung alle Vorschauen im alten Glanz. Die Ausgänge von Value- und
+  RGB-Knoten zählen jetzt mit (`_tree_digest`, nur diese: andere Ausgänge tragen Reste, die je Prozess schwanken);
+  der erste Lauf danach rendert alle Vorschauen neu. Damit die Spezialfarben eines vorigen Skins im Worker keine
+  Fehltreffer erzeugen, setzt `set_special` sie ohne Spezialmaterial auf den Ausgangswert zurück (Bild unverändert);
+  der zweite Standardlauf trifft wieder alle 425 Bilder.
 * Ergebnis Volllauf: `verify_robot.py` 323/323, Viewer 50 PASS, Unity-Testbett 29/29 Prüfungen und 16/16 EditMode-Tests;
   Viewer: Classic/Hazard/Medic mit „Lack“ weichen höchstens 21 von 160 000 Pixeln vom alten Standard ab.
 

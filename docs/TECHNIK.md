@@ -319,6 +319,11 @@ automatisch messen und prüfen; Unity-Prüfungen in einem Prozess bündeln.
     davon ändert das Bild, alles änderte den Schlüssel (welcher Prozess ein Bild rendert, entscheidet sich je Lauf).
   - Posen über ihre Eingaben schlüsseln (Aktion + Bildnummer), nicht über die ausgewerteten Matrizen: die
     unterscheiden sich zwischen Prozessen um ~1e-7 und kippen ab und zu eine Rundung.
+  - Werte von Ausgängen gehören dazu, auch wenn sie verknüpft sind: Ein Value-/RGB-Knoten (`FinishRough`,
+    `TintColor` …) hält seine Einstellung im Ausgang. Nur unverknüpfte Sockel aufzunehmen ließ in 1.20 die neue
+    Standard-Oberfläche unbemerkt – der warme Cache lieferte alle Vorschauen im alten Glanz (falsche Treffer).
+    Nur Value-/RGB-Knoten: die Ausgänge anderer Knoten tragen Reste, die je Prozess schwanken. Und Werte, die gerade
+    nicht wirken (Spezialfarben ohne Spezialmaterial), auf einen festen Wert zurücksetzen, sonst Fehltreffer.
   - Messbar machen statt raten: nach den Korrekturen trifft der zweite Volllauf 1 460 von 1 461 Bildern, der dritte alle.
   - Fehlersuche: `ROBOT_KEEP_WORKER_LOGS=1` behält die Worker-Logs (Treffer/Fehltreffer je Bild),
     `ROBOT_RENDER_DIGEST_DUMP=<Teil des Dateinamens>` schreibt die Bestandteile des Abdrucks – zwei Läufe vergleichen.

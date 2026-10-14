@@ -209,6 +209,12 @@ def _file_digest(path):
     return _FILE_DIGESTS[key]
 
 
+# Value/RGB nodes hold their setting in the (linked) output (FinishRough, TintColor ...): content of the image. Only
+# these - other nodes' output values are leftovers that differ between processes (1.20: a finish change was served
+# stale from the cache because linked sockets were skipped).
+_OUTPUT_VALUE_NODES = ("ShaderNodeValue", "ShaderNodeRGB")
+
+
 def _tree_digest(tree, h, seen):
     # by identity: every material's embedded tree is called "Shader Nodetree" - a name would skip all but the first
     if tree is None or tree.as_pointer() in seen:
@@ -216,8 +222,9 @@ def _tree_digest(tree, h, seen):
     seen.add(tree.as_pointer())
     for nd in sorted(tree.nodes, key=lambda n: n.name):
         h.update(repr((nd.bl_idname, nd.name, _rna_values(nd, []))).encode())
+        set_by_output = nd.bl_idname in _OUTPUT_VALUE_NODES
         for sock in list(nd.inputs) + list(nd.outputs):
-            if not sock.is_linked and hasattr(sock, "default_value"):
+            if (not sock.is_linked or (set_by_output and sock.is_output)) and hasattr(sock, "default_value"):
                 v = sock.default_value
                 if isinstance(v, float):
                     v = round(v, 5)
@@ -494,10 +501,11 @@ def set_special(nt, sp, form=None):
     bsdf.inputs["Alpha"].default_value = 1.0
     if sp and sp["id"] in SEE_THROUGH_SPECIALS or form == "Perforated":     # else EEVEE's opaque path
         nt.links.new(nt.nodes["SpecialAlpha"].outputs[0], bsdf.inputs["Alpha"])
-    if sp:
-        nt.nodes["SpecialA"].outputs[0].default_value = (*sp["color"], 1.0)
-        nt.nodes["SpecialB"].outputs[0].default_value = (*sp["color2"], 1.0)
-        nt.nodes["SpecialStrength"].outputs[0].default_value = sp["strength"]
+    # without a special the values do not show, but they are reset: the render cache keys them (1.20), and a value
+    # left from the previous skin in this worker would make the same image miss the cache
+    nt.nodes["SpecialA"].outputs[0].default_value = (*sp["color"], 1.0) if sp else (1.0, 1.0, 1.0, 1.0)
+    nt.nodes["SpecialB"].outputs[0].default_value = (*sp["color2"], 1.0) if sp else (1.0, 1.0, 1.0, 1.0)
+    nt.nodes["SpecialStrength"].outputs[0].default_value = sp["strength"] if sp else 1.0
 
 
 def set_look(ob, tex_dir, skin=DEFAULT_SKIN, expression="Normal", display="Status"):

@@ -104,6 +104,36 @@ namespace RobotTestbed.Tests
         }
 
         [Test]
+        public void LackIsAKnownFinish()
+        {
+            var warnings = new List<string>();
+            var l = Load("look_v6_finish_lack.json", warnings);
+            Assert.AreEqual("Lack", l.Finish);
+            Assert.IsEmpty(warnings);
+        }
+
+        [Test]
+        public void UnknownFinishFallsBackToStandard()
+        {
+            var warnings = new List<string>();
+            var l = Load("look_v6_unknown_finish.json", warnings);
+            Assert.AreEqual("Standard", l.Finish);
+            Assert.IsTrue(warnings.Exists(w => w.Contains("Oberfläche")));
+            Assert.AreEqual(Config.Finish("Standard"), Config.Finish("Spiegel"));
+        }
+
+        [Test]
+        public void StandardIsMattAndLackKeepsTheOldGloss()
+        {
+            // 1.20: Standard = the former Matt, Lack = the former Standard, appended after the six old finishes
+            var ids = Config.Objects("finishes").Select(f => (string)f["id"]).ToList();
+            CollectionAssert.AreEqual(new[] { "Standard", "Matt", "Satin", "Glanz", "Candy", "Chrom", "Lack" }, ids.Take(7));
+            Assert.AreEqual(new Vector2(1.9f, -0.25f), Config.Finish("Standard"));
+            Assert.AreEqual(new Vector2(1f, 0f), Config.Finish("Lack"));
+            Assert.Greater(Config.Finish("Matt").x, Config.Finish("Standard").x);
+        }
+
+        [Test]
         public void FutureLookVersionIsRejected()
         {
             Assert.Throws<FormatException>(() => Load("look_future_version.json", new List<string>()));

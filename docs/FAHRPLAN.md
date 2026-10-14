@@ -114,7 +114,9 @@ kleiner, Voxel-Form mit einem Drittel weniger Dreiecken, Zeitband statt festem B
 **1.19 Longstride** (14.10., v1.19.0): zwölf Clips im Spieltempo
 für Cube Escape 0.58 – Jog 5 m/s, SprintFull 8 m/s, StrafeLeft/StrafeRight und RunBack 5 m/s, Wade 4 m/s, CrawlFast
 2,4 m/s auf Händen und Knien unter 0,60 m, CarryIdle/CarryWalk mit der 0,8-m-Kiste, Crank am Ventilrad, Knockback und
-LandRoll; gesetzte Kontakte rutschen nicht (jeder Frame-Schritt geprüft). Als Nächstes 2.0 Bodyplan.
+LandRoll; gesetzte Kontakte rutschen nicht (jeder Frame-Schritt geprüft). **1.20 Powdercoat** (14.10., v1.20.0):
+Oberfläche „Standard“ matt für alle Skins (wie bisher „Matt“, passend zur dunklen Station), der frühere Glanz bleibt
+als neue Oberfläche „Lack“ wählbar, „Matt“ eine Stufe matter. Als Nächstes 2.0 Bodyplan.
 
 1.13.1–1.13.3: Prüfungen parallel (`check_output.sh`), QA-Cache und Render-Cache – mit warmem Cache Standardlauf
 etwa 45 s, Volllauf 90–115 s statt rund 7 Minuten; eine sichtbare Änderung rendert nur ihre eigenen Bilder neu.

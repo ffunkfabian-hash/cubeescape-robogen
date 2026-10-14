@@ -30,7 +30,7 @@ Shader "CubeEscape/RobotBody"
         _FabricColor ("Fabric", Vector) = (0.78, 0.1, 0.12, 0)
         _RefA ("Classic luminance: armour, mechanics, metal, lights", Vector) = (0.68, 0.079, 0.39, 0.48)
         _RefB ("Classic luminance: visor, fabric", Vector) = (0.007, 0.71, 0, 0)
-        _Finish ("Finish: roughness factor, metal offset", Vector) = (1, 0, 0, 0)
+        _Finish ("Finish: roughness factor, metal offset", Vector) = (1.9, -0.25, 0, 0)
         _ZoneSel0 ("Zones 1-4 (1 = second colour)", Vector) = (0, 0, 0, 0)
         _ZoneSel1 ("Zones 5-8", Vector) = (0, 0, 0, 0)
         _BadgeA0 ("Badge A channels (mask 1)", Vector) = (0, 0, 0, 0)

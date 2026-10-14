@@ -69,6 +69,26 @@ assert json.load(open(sys.argv[1]))["form"] == "None"
 PY
 case "$msg6" in *Form*) ok "form warning reported" ;; *) bad "form warning reported" ;; esac
 
+# 1.20: "Lack" (the former Standard gloss) is a known finish; an unknown finish falls back to Standard with a warning
+msgl="$("$BIN" --snapshot "$TMP/lack.png" --look "$HERE/tests/look_v6_finish_lack.json" --save-look "$TMP/lack.json" --size 300x300)"
+python3 - "$TMP/lack.json" <<'PY' && ok "finish Lack kept" || bad "finish Lack kept"
+import json, sys
+assert json.load(open(sys.argv[1]))["finish"] == "Lack"
+PY
+case "$msgl" in *warning*) bad "finish Lack without warning" ;; *) ok "finish Lack without warning" ;; esac
+msgf="$("$BIN" --snapshot "$TMP/uf.png" --look "$HERE/tests/look_v6_unknown_finish.json" --save-look "$TMP/uf.json" --size 300x300)"
+python3 - "$TMP/uf.json" <<'PY' && ok "unknown finish replaced" || bad "unknown finish replaced"
+import json, sys
+assert json.load(open(sys.argv[1]))["finish"] == "Standard"
+PY
+case "$msgf" in *Oberfläche*) ok "finish warning reported" ;; *) bad "finish warning reported" ;; esac
+# Standard (matt since 1.20) and Lack (the former Standard) look different on the same skin
+"$BIN" --snapshot "$TMP/std.png" --skin Classic --size 300x300 >/dev/null
+"$BIN" --snapshot "$TMP/lck.png" --skin Classic --finish Lack --size 300x300 >/dev/null
+diff=$(magick compare -metric AE -fuzz 2% "$TMP/std.png" "$TMP/lck.png" null: 2>&1 || true)
+if awk -v d="${diff%% *}" 'BEGIN { exit !(d > 200) }'; then ok "finish Lack differs from Standard (${diff%% *} px)"
+else bad "finish Lack differs from Standard (${diff%% *} px)"; fi
+
 # sidebar layout (1.14.1): the panel's content must fit the 440 pt column for the default look and a type with
 # accessories, else it is pushed out of the window and clipped on both sides
 for t in Classic Astronaut; do

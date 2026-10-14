@@ -37,12 +37,14 @@ struct RGB: Codable, Equatable {
 
 enum Finish: String, Codable, CaseIterable, Identifiable {
     case standard = "Standard", matte = "Matt", satin = "Satin", gloss = "Glanz", candy = "Candy", chrome = "Chrom"
+    case lacquer = "Lack"       // 1.20: the former Standard gloss (appended, IDs are permanent)
     var id: String { rawValue }
-    /// x: roughness factor, y: metalness offset (armour only)
+    /// x: roughness factor, y: metalness offset (armour only). 1.20: Standard is matt, Lack keeps the old gloss.
     var params: (Double, Double) {
         switch self {
-        case .standard: return (1.0, 0.0)
-        case .matte: return (1.9, -0.25)
+        case .standard: return (1.9, -0.25)
+        case .matte: return (2.2, -0.35)
+        case .lacquer: return (1.0, 0.0)
         case .satin: return (1.35, 0.05)
         case .candy: return (0.35, 0.08)
         case .gloss: return (0.45, 0.0)
@@ -158,6 +160,8 @@ struct Look: Codable, Equatable {
     var wear: Double = Look.wearDefault
     var special = SpecialLook()
     var form: String = "None"
+    /// A finish ID this viewer does not know (a look of a newer generator); reported by sanitized(), never saved.
+    var unknownFinish: String? = nil
 
     enum CodingKeys: String, CodingKey {
         case format, version, name, variants, armor, mech, metal, lights, screen, eyes, visor, fabric, finish, glow,
@@ -190,6 +194,7 @@ struct Look: Codable, Equatable {
         fabric = try c.decodeIfPresent(RGB.self, forKey: .fabric) ?? d.fabric
         let fin = try c.decodeIfPresent(String.self, forKey: .finish) ?? "Standard"
         finish = Finish(rawValue: fin) ?? .standard
+        if Finish(rawValue: fin) == nil { unknownFinish = fin }
         glow = try c.decodeIfPresent(Double.self, forKey: .glow) ?? d.glow
         expression = try c.decodeIfPresent(String.self, forKey: .expression) ?? d.expression
         display = try c.decodeIfPresent(String.self, forKey: .display) ?? d.display
@@ -258,6 +263,10 @@ struct Look: Codable, Equatable {
             warnings.append("Bauteil-Slot „\(k)“ unbekannt")
         }
         l.variants = fixed
+        if let f = unknownFinish {
+            warnings.append("Oberfläche „\(f)“ unbekannt")
+            l.unknownFinish = nil
+        }
         if !config.expressions.contains(expression) {
             warnings.append("Augen „\(expression)“ unbekannt")
             l.expression = "Normal"

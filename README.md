@@ -1,4 +1,4 @@
-# Cube Escape – Roboter-Charakter (Generator 1.19.0)
+# Cube Escape – Roboter-Charakter (Generator 1.20.0)
 
 Der spielbare Roboter aus dem Cube-Escape-Keyart, vollständig per Skript erzeugt: Geometrie mit Bauteil-Varianten
 und Accessoires, Materialien, gebackene Texturen (Detail- und Ausdrucks-Texturen per ImageMagick), Rig mit Bein- und
@@ -221,7 +221,8 @@ Fahrplan: [docs/FAHRPLAN.md](docs/FAHRPLAN.md); Techniken und Lehren (für Cubeg
   Blume, Fahne – in Kletter-/Hänge-Clips automatisch ausgeblendet).
 - **Farben:** 76 Skins als Startpunkt (★ = Startset), Thema darunter; ein Skin setzt Farben, Oberfläche, Zweitfarbe,
   Abzeichen und Leuchtlinien, Retro/Orbit/Tank auch eigene Teile. Danach frei: Panzerung, Mechanik, Metall, Lichter,
-  Augen, Display, Visier, Stoff; Oberfläche Standard/Matt/Satin/Glanz/Candy/Chrom.
+  Augen, Display, Visier, Stoff; Oberfläche Standard/Matt/Satin/Glanz/Candy/Chrom/Lack (seit 1.20 ist Standard matt
+  passend zur dunklen Station, Lack ist der frühere glänzende Standard).
 - **Spezialmaterial (1.13):** Glas/Kristall, Hologramm (wandernde Scanlinien), Glitch, Schillern, Skizze, Regenbogen
   und Galaxie (animiert) mit zwei Farben, Stärke und Tempo; Wirkung zur Laufzeit über dem Skin, Visier und Lichter
   bleiben. Die Beschreibung fürs spätere URP-Material steht in `robot_config.json` › `specials` (`urp`).
@@ -415,8 +416,9 @@ Materialien, Prefabs (Standard, modular, je Typ) und einen Animator mit allen Cl
 - **Screenshots** mit URP und Bloom: alle Skins, alle Typen, alle Ausdrücke, Frames aus Walk, ClimbUp, DanceRobot
   und Death → `output/UnityTestbed/unity_skins.png` usw.
 - **EditMode-Tests** (Unity Test Framework): Look-Format mit denselben Fixtures wie der Viewer (v1–v4, unbekannte
-  IDs und Spezialmaterialien, neuere Version), Kanalwahl der Masken, JSON-Leser, erzeugte Prefabs. Seit 1.13 laufen sie
-  im selben Unity-Prozess wie die Pipeline (`TestbedTestRun`) – ein Unity-Start statt zwei.
+  IDs, Spezialmaterialien und Oberflächen, neuere Version; 1.20: Standard matt, Lack), Kanalwahl der Masken,
+  JSON-Leser, erzeugte Prefabs. Seit 1.13 laufen sie im selben Unity-Prozess wie die Pipeline (`TestbedTestRun`) –
+  ein Unity-Start statt zwei.
 
 Das Projekt enthält Vorlagen für den späteren Einbau ins Spiel: `CubeEscape/RobotBody` (URP-Shader mit Zweitfarbe,
 Abzeichen, Leuchtlinien – dieselben Formeln wie Generator und Viewer), `CubeEscape/RobotScreen` (Augen/Display),
@@ -511,8 +513,9 @@ ersetzt, neuere Versionen abgelehnt – dieselben Regeln gehören in die Spielst
   Kante, nur Daumen/Handflächen liegen bis ≈ 2 cm an); im Viewer mit „Hilfsobjekte“ sichtbar.
 - **Export:** `verify_robot.py` öffnet die `.blend`, importiert alle FBX (Standard, modular, je Typ), vergleicht alle
   Takes mit dem Original und prüft Konfiguration, Clip-Daten (Tempo-Reihenfolge, Schritte, Root Motion, Griffpunkte,
-  Strom bei Death; seit 1.19 Spieltempi, rutschfreie Kontakte Frame für Frame, Kiste frei vom Körper), Beispiel-Looks
-  und Viewer-Daten. `viewer/test_viewer.sh` prüft Look-Migration, unbekannte IDs,
+  Strom bei Death; seit 1.19 Spieltempi, rutschfreie Kontakte Frame für Frame, Kiste frei vom Körper), Beispiel-Looks,
+  Oberflächen (1.20: Standard matt, Lack angehängt, wirksame Werte der Panzerung) und Viewer-Daten.
+  `viewer/test_viewer.sh` prüft Look-Migration, unbekannte IDs (seit 1.20 auch Oberflächen),
   Ablehnung neuerer Versionen und den Round Trip aller Typ-Looks. Seit 1.17 liegt jede Knochengruppe einer Mesh-Form
   innerhalb derselben Gruppe ihres Grundteils (+ eine Voxel-Zelle).
 - IK-Meldungen „… IK clamped“ sind bei Death, SitDown, SitIdle (gestreckte Beine) sowie beim Loslassen der Kante in

@@ -141,6 +141,7 @@ namespace RobotTestbed
             }
             foreach (var k in variants.Keys)
                 if (!slotIds.Contains(k)) warnings.Add("Bauteil-Slot " + k + " unbekannt");
+            if (!config.HasFinish(Finish)) { warnings.Add("Oberfläche " + Finish + " unbekannt"); Finish = "Standard"; }
             if (!config.Strings("expressions").Contains(Expression)) { warnings.Add("Augen " + Expression + " unbekannt"); Expression = "Normal"; }
             if (!config.AllDisplays().Contains(Display)) { warnings.Add("Display " + Display + " unbekannt"); Display = "Status"; }
             if (Skin != "Custom" && config.Skin(Skin) == null) { warnings.Add("Skin " + Skin + " unbekannt"); Skin = "Custom"; }

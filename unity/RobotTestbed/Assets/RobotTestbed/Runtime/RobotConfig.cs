@@ -71,11 +71,19 @@ namespace RobotTestbed
             return sel;
         }
 
+        /// <summary>Roughness factor and metal offset of a finish; an unknown ID gets "Standard" (matt since 1.20).</summary>
         public Vector2 Finish(string id)
         {
             foreach (var f in Objects("finishes"))
                 if ((string)f["id"] == id) return new Vector2((float)(double)f["roughness"], (float)(double)f["metalOffset"]);
-            return new Vector2(1f, 0f);
+            return id != "Standard" ? Finish("Standard") : new Vector2(1.9f, -0.25f);
+        }
+
+        public bool HasFinish(string id)
+        {
+            foreach (var f in Objects("finishes"))
+                if ((string)f["id"] == id) return true;
+            return false;
         }
 
         /// <summary>Atlas cell (scale u, scale v, offset u, offset v) for eyes, displays or displayAnimations.</summary>

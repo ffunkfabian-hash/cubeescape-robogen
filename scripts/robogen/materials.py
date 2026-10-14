@@ -152,8 +152,12 @@ PALETTE_KEYS = ("armor", "mech", "metal", "eye", "screen", "accent", "visor", "f
 PALETTE_DEFAULTS = {"visor": (0.006, 0.007, 0.010), "fabric": (0.78, 0.10, 0.12)}
 # Finishes (IDs are permanent, saved in looks): roughness factor and metalness offset on the armour.
 # 1.10: Candy and Chrom with less metal - in the dark game scenes a near-mirror armour read as black.
-FINISH_PARAMS = collections.OrderedDict([("Standard", (1.0, 0.0)), ("Matt", (1.9, -0.25)), ("Satin", (1.35, 0.05)),
-                                         ("Glanz", (0.45, 0.0)), ("Candy", (0.35, 0.08)), ("Chrom", (0.30, 0.32))])
+# 1.20: "Standard" is matt (the former Matt values) - the glossy half-metal armour mirrored the dark station and a white
+# skin read grey (Cube Escape 0.58). "Matt" got a little more matt to stay a step apart; the former Standard gloss
+# lives on as "Lack" (appended: the list position is part of the format).
+FINISH_PARAMS = collections.OrderedDict([("Standard", (1.9, -0.25)), ("Matt", (2.2, -0.35)), ("Satin", (1.35, 0.05)),
+                                         ("Glanz", (0.45, 0.0)), ("Candy", (0.35, 0.08)), ("Chrom", (0.30, 0.32)),
+                                         ("Lack", (1.0, 0.0))])
 FINISHES = list(FINISH_PARAMS)
 # Badges: painted onto the armour at fixed anchors (decals of make_textures.BADGE_ART or procedural patterns). Each badge
 # is one channel of a mask texture: index i -> BADGE_TEXTURES[i // 4], channel "RGBA"[i % 4]. Append only (IDs).

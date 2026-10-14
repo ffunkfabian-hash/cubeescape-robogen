@@ -1,6 +1,6 @@
 # Techniken des Roboter-Generators – Übertrag auf Cubegen
 
-Stand: Generator 1.13.3 „Spectral“. Diese Datei sammelt, **wie** der Generator arbeitet und was sich dabei bewährt
+Stand: Generator 1.20.0 „Powdercoat“. Diese Datei sammelt, **wie** der Generator arbeitet und was sich dabei bewährt
 oder als Falle erwiesen hat. Ziel: Der Modell-Editor von Cubegen soll genauso leistungsfähig werden. Jede Technik
 nennt die Fundstelle im Generator und was Cubegen davon übernehmen sollte. Pflegen bei jeder Generator-Version
 (neue Technik → neuer Abschnitt, geänderte Messwerte → hier ändern).
@@ -42,6 +42,7 @@ nennt die Fundstelle im Generator und was Cubegen davon übernehmen sollte. Pfle
 | Zeitband statt festem Budget | `timing_band()` | Laufzeit unter Last nicht mehr falsch „zu langsam“ | Zeiten gegen ruhige Referenzläufe mit Lasttoleranz bewerten |
 | Gesetzte Kontakte im Zieltempo | `planted_stride()`, `run_foot()`, `verify_longstride()` | Lauf-Clips bei 5/8/4/2,4 m/s ohne Rutschen | Schrittlänge aus Tempo × Kontaktzeit, nicht nach Gefühl |
 | Rolle über die Hülle aller Teile | `roll_hull()`, `lifted()` | ein Clip rollt für jeden Typ, nichts sinkt in den Boden | Bodenkontakt aus der Geometrie aller Varianten ableiten |
+| Standard-Oberfläche an der Spielwelt messen | `FINISH_PARAMS`, `verify_powdercoat()` | weißer Skin bleibt in der dunklen Station weiß | Standardwerte im Zielumfeld prüfen, alte Werte als neue ID anhängen |
 
 ## 1. Skin = Daten
 
@@ -464,3 +465,20 @@ mit schrägen Strahlen; Voxel-Flächen verschmelzen; Laufzeiten im Lastband bewe
 
 **Für Cubegen:** Bewegte Teile (Räder, Ketten, Füße) mit Kontaktgeschwindigkeit = Fahrtempo animieren und jeden
 Frame-Schritt prüfen; Bodenkontakt für Varianten aus der Hülle aller Varianten ableiten.
+
+## 19. Standard-Oberfläche an der Spielwelt messen (1.20)
+
+- **Gemessen im Spiel, nicht in der Vorschau:** Die Vorschauen leuchten den Roboter hell aus; die Station in Cube
+  Escape ist dunkel und matt (Metallic 0, Smoothness 0,4–0,5). Die alte Standard-Oberfläche (Panzerung im Mittel
+  Metallic 0,42, Smoothness 0,68 aus `T_Robot_U_MetalWear`) spiegelte dort die dunkle Umgebung, ein weißer Skin wirkte
+  grau. Matt (Metallic 0,17, Smoothness 0,40) passt zur Welt.
+- **Den Standard ändern, nicht die Masken:** Die gepackten Masken tragen Metall und Glätte für alle Oberflächen; eine
+  Änderung dort hätte Glanz, Candy und Chrom mitgezogen. Die Oberfläche ist ein Faktor zur Laufzeit – also bekommt
+  „Standard“ die Werte von „Matt“, und die Masken bleiben.
+- **Alte Werte als neue ID anhängen:** Der frühere Glanz-Standard heißt „Lack“ und steht am Ende der Liste; keine ID
+  wird umbenannt, gespeicherte Looks bleiben gültig (sie zeigen mit „Standard“ jetzt den matten Standard). „Matt“
+  rückt eine Stufe weiter, damit beide IDs unterscheidbar bleiben. `verify_powdercoat()` rechnet die wirksamen Werte
+  der Panzerung aus den Masken nach.
+
+**Für Cubegen:** Standardmaterialien der Modelle im Zielumfeld (dunkle, matte Station) prüfen, nicht nur im hellen
+Vorschaulicht; einen geänderten Standard nie still umdeuten, sondern den alten Wert als neue, wählbare ID behalten.

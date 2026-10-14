@@ -40,6 +40,9 @@ Skills (`ce-player-portals`, `ce-editor-assets`, `ce-world-story`, `ce-testing`)
 - **Spieltempo (1.19):** Jog/StrafeLeft/StrafeRight/RunBack/CarryWalk 5 m/s, SprintFull 8, Wade 4, CrawlFast 2,4 m/s
   laufen bei Tempo 1 rutschfrei; die Kiste (`prop.type` `crate`) hängt am Root (Hände greifen feste Punkte), das
   Ventilrad (`wheel`) steht vor dem Roboter. LandRoll: Kopf- und Rückenaufsätze dürfen den Boden streifen.
+- **Oberflächen (1.20):** `finishes` aus `robot_config.json` lesen, nie im Spiel festschreiben. „Standard“ ist matt
+  (×1,9 / −0,25, passend zur Station), „Lack“ der frühere Glanz-Standard; ein Werkstoff bringt bei „Standard“ seine
+  eigene Oberfläche. Ein im Spiel erzwungenes „Matt“ ist seit 1.20 nicht mehr nötig (und eine Stufe matter).
 - **Treffer-Kapseln** (`hitCapsules`): Punkte im Charakterraum der Ruhepose → einmal per Bindpose in den
   Knochenraum, dann als `CapsuleCollider` am Knochen (Vorlage: `TestbedPipeline.CheckCapsules`).
 - **Emitter** (`emitters`): Partikelsystem am genannten Socket, nur sichtbar mit dem Aufsatz (`slot`/`variant`).

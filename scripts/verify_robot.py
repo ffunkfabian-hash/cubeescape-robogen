@@ -810,6 +810,36 @@ def verify_longstride():
           (inside[:4], round(gap, 4)))
 
 
+# 1.20 Powdercoat: "Standard" is matt (the former Matt values) for every skin, the former Standard gloss is "Lack"
+POWDERCOAT_FINISHES = ["Standard", "Matt", "Satin", "Glanz", "Candy", "Chrom", "Lack"]
+
+
+def verify_powdercoat():
+    cfg = json.load(open(os.path.join(OUT, "robot_config.json"), encoding="utf-8"))
+    fin = {f["id"]: (f["roughness"], f["metalOffset"]) for f in cfg["finishes"]}
+    ids = [f["id"] for f in cfg["finishes"]]
+    check("powdercoat: finish IDs kept, Lack appended", ids[:len(POWDERCOAT_FINISHES)] == POWDERCOAT_FINISHES, ids)
+    check("powdercoat: Standard = former Matt (1.9, -0.25), Lack = former Standard (1.0, 0.0)",
+          fin.get("Standard") == (1.9, -0.25) and fin.get("Lack") == (1.0, 0.0), (fin.get("Standard"), fin.get("Lack")))
+    check("powdercoat: Matt stays a step more matt than Standard",
+          fin["Matt"][0] > fin["Standard"][0] and fin["Matt"][1] < fin["Standard"][1], fin["Matt"])
+    schema = json.load(open(os.path.join(OUT, "robot_look.schema.json"), encoding="utf-8"))
+    enum = schema["properties"]["finish"]["enum"]
+    check("powdercoat: look schema knows every finish", enum == ids, enum)
+    # what the runtime shader makes of the armour (ColorMask R): metallic + offset, roughness x factor
+    unity = os.path.join(OUT, "Textures", "Unity")
+    cl, mw = mask_planes(unity, "T_Robot_U_ColorLight.png"), mask_planes(unity, "T_Robot_U_MetalWear.png")
+    arm = cl[..., 0] > 0.9
+    metal, rough = mw[..., 0][arm], 1.0 - mw[..., 3][arm]
+    eff = {n: (round(float(np.clip(metal + fin[n][1], 0, 1).mean()), 3),
+               round(float(1.0 - np.clip(rough * fin[n][0], 0, 1).mean()), 3)) for n in ("Standard", "Lack")}
+    check("powdercoat: armour with Standard matt (metallic < 0.25, smoothness < 0.45), Lack glossy as before 1.20",
+          eff["Standard"][0] < 0.25 and eff["Standard"][1] < 0.45 and eff["Lack"][0] > 0.35 and eff["Lack"][1] > 0.6,
+          eff)
+    std = [sk["name"] for sk in cfg["skins"] if sk["finish"] == "Standard"]
+    check("powdercoat: skins on Standard (matt now)", len(std) > 0, len(std))
+
+
 def main():
     print("== verify %s" % bpy.data.filepath)
     ref = verify_blend()
@@ -827,6 +857,7 @@ def main():
     verify_crawlspace()
     verify_slimline()
     verify_longstride()
+    verify_powdercoat()
     ok = all(r["ok"] for r in results)
     os.makedirs(os.path.join(OUT, "logs"), exist_ok=True)
     with open(os.path.join(OUT, "logs", "verify_report.json"), "w", encoding="utf-8") as fh:

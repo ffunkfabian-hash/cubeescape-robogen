@@ -813,8 +813,9 @@ def build_baked_material(tex_paths, name="M_Robot", tint=None):
         nt.links.new(f.outputs[0], mix.inputs[3])
         return mix.outputs[0]
 
-    nt.links.new(finished(sep.outputs[0], "ADD", "FinishMetal", 0.0), bsdf.inputs["Metallic"])
-    nt.links.new(finished(inv.outputs[0], "MULTIPLY", "FinishRough", 1.0), bsdf.inputs["Roughness"])
+    std_rough, std_metal = FINISH_PARAMS["Standard"]     # the default skin's finish until a preview sets its own
+    nt.links.new(finished(sep.outputs[0], "ADD", "FinishMetal", std_metal), bsdf.inputs["Metallic"])
+    nt.links.new(finished(inv.outputs[0], "MULTIPLY", "FinishRough", std_rough), bsdf.inputs["Roughness"])
     nrm = tex("T_Robot_Normal.png", "Non-Color", -650)
     nmap = nt.nodes.new("ShaderNodeNormalMap")
     nmap.location = (-150, -650)

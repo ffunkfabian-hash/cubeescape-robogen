@@ -1,0 +1,95 @@
+{
+  "armor": {
+    "b": 0.035,
+    "g": 0.03,
+    "r": 0.03
+  },
+  "armor2": {
+    "b": 0.035,
+    "g": 0.03,
+    "r": 0.03
+  },
+  "autoDisplay": true,
+  "autoExpression": true,
+  "badges": [],
+  "display": "Clock",
+  "expression": "Skeptical",
+  "eyes": {
+    "b": 1.0,
+    "g": 1.0,
+    "r": 1.0
+  },
+  "fabric": {
+    "b": 0.08,
+    "g": 0.05,
+    "r": 0.7
+  },
+  "finish": "Lack",
+  "form": "None",
+  "format": "CubeEscapeRobotLook",
+  "glow": 1.0,
+  "layers": [],
+  "lights": {
+    "b": 0.3,
+    "g": 0.8,
+    "r": 1.0
+  },
+  "lines": {
+    "color": {
+      "b": 0.3,
+      "g": 0.8,
+      "r": 1.0
+    },
+    "pattern": "None",
+    "strength": 1.0
+  },
+  "material": {
+    "color": {
+      "b": 0.035,
+      "g": 0.03,
+      "r": 0.03
+    },
+    "id": "None"
+  },
+  "mech": {
+    "b": 0.85,
+    "g": 0.85,
+    "r": 0.85
+  },
+  "metal": {
+    "b": 0.35,
+    "g": 0.7,
+    "r": 0.85
+  },
+  "name": "Lacquered",
+  "screen": {
+    "b": 0.9,
+    "g": 0.9,
+    "r": 0.9
+  },
+  "skin": "Classic",
+  "special": {
+    "id": "None"
+  },
+  "variants": {
+    "AccBack": "None",
+    "AccEar": "None",
+    "AccFace": "Monocle",
+    "AccHand": "None",
+    "AccHead": "TopHat",
+    "AccNeck": "BowTie",
+    "Backpack": "Classic",
+    "Feet": "Boots",
+    "Hands": "Mitt",
+    "Head": "Classic",
+    "Pads": "Round"
+  },
+  "version": 6,
+  "visor": {
+    "b": 0.01,
+    "g": 0.007,
+    "r": 0.006
+  },
+  "wear": 0.5,
+  "zones2": []
+}

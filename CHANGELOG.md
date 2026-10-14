@@ -3,6 +3,40 @@
 Versionen des Roboter-Generators (zählen getrennt von Cube Escape und Cubegen). Jede Version hat einen Tag
 `v<Version>` und einen Release-Branch `release/<Version>`.
 
+## 1.20.0 „Powdercoat“ – 2026-10-14
+
+**Oberfläche „Standard“ ist matt – für alle Skins.** Cube Escape 0.58 hat gemessen: Die Station ist dunkel und matt
+(Metallic 0, Smoothness 0,4–0,5); die alte Standard-Panzerung (im Mittel Metallic 0,42, Smoothness 0,68 aus
+`T_Robot_U_MetalWear`) spiegelte die dunkle Umgebung, Classic wirkte grau. Der Glanz bleibt als neue Oberfläche wählbar.
+
+| Oberfläche (`robot_config.json` › `finishes`) | bis 1.19 (Rauheit ×, Metall +) | ab 1.20 | Panzerung wirksam (Metallic / Smoothness) |
+|---|---|---|---|
+| Standard | 1,0 / 0,0 | **1,9 / −0,25** (die bisherigen Matt-Werte) | 0,42 / 0,68 → **0,17 / 0,40** |
+| Matt | 1,9 / −0,25 | **2,2 / −0,35** | 0,17 / 0,40 → **0,07 / 0,30** |
+| Satin, Glanz, Candy, Chrom | unverändert | unverändert | unverändert |
+| **Lack** (neu, Position 7 am Ende) | – | 1,0 / 0,0 (der bisherige Standard) | 0,42 / 0,68 |
+
+* **Wo:** nur die Oberflächen-Werte (`FINISH_PARAMS`), nicht die gepackten Masken – Metall und Glätte dort tragen alle
+  Oberflächen, eine Änderung hätte Glanz, Candy und Chrom mitgezogen. Generator-Vorschauen, Viewer und Unity-Testbett
+  lesen dieselben Werte; Standardwerte im Viewer (`Finish.params`), im Shader `RobotBody` (`_Finish`) und im gebackenen
+  Blender-Material (`FinishRough`/`FinishMetal`) ziehen mit.
+* **Matt eine Stufe matter:** sonst wären Standard und Matt gleich und die 9 Skins, die Matt bewusst wählen (Shadow,
+  Tank, Void, Pixel, Origami, Bone …), stächen nicht mehr heraus; die 42 Skins mit Standard sind jetzt matt. Ein im
+  Spiel erzwungenes „Matt“ ist nicht mehr nötig.
+* **Looks:** IDs unverändert, kein neues Look-Format (wie neue Varianten oder Skins): gespeicherte Looks mit „Standard“
+  zeigen jetzt die matte Oberfläche – so gewollt. Ein Werkstoff bringt bei „Standard“ weiter seine eigene Oberfläche.
+  Ältere Leser kennen „Lack“ nicht und fallen auf Standard zurück. Unity-Testbett und Viewer melden eine unbekannte
+  Oberfläche jetzt als Warnung und nehmen Standard (vorher: still Standard bzw. die alten Glanzwerte).
+* **Prüfungen:** `verify_powdercoat` in `verify_robot.py` (IDs in Reihenfolge, Werte, Schema, wirksame Werte der
+  Panzerung aus den Masken: Standard 0,171 / 0,399, Lack 0,421 / 0,683); Viewer-Tests „finish Lack kept/without
+  warning“, „unknown finish replaced/warning“, „Lack differs from Standard“; EditMode-Tests `LackIsAKnownFinish`,
+  `UnknownFinishFallsBackToStandard`, `StandardIsMattAndLackKeepsTheOldGloss`. Neue Fixtures
+  `viewer/tests/look_v6_finish_lack.json`, `look_v6_unknown_finish.json` (alte unverändert).
+* Modell, Rig, Clips, QA, Clip-Daten, Typ-Maße, LODs und Kapseln unverändert (Bericht `qa`/`clips`/`type_bounds`/
+  `triangles`/`lods`/`hit_capsules` identisch zu 1.19).
+* Ergebnis Volllauf: `verify_robot.py` 323/323, Viewer 50 PASS, Unity-Testbett 29/29 Prüfungen und 16/16 EditMode-Tests;
+  Viewer: Classic/Hazard/Medic mit „Lack“ weichen höchstens 21 von 160 000 Pixeln vom alten Standard ab.
+
 ## 1.19.0 „Longstride“ – 2026-10-14
 
 **Clips im Spieltempo für Cube Escape 0.58** (Gehen 5 m/s, Sprint 8 m/s, Kriechen unter der 0,65-m-Kapsel 2,4 m/s,

@@ -1,4 +1,4 @@
-# Cube Escape – Roboter-Charakter (Generator 1.18.1)
+# Cube Escape – Roboter-Charakter (Generator 1.18.2)
 
 Der spielbare Roboter aus dem Cube-Escape-Keyart, vollständig per Skript erzeugt: Geometrie mit Bauteil-Varianten
 und Accessoires, Materialien, gebackene Texturen (Detail- und Ausdrucks-Texturen per ImageMagick), Rig mit Bein- und
@@ -475,11 +475,11 @@ ersetzt, neuere Versionen abgelehnt – dieselben Regeln gehören in die Spielst
 | Thema | Stand | Was zu tun ist |
 |---|---|---|
 | Unity-Integration | nicht begonnen, nicht im Spiel getestet (Spielprojekt bewusst unverändert) | FBX importieren, Materialien/Animator nach diesem README aufbauen, als neue Variante neben `RobotAnimator` |
-| Tempo Laufen | Clips bis Sprint ≈ 4,2 m/s; Spiel: 5 bzw. 8 m/s | Animator-Tempo = Geschwindigkeit / `naturalSpeed` (Sprint bei 8 m/s ≈ 1,9-fach) oder Spieltempo senken (Design-Entscheidung) |
-| Standhöhe | Roboter 1,38 m; Spiel-Kapsel seit Cube Escape 0.52 1,40 m (`PlayerController.CapsuleHeight`), Ego-Augenhöhe dort noch 1,0 m | beim Roboter-Import die Ego-Kamera auf `eyeHeight` setzen |
+| Tempo Laufen | Clips bis Sprint ≈ 4,2 m/s; Spiel: 5 bzw. 8 m/s – **entschieden 14.10.:** Spieltempo bleibt | Animator-Tempo = Geschwindigkeit / `naturalSpeed`, höchstens 1,4-fach; eine Generator-Version gibt Run und Sprint Schrittlängen für 5 und 8 m/s |
+| Standhöhe | Roboter 1,38 m; Spiel-Kapsel seit Cube Escape 0.52 1,40 m (`PlayerController.CapsuleHeight`), Ego-Augenhöhe dort noch 1,0 m – **entschieden 14.10.:** `eyeHeight` | beim Roboter-Import die Ego-Kamera auf `eyeHeight` (1,16 m) setzen |
 | Ducken | Duck-Kapsel 0,65 m bleibt (Entscheidung 13.10.); Ducken bis ≈ 1,05 m, darunter Kriechen (CrawlIdle, Crawl ≤ 0,57 m, seit 1.16) | im Spiel: unter niedriger Decke vom Ducken ins Kriechen wechseln |
 | Formen im Spiel | Mesh-Formen als eigene FBX, Lochung als Formel, Kabel als Teil | Spielversion „Spektrum“: Formen als Meshes bzw. Shader-Variante (Cull Off) mit Fallback |
-| Kapselbreite | Rumpf + Schultern 0,70 m (Runner) bis 0,77 m, mit Armen 0,73–0,87 m (`typeBounds`); Kapsel 0,6 m | Überstand akzeptieren (üblich) oder Radius 0,35 |
+| Kapselbreite | Rumpf + Schultern 0,70 m (Runner) bis 0,77 m, mit Armen 0,73–0,87 m (`typeBounds`); Kapsel 0,6 m – **entschieden 14.10.:** Radius bleibt 0,30 m | Überstand akzeptieren (ein breiterer Radius schlösse Durchgänge in bestehenden Leveln) |
 | Draw Calls | Standard und je Robotertyp: 1 Mesh, 3–4 Materialien, LOD1/LOD2 (1.13); modular 1 Mesh je Teil | bei frei kombinierbaren Looks die Teile zur Laufzeit zu einem Skinned Mesh kombinieren |
 | Spieler-Looks | Format, Schema, Migration und Beispiele fertig, Viewer getestet | im Spiel in den Spielstand übernehmen (`SaveData`-Migration) |
 | Robot Viewer | Universal-App ab macOS 13, lokal (ad hoc) signiert | für Weitergabe mit einer Apple-Developer-ID signieren und notarisieren |

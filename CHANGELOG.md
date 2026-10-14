@@ -3,6 +3,12 @@
 Versionen des Roboter-Generators (zählen getrennt von Cube Escape und Cubegen). Jede Version hat einen Tag
 `v<Version>` und einen Release-Branch `release/<Version>`.
 
+## 1.18.2 – 2026-10-14
+
+* Fahrplan und README: Tempo, Kapselbreite und Augenhöhe des Spieler-Roboters entschieden (Spieltempo bleibt,
+  Animation höchstens 1,4-fach bis zu längeren Run-/Sprint-Schritten; Kapselradius 0,30 m; Ego-Kamera auf `eyeHeight`).
+  Generator und Ausgabe unverändert.
+
 ## 1.18.1 – 2026-10-14
 
 * Skill `rg-unity-integration`: Werte im Spiel als Materialinstanz je Roboter statt `MaterialPropertyBlock`

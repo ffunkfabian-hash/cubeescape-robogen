@@ -282,7 +282,10 @@ SPRINGS = collections.OrderedDict([
 ])
 # Relative wind of the in-place locomotion clips (0..1): lifts the cape and bends the antenna backwards.
 CLIP_WIND = {"Walk": 0.3, "Run": 0.75, "RunFast": 0.9, "Sprint": 1.0, "CrouchWalk": 0.2, "SlopeSlide": 0.6,
-             "Fall": 0.35, "DoubleJump": 0.3}
+             "Fall": 0.35, "DoubleJump": 0.3,
+             # 1.19 (RunBack: the wind comes from behind, the cape lies on the back)
+             "Jog": 0.85, "SprintFull": 1.0, "StrafeLeft": 0.5, "StrafeRight": 0.5, "Wade": 0.4, "CarryWalk": 0.6,
+             "CrawlFast": 0.3}
 
 
 # Type emotes: a socket rides rigidly on a hand between two frames (the hat in "HatTip").

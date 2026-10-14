@@ -268,7 +268,7 @@ def qa_code_digest():
     h = hashlib.sha1()
     for name in QA_CODE_PARTS:
         h.update(code_source(name).encode())
-    for rule in (ACCEPTED_OVERLAPS, ACCEPTED_DETACH, HIDE_HELD_ITEM):
+    for rule in (ACCEPTED_OVERLAPS, ACCEPTED_DETACH, HIDE_HELD_ITEM, ACCEPTED_GROUND.items()):
         h.update(repr(sorted(rule)).encode())
     return h.hexdigest()
 

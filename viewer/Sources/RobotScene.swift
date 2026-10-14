@@ -967,6 +967,16 @@ final class RobotScene: NSObject, SCNSceneRendererDelegate {
         case "box":
             let face = f(p.forward), h = f(p.top)
             add(SCNBox(width: 0.9, height: CGFloat(h), length: 0.8, chamferRadius: 0.02), [0, h / 2, face + 0.4])
+        case "crate":       // carried: hangs at fixed points of the character space
+            let size = f(p.size), face = f(p.forward), bottom = f(p.bottom)
+            add(SCNBox(width: CGFloat(size), height: CGFloat(size), length: CGFloat(size), chamferRadius: 0.02),
+                [0, bottom + size / 2, face + size / 2])
+        case "wheel":       // valve wheel facing the robot (rim and two spokes)
+            let r = f(p.radius), up = f(p.up), plane = f(p.forward)
+            add(SCNTorus(ringRadius: CGFloat(r), pipeRadius: 0.018), [0, up, plane], euler: [.pi / 2, 0, 0])
+            add(SCNCylinder(radius: 0.012, height: CGFloat(2 * r)), [0, up, plane])
+            add(SCNCylinder(radius: 0.012, height: CGFloat(2 * r)), [0, up, plane], euler: [0, 0, .pi / 2])
+            add(SCNCylinder(radius: 0.02, height: 0.3), [0, up, plane + 0.15], euler: [.pi / 2, 0, 0])   // axle
         default:
             break
         }

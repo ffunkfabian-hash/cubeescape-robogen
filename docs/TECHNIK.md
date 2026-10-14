@@ -40,6 +40,8 @@ nennt die Fundstelle im Generator und was Cubegen davon übernehmen sollte. Pfle
 | Kanonische Reihenfolge vor Decimate | `canonical_bm()` | Facetten-Form in jedem Prozess gleich | Vor jeder reihenfolgeabhängigen Operation sortieren |
 | Voxel-Rechtecke | `emit_voxel_quads()`, `voxel_appearance()` | ein Drittel weniger Dreiecke, gleiches Bild | Gleich aussehende Nachbarflächen zusammenfassen |
 | Zeitband statt festem Budget | `timing_band()` | Laufzeit unter Last nicht mehr falsch „zu langsam“ | Zeiten gegen ruhige Referenzläufe mit Lasttoleranz bewerten |
+| Gesetzte Kontakte im Zieltempo | `planted_stride()`, `run_foot()`, `verify_longstride()` | Lauf-Clips bei 5/8/4/2,4 m/s ohne Rutschen | Schrittlänge aus Tempo × Kontaktzeit, nicht nach Gefühl |
+| Rolle über die Hülle aller Teile | `roll_hull()`, `lifted()` | ein Clip rollt für jeden Typ, nichts sinkt in den Boden | Bodenkontakt aus der Geometrie aller Varianten ableiten |
 
 ## 1. Skin = Daten
 
@@ -435,3 +437,30 @@ dem Inselabstand ableiten.
 
 **Für Cubegen:** Exporte nach Inhalt cachen; vor Decimate und ähnlichen Operationen kanonisch sortieren; Innen-Tests
 mit schrägen Strahlen; Voxel-Flächen verschmelzen; Laufzeiten im Lastband bewerten.
+
+## 18. Clips im Spieltempo (1.19)
+
+- **Schrittlänge folgt aus dem Tempo:** Ein gesetzter Fuß bewegt sich im In-place-Clip mit der Bodengeschwindigkeit
+  rückwärts. Länge = Tempo × Kontaktzeit (`planted_stride(speed, frames)`); Neigung und Gierwinkel bleiben während des
+  Kontakts konstant, sonst wandert der gemessene Mittelpunkt gegen den Kontaktpunkt. Mit dem kurzen Bein des Roboters
+  (0,31 m bis zum Knöchel) heißt 5 m/s: 2,5 Frames Kontakt bei 0,42 m Schritt, 8 m/s: 1,5 Frames.
+- **Mindestens zwei Frame-Schritte je Kontakt:** `measure_clips` mittelt über aufeinanderfolgende Kontakt-Frames und
+  braucht mehr als drei Werte; bei 8 m/s hat ein Doppelschritt nur einen Frame-Schritt je Fuß, deshalb trägt
+  SprintFull zwei Doppelschritte in einer Schleife. Die Prüfung misst jeden einzelnen Frame-Schritt (±3 %), nicht nur
+  den Median.
+- **Kleine Beine falten schnell:** Bei tiefem Becken kommt die Ferse im Schwung an den Oberschenkel. Hilfen in dieser
+  Reihenfolge: Zehen früh im Schwung anheben (die Ferse sinkt), das Becken wenig wippen (der tiefste Punkt fiel mit
+  dem durchschwingenden Bein zusammen), Becken leicht nach hinten kippen, den Fuß früh nach vorn bringen.
+- **Seitlich laufen ohne Kreuzen:** Hüfte 70° in die Laufrichtung drehen, Beine auf zwei Spuren in Laufrichtung, Brust
+  und Kopf zurückdrehen. Ein kürzerer Kontakt (2,2 statt 2,5 Frames) gibt einen kürzeren Schritt und lässt das Becken
+  höher.
+- **Rollen über die Hülle:** Der Körper wird je Frame angehoben, bis die tiefste Ecke aller Teile (alle Varianten,
+  Formen) 2 mm über dem Boden liegt – gelöst mit dem echten Solver (`pose_matrix`) über die Ruhepose-Punkte je Knochen.
+  Gesetzte Füße bleiben Weltpunkte, angezogene Füße reiten auf dem Becken; reicht das Bein nicht mehr, verlässt der
+  Fuß den Boden (Ziel auf die Beinlänge kürzen statt IK-Klemmen). Große Aufsätze würden den Standard-Roboter weit
+  anheben: sie sind aus der Hülle genommen und als benannte Bodenausnahme erlaubt.
+- **Getragenes als Daten:** Die Hände halten Kiste und Rad an festen Punkten des Charakterraums; das Spiel hängt die
+  Kiste an den Root, die Daten (`prop`) beschreiben sie, die Prüfung hält sie frei vom Körper.
+
+**Für Cubegen:** Bewegte Teile (Räder, Ketten, Füße) mit Kontaktgeschwindigkeit = Fahrtempo animieren und jeden
+Frame-Schritt prüfen; Bodenkontakt für Varianten aus der Hülle aller Varianten ableiten.

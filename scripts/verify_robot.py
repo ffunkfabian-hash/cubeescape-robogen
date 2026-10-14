@@ -682,6 +682,134 @@ def verify_slimline():
           bad[:6] or n)
 
 
+# 1.19 Longstride: clips at the game's own tempo (Cube Escape 0.58), carried crate, valve wheel, knockback, roll
+LONGSTRIDE_SPEEDS = {"Jog": 5.0, "SprintFull": 8.0, "StrafeLeft": 5.0, "StrafeRight": 5.0, "RunBack": 5.0,
+                     "CarryWalk": 5.0, "Wade": 4.0, "CrawlFast": 2.4}
+# direction in which a planted contact moves (Blender world: the robot looks along -Y, its left is +X)
+LONGSTRIDE_GROUND = {"Jog": (0, 1), "SprintFull": (0, 1), "StrafeLeft": (-1, 0), "StrafeRight": (1, 0),
+                     "RunBack": (0, -1), "CarryWalk": (0, 1), "Wade": (0, 1), "CrawlFast": (0, 1)}
+PLANT_TOLERANCE = 0.03       # every frame step of a planted contact within 3 % of naturalSpeed
+
+
+def evaluated(ob):
+    dg = bpy.context.evaluated_depsgraph_get()
+    ev = ob.evaluated_get(dg)
+    me = ev.to_mesh()
+    co = np.empty(len(me.vertices) * 3)
+    me.vertices.foreach_get("co", co)
+    ev.to_mesh_clear()
+    mw = np.array(ob.matrix_world)
+    return co.reshape(-1, 3) @ mw[:3, :3].T + mw[:3, 3]
+
+
+def group_index(ob):
+    names = {g.index: g.name for g in ob.vertex_groups}
+    grp = np.array([names[max(v.groups, key=lambda g: g.weight).group] if v.groups else "" for v in ob.data.vertices])
+    return grp
+
+
+def verify_longstride():
+    cfg = json.load(open(os.path.join(OUT, "robot_config.json"), encoding="utf-8"))
+    clips = cfg.get("clips", {})
+    new = ["Jog", "SprintFull", "StrafeLeft", "StrafeRight", "RunBack", "CarryIdle", "CarryWalk", "Wade", "Crank",
+           "Knockback", "LandRoll", "CrawlFast"]
+    if not all(n in clips for n in new):          # a --groups run without the 1.19 clips
+        return
+    speeds = {n: clips[n]["naturalSpeed"] for n in LONGSTRIDE_SPEEDS}
+    check("longstride: natural speeds 5 / 8 / 5 / 4 / 2.4 m/s (+-1 %)",
+          all(abs(speeds[n] - v) <= 0.01 * v for n, v in LONGSTRIDE_SPEEDS.items()), speeds)
+    steps = {n: len(clips[n]["footsteps"]) for n in LONGSTRIDE_SPEEDS}
+    check("longstride: two steps per stride (SprintFull: two strides per loop)",
+          all(v == (4 if n == "SprintFull" else 2) for n, v in steps.items()), steps)
+    loops = {n: clips[n]["loop"] for n in new}
+    check("longstride: loops (Knockback and LandRoll play once)",
+          all(v == (n not in ("Knockback", "LandRoll")) for n, v in loops.items()), loops)
+    still = [n for n in new if any(abs(v) > 1e-4 for v in clips[n]["rootMotion"]["move"]) or
+             abs(clips[n]["rootMotion"]["turnRight"]) > 0.01]
+    check("longstride: all in place (root motion 0)", not still, still)
+    cf = clips["CrawlFast"]
+    check("longstride: CrawlFast below 0.60 m, steps on the hands, items hidden",
+          cf["height"]["max"] <= 0.60 and cf["gait"] == "hands" and cf["hideHeldItem"] and
+          all(s.startswith("Hand_") for _, s in cf["footsteps"]), cf["height"])
+    ev = {n: clips[n]["events"] for n in ("LandRoll", "Knockback", "Crank")}
+    check("longstride: events (LandRoll Impact at touchdown, Knockback Impact, Crank Grab)",
+          [0, "Impact"] in ev["LandRoll"] and any(e == "Impact" for _, e in ev["Knockback"]) and
+          any(e == "Grab" for _, e in ev["Crank"]), ev)
+    props = {n: (clips[n]["prop"] or {}).get("type") for n in ("CarryIdle", "CarryWalk", "Crank")}
+    check("longstride: props crate (carry) and wheel (crank)",
+          props == {"CarryIdle": "crate", "CarryWalk": "crate", "Crank": "wheel"}, props)
+    cats = {c["id"]: c["clips"] for c in cfg["clipCategories"]}
+    want = {"Move": ["Jog", "SprintFull", "StrafeLeft", "StrafeRight", "RunBack", "Wade"], "Air": ["LandRoll"],
+            "Crouch": ["CrawlFast"], "Interact": ["CarryIdle", "CarryWalk", "Crank"], "Damage": ["Knockback"]}
+    check("longstride: categories, appended at the end", all(cats[k][-len(v):] == v for k, v in want.items()),
+          {k: cats[k][-len(v):] for k, v in want.items()})
+    ob, arm = bpy.data.objects.get("Robot_Mesh"), bpy.data.objects.get("Robot_Armature")
+    if ob is None or arm is None:
+        return
+    grp = group_index(ob)
+    # planted contacts: every frame step on the ground moves at naturalSpeed against the running direction
+    worst, wrong = {}, []
+    for n, (dx, dy) in LONGSTRIDE_GROUND.items():
+        hands = clips[n]["gait"] == "hands"
+        sides = {s: np.isin(grp, ["Hand_" + s, "Fingers_" + s] if hands else ["Foot_" + s]) for s in "LR"}
+        set_action(arm, bpy.data.actions[n])
+        prev, dev = None, 0.0
+        for f in range(clips[n]["frames"] + 1):
+            bpy.context.scene.frame_set(f)
+            co = evaluated(ob)
+            cur = {}
+            for s, m in sides.items():
+                pts = co[m]
+                cur[s] = (pts[:, 2].min() < (0.035 if hands else 0.006), pts.mean(axis=0))
+                if prev and cur[s][0] and prev[s][0]:
+                    d = (cur[s][1] - prev[s][1])[:2] * 30.0
+                    along = d[0] * dx + d[1] * dy
+                    dev = max(dev, abs(np.linalg.norm(d) - speeds[n]) / speeds[n])
+                    if along < 0.97 * np.linalg.norm(d):
+                        wrong.append("%s@%d" % (n, f))
+            prev = cur
+        worst[n] = round(float(dev), 4)
+    check("longstride: planted contacts move at naturalSpeed (+-3 %) against the run, no slip",
+          all(v <= PLANT_TOLERANCE for v in worst.values()) and not wrong, (worst, wrong[:4]))
+    # standing clips: a foot on the ground stays where it is (< 2 mm per frame)
+    feet = {s: grp == "Foot_" + s for s in "LR"}
+    slide = {}
+    for n in ("CarryIdle", "Crank", "Knockback", "LandRoll"):
+        set_action(arm, bpy.data.actions[n])
+        prev, most = None, 0.0
+        for f in range(clips[n]["frames"] + 1):
+            bpy.context.scene.frame_set(f)
+            co = evaluated(ob)
+            cur = {s: (co[m][:, 2].min() < 0.006, co[m].mean(axis=0)) for s, m in feet.items()}
+            for s in "LR":
+                if prev and cur[s][0] and prev[s][0]:
+                    most = max(most, float(np.linalg.norm((cur[s][1] - prev[s][1])[:2])))
+            prev = cur
+        slide[n] = round(most, 4)
+    check("longstride: feet on the ground stay put in CarryIdle, Crank, Knockback, LandRoll (< 2 mm/frame)",
+          all(v < 0.002 for v in slide.values()), slide)
+    # the carried crate: no body part inside it, both hands on its side faces
+    prop = clips["CarryIdle"]["prop"]
+    size, front, bottom = prop["size"], prop["forward"], prop["bottom"]
+    held = np.array([g.startswith(("Hand_", "Fingers_", "Thumb_", "Prop_")) for g in grp])
+    inside, gap = [], 0.0
+    for n in ("CarryIdle", "CarryWalk"):
+        set_action(arm, bpy.data.actions[n])
+        for f in range(0, clips[n]["frames"] + 1, 2):
+            bpy.context.scene.frame_set(f)
+            co = evaluated(ob)
+            body = co[~held]
+            m = ((np.abs(body[:, 0]) < size / 2 - 0.005) & (-body[:, 1] > front + 0.005) &
+                 (-body[:, 1] < front + size) & (body[:, 2] > bottom + 0.005) & (body[:, 2] < bottom + size))
+            if m.any():
+                inside.append("%s@%d" % (n, f))
+            for s in "LR":
+                hand = co[np.isin(grp, ["Hand_" + s, "Fingers_" + s])]
+                gap = max(gap, float(np.abs(np.abs(hand[:, 0]) - size / 2).min()))
+    check("longstride: crate clear of the body, hands on its sides (< 3 cm)", not inside and gap < 0.03,
+          (inside[:4], round(gap, 4)))
+
+
 def main():
     print("== verify %s" % bpy.data.filepath)
     ref = verify_blend()
@@ -698,6 +826,7 @@ def main():
     verify_reshape()
     verify_crawlspace()
     verify_slimline()
+    verify_longstride()
     ok = all(r["ok"] for r in results)
     os.makedirs(os.path.join(OUT, "logs"), exist_ok=True)
     with open(os.path.join(OUT, "logs", "verify_report.json"), "w", encoding="utf-8") as fh:

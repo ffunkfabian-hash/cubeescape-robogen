@@ -32,7 +32,7 @@ import make_textures  # noqa: E402 - ImageMagick source textures
 import export_viewer  # noqa: E402 - data for the RobotViewer app
 
 LOG = logging.getLogger("robot")
-VERSION = "1.18.2"
+VERSION = "1.19.0"
 
 # ----------------------------------------------------------------------------------------------
 # Arguments and logging

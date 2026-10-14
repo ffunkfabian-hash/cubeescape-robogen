@@ -9,24 +9,27 @@ STAND = P()
 # gait: "feet" or "hands" (crawling) - which contacts give the natural speed, the contacts and the footsteps
 Anim = collections.namedtuple("Anim", "name frames loop fn desc group unity gait")
 ANIMS = []  # Anim records in registration order
-GROUPS = ["Basis", "Phase1", "Phase2", "Phase3", "Phase4", "Phase5", "Phase6", "Phase7", "Phase8"]
+GROUPS = ["Basis", "Phase1", "Phase2", "Phase3", "Phase4", "Phase5", "Phase6", "Phase7", "Phase8", "Phase9"]
 GROUP_LABELS = {"Basis": "Basis", "Phase1": "Spielsysteme", "Phase2": "Werkzeuge & Interaktion", "Phase3": "Charakter",
                 "Phase4": "Tänze", "Phase5": "Emotes", "Phase6": "Klettern & Hängen", "Phase7": "Tempo & Ducken",
-                "Phase8": "Kriechen"}
+                "Phase8": "Kriechen", "Phase9": "Spieltempo & Aktionen"}
 
 
 # 1.16: categories by content for the viewer, ANIMATIONS.md and the game (the groups above are build phases and stay
 # for contact sheets, QA packages and --groups). Every clip in exactly one category, in display order; IDs permanent.
 CLIP_CATEGORIES = collections.OrderedDict([
     ("Move", ("Gehen & Laufen", ["Idle", "Walk", "WalkStart", "WalkStop", "Run", "RunFast", "Sprint", "TurnLeft",
-                                 "TurnRight", "MudWalk", "SlopeSlide"])),
-    ("Air", ("Springen & Fallen", ["Jump", "DoubleJump", "Fall", "Land"])),
-    ("Crouch", ("Ducken & Kriechen", ["Crouch", "CrouchWalk", "CrouchDeep", "CrawlIdle", "Crawl"])),
+                                 "TurnRight", "MudWalk", "SlopeSlide", "Jog", "SprintFull", "StrafeLeft",
+                                 "StrafeRight", "RunBack", "Wade"])),
+    ("Air", ("Springen & Fallen", ["Jump", "DoubleJump", "Fall", "Land", "LandRoll"])),
+    ("Crouch", ("Ducken & Kriechen", ["Crouch", "CrouchWalk", "CrouchDeep", "CrawlIdle", "Crawl", "CrawlFast"])),
     ("Climb", ("Klettern & Hängen", ["LedgeGrab", "HangIdle", "ShimmyLeft", "ShimmyRight", "HangSwing", "ClimbUp",
                                      "LadderUp", "LadderDown", "Vault"])),
     ("Interact", ("Interaktion & Werkzeuge", ["Interact", "PickUp", "Push", "PushStart", "PushStep", "ToolAim",
-                                               "ToolUse", "Scan", "TerminalTyping", "PortalEnter"])),
-    ("Damage", ("Treffer & Gefahren", ["Hit", "HitHeavy", "Electrocuted", "GasCough", "Death", "Respawn"])),
+                                               "ToolUse", "Scan", "TerminalTyping", "PortalEnter", "CarryIdle",
+                                               "CarryWalk", "Crank"])),
+    ("Damage", ("Treffer & Gefahren", ["Hit", "HitHeavy", "Electrocuted", "GasCough", "Death", "Respawn",
+                                        "Knockback"])),
     ("Idle", ("Warten & Charakter", ["IdleScratch", "IdleFootTap", "IdleYawn", "Talk", "Listen", "EdgeBalance",
                                      "Celebrate"])),
     ("Emote", ("Gesten", ["Wave", "Bow", "Clap", "Think", "Point", "Shrug", "NodYes", "ShakeNo", "HatTip",
@@ -1434,6 +1437,543 @@ def flag_wave(f):
              eyes=(1.0 - 0.1 * env, -0.004 * env, 0.004 * env))
 
 
+# ================================ Phase 9 (1.19): the game's own tempo ================================
+# Cube Escape 0.58 plays the robot at its real speeds: walk 5 m/s, sprint 8 m/s, crawl 2.4 m/s under the 0.65 m crouch
+# capsule, water 4 m/s, carrying the magnet crate 5 m/s; the shoulder camera keeps the robot facing it (strafe, run
+# backwards). These clips play at tempo 1 at those speeds: a planted contact moves at exactly naturalSpeed while it is
+# on the ground (constant pitch and yaw, so the measured mean moves with the contact point), and every planted phase
+# spans at least two frame steps so measure_clips sees it. Stride = speed * planted frames / FPS.
+
+def planted_stride(speed, frames):
+    """Metres a contact travels in `frames` frames at `speed` m/s."""
+    return speed * frames / FPS
+
+
+def run_foot(u, stride, stance, lift, kick=0.0, reach=0.0, p_plant=0.0, p_off=24.0, p_swing=10.0, p_land=-4.0,
+             sweep=0.75):
+    """One foot of a fast in-place gait along its running line: (back, z, pitch), u = 0 at touchdown. While planted,
+    back runs from -stride/2 to +stride/2 at constant speed with constant pitch; the swing kicks the heel up behind
+    (kick, m), drives the knee and reaches past the touchdown point (reach, m) and comes down onto it; the foot is
+    back in front at the share `sweep` of the swing."""
+    u %= 1.0
+    if u < stance:
+        return (-stride / 2 + stride * u / stance, 0.0, p_plant)
+    w = (u - stance) / (1.0 - stance)
+    back = (lerp(stride / 2, -stride / 2, ease(min(1.0, w / sweep))) + kick * pulse(w, 0.28, 0.28)
+            - reach * pulse(w, 0.74, 0.26))
+    z = lift * math.sin(math.pi * w) ** 0.8
+    if w < 0.12:                                    # toe-off
+        p = lerp(p_plant, p_off, ease(w / 0.12))
+    elif w < 0.4:                                   # toes up early: the heel stays clear of the thigh
+        p = lerp(p_off, p_swing, ease((w - 0.12) / 0.28))
+    else:
+        p = lerp(p_swing, p_land, ease((w - 0.4) / 0.6))
+    return (back, z, p)
+
+
+def game_run(f, frames, cycles, speed, planted, lift, kick, reach, lean, pelvis_z, swing, bob, elbow=-84.0,
+             tilt=6.0, p_off=24.0, p_swing=10.0, center=0.0, outward=0.006, yaw=10.0):
+    """Forward run cycle (cycles per loop) at `speed` m/s with `planted` frames of ground contact per step."""
+    t = (cycles * f / frames) % 1.0
+    stance = planted * cycles / frames
+    stride = planted_stride(speed, planted)
+    c = math.cos(2 * math.pi * t)
+    feet = {}
+    for side, off in (("L", 0.0), ("R", 0.5)):
+        back, z, p = run_foot(t + off, stride, stance, lift, kick, reach, p_off=p_off, p_swing=p_swing)
+        feet[side] = (outward, center + back, z, p)
+    b = math.cos(4 * math.pi * (t - stance / 2))     # lowest while a foot is planted
+    return P(
+        pelvis=(0.008 * math.sin(2 * math.pi * t), center, pelvis_z - bob * b),
+        pelvis_rot=(tilt, 0, -yaw * c),
+        spine=(lean - tilt + 2 * b, 0, yaw * c),
+        head=(-lean + 4 - 2 * b, 0, -0.4 * yaw * c),
+        uarm_L=arm(swing * c, 10),
+        uarm_R=arm(-swing * c, 10),
+        larm_L=arm(elbow + 14 * c),
+        larm_R=arm(elbow - 14 * c),
+        hand_LR=arm(-10),
+        shoulder_L=(0, -4 * max(0.0, -c), 0),
+        shoulder_R=(0, -4 * max(0.0, c), 0),
+        fing_LR=curl(78),
+        thumb_LR=curl(48),
+        foot_L=feet["L"],
+        foot_R=feet["R"],
+        eyes=(0.92, 0, 0.003),
+    )
+
+
+JOG_FRAMES, JOG_PLANTED = 16, 2.5
+
+
+@anim("Jog", JOG_FRAMES, True, "Laufen im Spieltempo 5 m/s: lange Flugphase, Fersen hoch, Arme schwingen mit",
+      "Phase9", "in-place; Animator-Tempo = Geschwindigkeit / naturalSpeed (5 m/s)")
+def jog(f):
+    return game_run(f, JOG_FRAMES, 1, 5.0, JOG_PLANTED, lift=0.056, kick=0.015, reach=0.03, lean=16, pelvis_z=-0.090,
+                    swing=44, bob=0.004, tilt=-8, p_off=10, p_swing=-6)
+
+
+SPRINT_FULL_FRAMES, SPRINT_FULL_PLANTED = 20, 1.5     # two strides: a planted phase of 1.5 frames is one frame step
+
+
+@anim("SprintFull", SPRINT_FULL_FRAMES, True, "Vollsprint 8 m/s: stark vorgebeugt, Knie hoch, Arme pumpen (zwei "
+      "Doppelschritte)", "Phase9", "in-place; Animator-Tempo = Geschwindigkeit / naturalSpeed (8 m/s)")
+def sprint_full(f):
+    return game_run(f, SPRINT_FULL_FRAMES, 2, 8.0, SPRINT_FULL_PLANTED, lift=0.06, kick=0.0, reach=0.03, lean=30,
+                    pelvis_z=-0.094, swing=62, bob=0.012, elbow=-88, tilt=-8, p_off=10, p_swing=-6)
+
+
+# Strafing: the hips turn towards the running direction and the legs run along it on two tracks (they never cross),
+# chest and head turn back to the camera.
+STRAFE_YAW = 70.0
+STRAFE_PLANTED = 2.2       # a shorter planted phase = a shorter stride: the legs work less across the turned hips
+
+
+def strafe(f, sign):
+    """sign +1: to the robot's left (+X), -1: to its right."""
+    frames, planted = JOG_FRAMES, STRAFE_PLANTED
+    t = f / frames
+    stance = planted / frames
+    stride = planted_stride(5.0, planted)
+    c = math.cos(2 * math.pi * t)
+    yaw = sign * STRAFE_YAW
+    feet, yaws = {}, {}
+    for side, s, off in (("L", 1, 0.0), ("R", -1, 0.5)):
+        back, z, p = run_foot(t + off, stride, stance, 0.044, 0.0, 0.0, p_off=6, p_swing=-10)
+        hx, hy = LEG_X * s * math.cos(math.radians(yaw)), LEG_X * s * math.sin(math.radians(yaw))
+        x = hx - sign * (back + 0.020)         # the ground moves against the running direction
+        feet[side] = (s * x - LEG_X, 1.35 * hy, z, p)
+        yaws[side] = sign * 72.0
+    b = math.cos(4 * math.pi * (t - stance / 2))
+    return P(
+        pelvis=(0.0, 0.0, -0.072 - 0.004 * b),
+        pelvis_rot=(-11, 0, yaw + 6 * c),
+        spine=(20 + 2 * b, sign * 3, -0.62 * yaw - 6 * c),
+        head=(-8 - 2 * b, -sign * 3, -0.38 * yaw),
+        uarm_L=arm(30 * c, 16),
+        uarm_R=arm(-30 * c, 16),
+        larm_L=arm(-82 + 10 * c),
+        larm_R=arm(-82 - 10 * c),
+        hand_LR=arm(-10),
+        fing_LR=curl(78),
+        thumb_LR=curl(48),
+        foot_L=feet["L"], foot_R=feet["R"], footyaw_L=(yaws["L"],), footyaw_R=(yaws["R"],),
+        eyes=(0.95, -sign * 0.006, 0.002),
+    )
+
+
+@anim("StrafeLeft", JOG_FRAMES, True, "seitwärts nach links laufen (5 m/s), Hüfte dreht mit, Blick bleibt vorn",
+      "Phase9", "in-place; Animator-Tempo = Geschwindigkeit / naturalSpeed (5 m/s)")
+def strafe_left(f):
+    return strafe(f, 1)
+
+
+@anim("StrafeRight", JOG_FRAMES, True, "seitwärts nach rechts laufen (5 m/s), Hüfte dreht mit, Blick bleibt vorn",
+      "Phase9", "in-place; Animator-Tempo = Geschwindigkeit / naturalSpeed (5 m/s)")
+def strafe_right(f):
+    return strafe(f, -1)
+
+
+@anim("RunBack", JOG_FRAMES, True, "rückwärts laufen (5 m/s) auf den Fußballen, Oberkörper leicht vor", "Phase9",
+      "in-place; Animator-Tempo = Geschwindigkeit / naturalSpeed (5 m/s)")
+def run_back(f):
+    frames, planted = JOG_FRAMES, JOG_PLANTED
+    t = f / frames
+    stance = planted / frames
+    stride = planted_stride(5.0, planted)
+    c = math.cos(2 * math.pi * t)
+    feet = {}
+    for side, off in (("L", 0.0), ("R", 0.5)):
+        back, z, p = run_foot(t + off, stride, stance, 0.055, 0.015, 0.02, p_plant=14, p_off=-4, p_swing=0, p_land=14)
+        feet[side] = (0.010, 0.02 - back, z, p)       # mirrored: the foot lands behind and is planted forwards
+    b = math.cos(4 * math.pi * (t - stance / 2))
+    return P(
+        pelvis=(0.008 * math.sin(2 * math.pi * t), 0.02, -0.088 - 0.004 * b),
+        pelvis_rot=(-2, 0, 8 * c),
+        spine=(20 + 2 * b, 0, -8 * c),
+        head=(-14 - 2 * b, 0, 3 * c),
+        uarm_L=arm(-34 * c, 14),
+        uarm_R=arm(34 * c, 14),
+        larm_L=arm(-80 - 12 * c),
+        larm_R=arm(-80 + 12 * c),
+        hand_LR=arm(-10),
+        fing_LR=curl(72),
+        thumb_LR=curl(45),
+        foot_L=feet["L"], foot_R=feet["R"],
+        eyes=(1.05, 0, 0.002),
+    )
+
+
+WADE_FRAMES, WADE_PLANTED = 18, 2.5
+
+
+@anim("Wade", WADE_FRAMES, True, "durch knie- bis hüfttiefes Wasser waten (4 m/s): Knie hoch, Arme balancieren",
+      "Phase9", "in-place; Animator-Tempo = Geschwindigkeit / naturalSpeed (4 m/s)")
+def wade(f):
+    t = f / WADE_FRAMES
+    stance = WADE_PLANTED / WADE_FRAMES
+    stride = planted_stride(4.0, WADE_PLANTED)
+    c = math.cos(2 * math.pi * t)
+    s2 = math.sin(2 * math.pi * t)
+    feet = {}
+    for side, off in (("L", 0.0), ("R", 0.5)):
+        back, z, p = run_foot(t + off, stride, stance, 0.075, 0.0, 0.02, p_off=8, p_swing=-10, p_land=-2)
+        feet[side] = (0.012, back, z, p)
+    b = math.cos(4 * math.pi * (t - stance / 2))
+    return P(
+        pelvis=(0.016 * s2, 0.0, -0.062 - 0.004 * b),
+        pelvis_rot=(-6, -3 * s2, -12 * c),
+        spine=(16 + 2 * b, 4 * s2, 10 * c),
+        head=(-12 - 2 * b, -3 * s2, -2 * c),
+        uarm_L=arm(-14 + 16 * c, 48 + 8 * s2),          # arms out to the sides, rowing against the water
+        uarm_R=arm(-14 - 16 * c, 48 - 8 * s2),
+        larm_L=arm(-34 + 10 * c),
+        larm_R=arm(-34 - 10 * c),
+        hand_LR=arm(-16, 0, 0),
+        fing_LR=curl(24),
+        foot_L=feet["L"], foot_R=feet["R"],
+        eyes=(0.9, 0.004 * s2, 0.003),
+    )
+
+
+# The magnet crate (Cube Escape 0.58): a 0.8 m steel cube carried in front of the chest. The hands hold its side faces
+# at fixed points of the character space, so the game can hang the crate on the root: it does not bob with the body.
+CRATE_SIZE = 0.80
+CRATE_FRONT = 0.30        # m from the root to its near face (character forward)
+CRATE_BOTTOM = 0.36       # m above the ground
+CRATE_GRIP = (CRATE_SIZE / 2 + 0.035, -(CRATE_FRONT + 0.04), CRATE_BOTTOM + 0.22)     # knuckle target (left hand)
+CRATE_POLE = (1.0, 0.2, -0.6)                                                        # elbows out and down
+CARRY_ARMS = dict(shoulder_LR=(0, 0, -12), hand_LR=arm(0, 0, -70), fing_LR=curl(22), thumb_LR=curl(10),
+                  handik_LR=(*CRATE_GRIP, *CRATE_POLE, 1.0))
+
+
+@anim("CarryIdle", 60, True, "schwere Stahlkiste (0,8 m) vor der Brust halten, schnaufen", "Phase9",
+      "Kiste am Root: siehe clips.CarryIdle.prop")
+def carry_idle(f):
+    t = f / 60.0
+    br = math.sin(2 * math.pi * 2 * t)
+    sway = math.sin(2 * math.pi * t)
+    return P(pelvis=(0.006 * sway, 0.01, -0.060 - 0.006 * (0.5 + 0.5 * br)), pelvis_rot=(-4, 0, 0),
+             spine=(2 + 1.5 * br, 0, 2 * sway), head=(-6 - br, 2 * sway, 0),
+             foot_LR=(0.040, 0.0, 0.0, 0.0), eyes=(0.9, 0, 0.004), **CARRY_ARMS)
+
+
+@anim("CarryWalk", JOG_FRAMES, True, "mit der Stahlkiste im Spieltempo laufen (5 m/s), Kiste bleibt ruhig", "Phase9",
+      "in-place; Animator-Tempo = Geschwindigkeit / naturalSpeed (5 m/s); Kiste am Root")
+def carry_walk(f):
+    t = f / JOG_FRAMES
+    stance = JOG_PLANTED / JOG_FRAMES
+    stride = planted_stride(5.0, JOG_PLANTED)
+    c = math.cos(2 * math.pi * t)
+    feet = {}
+    for side, off in (("L", 0.0), ("R", 0.5)):
+        back, z, p = run_foot(t + off, stride, stance, 0.05, 0.0, 0.02, p_off=8, p_swing=-8)
+        feet[side] = (0.010, back, z, p)
+    b = math.cos(4 * math.pi * (t - stance / 2))
+    return P(pelvis=(0.006 * math.sin(2 * math.pi * t), 0.0, -0.086 - 0.004 * b), pelvis_rot=(-8, 0, -8 * c),
+             spine=(8 + b, 0, 8 * c), head=(-8 - b, 0, -2 * c), foot_L=feet["L"], foot_R=feet["R"],
+             eyes=(0.85, 0, 0.004), **CARRY_ARMS)
+
+
+# Valve wheel in front of the chest (wheel plane faces the robot): both hands turn it clockwise like a steering wheel
+# at ten and two, then grip again.
+WHEEL_UP, WHEEL_FRONT, WHEEL_R = 0.72, 0.40, 0.20
+CRANK_FRAMES, CRANK_TURN = 45, 32          # frames per loop, frame at which the turn ends and the hands regrip
+
+
+def wheel_grip(a, back=0.0, w=1.0):
+    """Knuckle target on the rim at angle a (deg, 0 = the robot's left, 90 = top), left-hand convention for x."""
+    x = WHEEL_R * math.cos(math.radians(a))
+    return (x, -WHEEL_FRONT + 0.03 + back, WHEEL_UP + WHEEL_R * math.sin(math.radians(a)), 1.0, 0.1, -0.15, w)
+
+
+@anim("Crank", CRANK_FRAMES, True, "Ventilrad vor der Brust mit beiden Händen drehen, nachgreifen", "Phase9",
+      "Rad: siehe clips.Crank.prop")
+def crank(f):
+    if f <= CRANK_TURN:
+        k = ease(f / CRANK_TURN)
+        lift = 0.0
+    else:
+        s = (f - CRANK_TURN) / (CRANK_FRAMES - CRANK_TURN)
+        k = 1.0 - ease(s)
+        lift = math.sin(math.pi * s)              # the hands leave the rim on the way back
+    turn = 36.0 * k
+    al, ar = 20.0 + turn, 160.0 + turn            # left hand 10 o'clock -> up, right hand 2 o'clock -> down
+    xl, yl, zl, *pl = wheel_grip(al, 0.04 * lift)
+    xr, yr, zr, *pr = wheel_grip(ar, 0.04 * lift)
+    effort = math.sin(math.pi * min(1.0, f / CRANK_TURN))
+    return P(
+        pelvis=(-0.012 * k, 0.02, -0.050 - 0.012 * effort),
+        pelvis_rot=(-2, 0, 1 - 2 * k),
+        spine=(10 + 3 * effort, -3 * k, 3 - 5 * k),
+        head=(-10 - 2 * effort, 2 * k, 4 * k - 2),
+        handik_L=(xl, yl, zl, *pl), handik_R=(-xr, yr, zr, *pr),
+        hand_LR=arm(-10, 0, 0), fing_LR=curl(70 - 40 * lift), thumb_LR=curl(45 - 25 * lift),
+        foot_L=(0.035, -0.04, 0.0, 0.0), foot_R=(0.035, 0.07, 0.0, 0.0),
+        eyes=(0.8 + 0.1 * lift, 0, 0.004),
+    )
+
+
+def foot_step(f, f0, f1, y0, y1, height, out0=0.0, out1=0.0):
+    """Foot channel moving from y0 to y1 between f0 and f1 through the air (planted before and after)."""
+    if f <= f0:
+        return (out0, y0, 0.0, 0.0)
+    if f >= f1:
+        return (out1, y1, 0.0, 0.0)
+    s = (f - f0) / (f1 - f0)
+    e = ease(s)
+    return (lerp(out0, out1, e), lerp(y0, y1, e), height * math.sin(math.pi * s), -12 * math.sin(math.pi * s))
+
+
+KNOCK_FRAMES = 26
+
+
+@anim("Knockback", KNOCK_FRAMES, False, "von einem schweren Treffer zurückgeschleudert, fängt sich und kommt zurück",
+      "Phase9")
+def knockback(f):
+    pose = keyed(f, [
+        (0, STAND),
+        (2, P(pelvis=(0, 0.04, -0.03), spine=(-20, 0, 4), head=(-20, -6, 6), uarm_LR=arm(-62, 36),
+              larm_LR=arm(-18), fing_LR=curl(0), thumb_LR=curl(-10), eyes=(0.2, 0, 0)), "out"),
+        (6, P(pelvis=(0, 0.16, -0.02), pelvis_rot=(-8, 0, 0), spine=(-14, 0, 2), head=(-18, -4, 4),
+              uarm_L=arm(-66, 46), uarm_R=arm(-52, 50), larm_LR=arm(-24), fing_LR=curl(5), eyes=(0.5, 0, 0))),
+        (9, P(pelvis=(0, 0.20, -0.13), pelvis_rot=(4, 0, 0), spine=(22, 0, 0), head=(4, 0, 0), uarm_LR=arm(-40, 30),
+              larm_LR=arm(-36), fing_LR=curl(30), eyes=(0.7, 0, -0.003)), "out"),
+        (13, P(pelvis=(0, 0.19, -0.09), pelvis_rot=(2, 0, 0), spine=(12, 0, 0), head=(-4, 0, 0),
+               uarm_LR=arm(-20, 18), larm_LR=arm(-30), fing_LR=curl(25), eyes=(0.9, 0, 0))),
+        (19, P(pelvis=(0, 0.08, -0.04), spine=(5, 0, 0), head=(0, 0, 0), uarm_LR=arm(-4, 8), larm_LR=arm(-16))),
+        (KNOCK_FRAMES, STAND),
+    ])
+    # the feet: a hop back together, landing staggered, then two steps back to the start (always planted or lifted)
+    if f < 12:
+        fl = foot_step(f, 1, 8, 0.0, 0.17, 0.07)
+        fr = foot_step(f, 1, 8, 0.0, 0.26, 0.09, 0.0, 0.02)
+    else:
+        fl = foot_step(f, 18, 23, 0.17, 0.0, 0.05)
+        fr = foot_step(f, 13, 19, 0.26, 0.04, 0.035, 0.02, 0.0)
+        if f >= 19:
+            fr = foot_step(f, 23, 26, 0.04, 0.0, 0.03)
+    return with_(pose, foot_L=fl, foot_R=fr)
+
+
+# Fast crawl on hands and knees under the 0.65 m crouch capsule (2.4 m/s): a trot, each hand with the opposite knee.
+# The hands are planted (natural speed and steps come from them, gait "hands"); the knees brush the ground at the
+# lowest point of their arc; the feet trail behind, soles up. The big head stays low, looking ahead and down.
+CRAWLF_FRAMES, CRAWLF_PLANTED = 14, 3.5
+CRAWLF_PELVIS = (0.0, 0.11, -0.203)       # pelvis offset (m): hips about 0.26 m above the ground
+CRAWLF_TILT = 90.0                         # torso pitch (deg): horizontal
+CRAWLF_HAND = (0.45, -0.395, 0.072)       # centre of the hand stroke (x out, y forward = minus, knuckle height)
+CRAWLF_FIST_ROLL = 1.024                   # the fist rolls over the knuckles: the hand centre is 2.4 % slower
+CRAWLF_POLE = (1.0, 0.0, 0.5)              # elbows out and up
+CRAWLF_KNEE_Z = 0.092                      # knee joint height at ground contact (the knee shell is ~9 cm thick)
+CRAWLF_KNEE_BACK = 0.06                    # knee behind the hip at contact: the shins stay clear of the pelvis
+
+
+def body_hip(side, pelvis, pelvis_rot):
+    """World position of a hip joint for given pelvis channels (as the solver computes it)."""
+    pel = J["pelvis"]
+    q = q_euler(*pelvis_rot)
+    return pel + Vector(pelvis) + q @ (J["hip_" + side] - pel)
+
+
+def foot_for_ankle(side, ankle, pitch):
+    """Foot channel that puts the ankle at a world position with the given pitch (inverse of Solver.leg_ik)."""
+    s = 1 if side == "L" else -1
+    contact = TOE_OFF if pitch > 0 else HEEL_OFF
+    base = Vector(ankle) - (contact + rx_q(pitch) @ (-contact))
+    rest = J["ankle_" + side]
+    return (s * (base.x - rest.x), base.y, base.z - rest.z, pitch)
+
+
+@anim("CrawlFast", CRAWLF_FRAMES, True,
+      "schnell auf Händen und Knien krabbeln (2,4 m/s), Kopf tief, Füße nachgezogen",
+      "Phase9", "in-place; Animator-Tempo = Geschwindigkeit / naturalSpeed (gemessen an den Händen)", gait="hands")
+def crawl_fast(f):
+    t = f / CRAWLF_FRAMES
+    stance = CRAWLF_PLANTED / CRAWLF_FRAMES
+    stride = planted_stride(2.4, CRAWLF_PLANTED) * CRAWLF_FIST_ROLL
+    c = math.cos(2 * math.pi * t)
+    hx, hy, hz = CRAWLF_HAND
+    px, py, pz = CRAWLF_PELVIS
+    # the side of the swinging knee rolls up; the body bobs down while a knee touches
+    roll = -6.0 * math.cos(2 * math.pi * (t - stance / 2))
+    pelvis = (px + 0.01 * c, py, pz - 0.006 * math.cos(4 * math.pi * t))
+    pelvis_rot = (CRAWLF_TILT, roll, -5 * c)
+    kw = {}
+    knee_stance = 0.12
+    for side, off in (("L", 0.0), ("R", 0.5)):
+        u = (t + off) % 1.0
+        back, z, _ = run_foot(u, stride, stance, 0.10, 0.0, 0.03, p_off=0, p_swing=0, p_land=0, sweep=0.55)
+        # the swinging hand arcs outwards around the head (ear accessories reach 0.45 m out)
+        kw["handik_" + side] = (hx + 0.6 * z, hy + back, hz + z, *CRAWLF_POLE, 1.0)
+        # the opposite knee: same phase as this hand (a trot), centred on the hand's planted phase
+        k_side = "R" if side == "L" else "L"
+        ku = (u - stance / 2 + knee_stance / 2) % 1.0
+        kback = run_foot(ku, 0.06, knee_stance, 0.0, 0.03, 0.0, p_off=0, p_swing=0, p_land=0)[0]
+        hip = body_hip(k_side, pelvis, pelvis_rot)
+        dy = max(-0.9 * THIGH, min(0.9 * THIGH, CRAWLF_KNEE_BACK + kback))
+        dz = math.sqrt(max(0.0, THIGH ** 2 - dy ** 2))
+        knee = Vector((hip.x, hip.y + dy, hip.z - dz))
+        shin = math.radians(10.0 + 12.0 * max(0.0, -kback) / 0.1)       # the shin lifts when the knee is forward
+        ankle = knee + Vector((0.0, SHIN * math.cos(shin), SHIN * math.sin(shin)))
+        kw["foot_" + k_side] = foot_for_ankle(k_side, ankle, 135.0)
+    return P(pelvis=pelvis, pelvis_rot=pelvis_rot, spine=(0, -0.5 * roll, 6 * c), head=(-14, 0, -8 * c),
+             shoulder_LR=(0, 3, 0), hand_LR=arm(-10), fing_LR=curl(50), thumb_LR=curl(30),
+             eyes=(1.0, 0.004 * c, 0.004), **kw)
+
+
+# Landing roll: the robot rolls forward over its head and back and comes up on its feet. Every robot type rolls the
+# same clip, so the body is lifted frame by frame until the envelope of the parts just touches the ground: every slot
+# variant (heads, hands, feet, pads, backpacks) and the body forms of the standard robot. The accessories on the head
+# and back sockets would lift the standard robot up to 0.3 m off the floor (samurai helmet, dish, pouches): they are
+# left out and may touch the floor while rolling (QA: ACCEPTED_GROUND).
+_ROLL_HULL = {}
+ROLL_CLEARANCE = 0.002            # m above the ground for the lowest point of the envelope
+ROLL_SQUASH = ("Socket_Head", "Antenna", "Socket_Back", "Cape")     # accessory bones left out of the envelope
+ROLL_SQUASH_PARTS = ("Head_TV",)
+
+
+def roll_hull():
+    """Rest-pose vertices of every built part per bone (numpy arrays, cached): all slot variants and the body forms
+    of the standard configuration, without the accessory sockets (ROLL_SQUASH)."""
+    if not _ROLL_HULL:
+        pts = collections.defaultdict(list)
+        base = set(config_groups(default_config()))
+        objs = list(bpy.data.collections["Robot_Parts"].objects)
+        forms = bpy.data.collections.get("Robot_Forms")
+        objs += [ob for ob in (forms.objects if forms else []) if ob.name.split("__")[0] in base]
+        for ob in sorted(objs, key=lambda o: o.name):
+            if ob.type != "MESH" or not ob.vertex_groups or ob.name in ROLL_SQUASH_PARTS:
+                continue
+            names = {g.index: g.name for g in ob.vertex_groups}
+            mw = ob.matrix_world
+            for v in ob.data.vertices:
+                if v.groups:
+                    g = names[max(v.groups, key=lambda x: x.weight).group]
+                    if g not in ROLL_SQUASH:
+                        pts[g].append(tuple(mw @ v.co))
+        for g in sorted(pts):
+            _ROLL_HULL[g] = np.array(pts[g], dtype=np.float64)
+    return _ROLL_HULL
+
+
+_ROLL_SOLVER = {}
+
+
+def hull_min_z(pose):
+    """Lowest point of the part envelope for a pose (armature space = world: the rig stands at the origin)."""
+    arm_ob = bpy.data.objects["Robot_Armature"]
+    if _ROLL_SOLVER.get("arm") != arm_ob.as_pointer():
+        _ROLL_SOLVER.update(arm=arm_ob.as_pointer(), solver=Solver(arm_ob),
+                            rest_inv={b.name: b.matrix_local.inverted() for b in arm_ob.data.bones})
+    solver, rest_inv = _ROLL_SOLVER["solver"], _ROLL_SOLVER["rest_inv"]
+    sample = solver.solve(pose)
+    cache = {}
+    low = 1e9
+    for bone, pts in roll_hull().items():
+        if bone not in rest_inv:
+            continue
+        m = solver.pose_matrix(sample, bone, cache) @ rest_inv[bone]
+        low = min(low, float((pts @ np.array(m[2][:3]) + m[2][3]).min()))
+    return low
+
+
+def lifted(make):
+    """make(dz) -> pose with the body raised by dz (pelvis and everything tucked to it); the smallest dz >= 0 at
+    which the envelope clears the ground (limbs planted on the ground straighten as the body rises: a few rounds)."""
+    dz = 0.0
+    pose = make(dz)
+    for _ in range(4):
+        low = hull_min_z(pose)
+        if low >= ROLL_CLEARANCE - 1e-4:
+            break
+        dz += ROLL_CLEARANCE - low
+        pose = make(dz)
+    return pose
+
+
+ROLL_FRAMES = 27
+ROLL_TOUCH, ROLL_UP = 0, 19       # touchdown (Impact) and feet down again
+ROLL_FOOT_OUT = 0.10              # feet a little apart while landing and getting up
+ROLL_FOOT_UP = -0.08              # the feet come down a little in front after the roll, then step back
+ROLL_TUCK_HIP = Vector((0.08, -0.18, -0.20))    # ankle relative to the hip in the pelvis frame while tucked (left)
+ROLL_TUCK_PITCH = 30.0            # foot pitch relative to the body while tucked (toes pointed)
+
+
+def roll_feet(f, pose, tuck):
+    """Feet planted apart, tucked to the body (tuck 0..1) while rolling, and two small steps back to the stand."""
+    kw = {}
+    pitch_body = pose["pelvis_rot"][0] % 360.0
+    if pitch_body > 180.0:
+        pitch_body -= 360.0
+    q = q_euler(*pose["pelvis_rot"])
+    for side, s, f0 in (("L", 1, 20), ("R", -1, 23)):
+        if tuck <= 0.0:
+            out = foot_step(f, f0, f0 + 3, ROLL_FOOT_UP, 0.0, 0.03, ROLL_FOOT_OUT, 0.0) if f > ROLL_UP - 8 else \
+                (ROLL_FOOT_OUT, 0.0, 0.0, 0.0)
+            kw["foot_" + side] = out
+            continue
+        rest = J["ankle_" + side]
+        planted = Vector((rest.x + s * ROLL_FOOT_OUT, ROLL_FOOT_UP if f > ROLL_UP - 8 else 0.0, rest.z))
+        local = Vector((s * ROLL_TUCK_HIP.x, ROLL_TUCK_HIP.y, ROLL_TUCK_HIP.z))
+        hip = body_hip(side, pose["pelvis"], pose["pelvis_rot"])
+        tucked = hip + q @ local
+        ankle = planted.lerp(tucked, tuck ** 1.5)               # over the spot first, then down onto it
+        ankle.z = lerp(planted.z, tucked.z, tuck ** 1.2)
+        reach = ankle - hip
+        if reach.length > THIGH + SHIN - 0.004:     # the body rises faster than the leg pushes: the foot leaves
+            ankle = hip + reach.normalized() * (THIGH + SHIN - 0.004)
+        ankle.z = max(ankle.z, rest.z + 0.06 * math.sqrt(tuck))     # leaving and reaching the floor: in the air
+        kw["foot_" + side] = foot_for_ankle(side, ankle, (pitch_body + ROLL_TUCK_PITCH) * tuck * tuck)
+    return kw
+
+
+ROLL_ARMS_OUT = dict(uarm_LR=arm(-30, 70), larm_LR=arm(-30), fing_LR=curl(50), thumb_LR=curl(30))
+
+
+@anim("LandRoll", ROLL_FRAMES, False, "Landung aus großer Höhe mit Vorwärtsrolle zurück in den Stand", "Phase9",
+      "in-place; Impact bei Frame 0")
+def land_roll(f):
+    tuck_keys = [(0, 0.0), (6, 0.0), (9, 1.0), (15, 1.0), (ROLL_UP, 0.0), (ROLL_FRAMES, 0.0)]
+    pose = keyed(f, [
+        (ROLL_TOUCH, P(pelvis=(0, 0.02, -0.04), spine=(8, 0, 0), head=(4, 0, 0), uarm_LR=arm(-35, 45),
+                       larm_LR=arm(-30), fing_LR=curl(10), eyes=(1.1, 0, 0.002))),
+        (3, P(pelvis=(0, 0.08, -0.17), pelvis_rot=(-8, 0, 0), spine=(42, 0, 0), head=(8, 0, 0),
+              uarm_LR=arm(-62, 40), larm_LR=arm(-20), fing_LR=curl(20), eyes=(0.6, 0, 0)), "out"),
+        (5, P(pelvis=(0, 0.02, -0.12), pelvis_rot=(36, 0, 0), spine=(34, 0, 0), head=(20, 0, 0),
+              uarm_LR=arm(-70, 52), larm_LR=arm(-14), fing_LR=curl(10), thumb_LR=curl(0), eyes=(0.4, 0, 0))),
+        (7, P(pelvis=(0, -0.04, -0.10), pelvis_rot=(70, 0, 0), spine=(30, 0, 0), head=(30, 0, 0),
+              uarm_LR=arm(-60, 60), larm_LR=arm(-20), fing_LR=curl(30), eyes=(0.4, 0, 0))),
+        (8, P(pelvis=(0, -0.07, -0.25), pelvis_rot=(100, 0, 0), spine=(28, 0, 0), head=(30, 0, 0),
+              eyes=(0.3, 0, 0), **ROLL_ARMS_OUT)),
+        (9, P(pelvis=(0, -0.10, -0.40), pelvis_rot=(130, 0, 0), spine=(26, 0, 0), head=(30, 0, 0),
+              eyes=(0.3, 0, 0), **ROLL_ARMS_OUT)),
+        (12, P(pelvis=(0, -0.08, -0.45), pelvis_rot=(205, 0, 0), spine=(26, 0, 0), head=(28, 0, 0),
+               eyes=(0.3, 0, 0), **ROLL_ARMS_OUT)),
+        (15, P(pelvis=(0, -0.02, -0.45), pelvis_rot=(285, 0, 0), spine=(26, 0, 0), head=(24, 0, 0),
+               eyes=(0.4, 0, 0), **ROLL_ARMS_OUT)),
+        (17, P(pelvis=(0, -0.02, -0.15), pelvis_rot=(330, 0, 0), spine=(38, 0, 0), head=(4, 0, 0),
+               uarm_LR=arm(-60, 30), larm_LR=arm(-36), fing_LR=curl(40), eyes=(0.7, 0, 0))),
+        (ROLL_UP, P(pelvis=(0, 0.0, -0.13), pelvis_rot=(352, 0, 0), spine=(40, 0, 0), head=(-6, 0, 0),
+                    uarm_LR=arm(-55, 26), larm_LR=arm(-40), fing_LR=curl(30), eyes=(1.0, 0, 0)), "out"),
+        (23, P(pelvis=(0, -0.03, -0.05), pelvis_rot=(358, 0, 0), spine=(8, 0, 0), head=(-4, 0, 0),
+               uarm_LR=arm(-10, 10), larm_LR=arm(-16), eyes=(1.05, 0, 0))),
+        (ROLL_FRAMES, P(pelvis_rot=(360, 0, 0))),
+    ])
+    tuck = 0.0
+    for (f0, a), (f1, b) in zip(tuck_keys, tuck_keys[1:]):
+        if f0 <= f <= f1:
+            tuck = lerp(a, b, ease((f - f0) / max(1e-6, f1 - f0)))
+            break
+    px, py, pz = pose["pelvis"]
+
+    def make(dz):
+        p = with_(pose, pelvis=(px, py, pz + dz))
+        return with_(p, **roll_feet(f, p, tuck))
+
+    return lifted(make)
+
+
 # ---------------------------------- per-clip game data ----------------------------------
 # Everything the game needs besides the bone curves. Exported to robot_config.json ("clips") and the viewer.
 # Expression/display keys: [frame, name]; "$base" = the look's own choice. Emission keys: [frame, factor], linear.
@@ -1447,6 +1987,7 @@ CLIP_EXPRESSIONS = {
     "Hit": [[0, "Angry"], [10, "$base"]], "HitHeavy": [[0, "Angry"], [10, "$base"]],
     "Respawn": [[0, "Off"], [17, "Loading"], [24, "$base"]],
     "SitDown": [[0, "$base"], [31, "Cute"]], "PickUp": [[0, "$base"], [21, "Love"]],
+    "Knockback": [[0, "Damage"], [16, "$base"]], "LandRoll": [[0, "Surprised"], [18, "Determined"], [24, "$base"]],
 }
 for _names, _expr in (
         (("Celebrate", "DanceBob", "DanceShuffle", "DanceDisco", "DanceSway", "Wave", "Talk", "NodYes", "HatTip",
@@ -1458,6 +1999,8 @@ for _names, _expr in (
         (("Fall", "SlopeSlide", "EdgeBalance", "PortalEnter", "LedgeGrab"), "Surprised"),
         (("Push", "PushStart", "PushStep", "MudWalk", "ClimbUp", "LadderUp", "LadderDown", "HangIdle", "ShimmyLeft",
           "ShimmyRight", "HangSwing", "RunFast", "Sprint"), "Determined"),
+        (("Jog", "SprintFull", "StrafeLeft", "StrafeRight", "RunBack", "Wade", "CarryIdle", "CarryWalk"), "Determined"),
+        (("Crank", "CrawlFast"), "Focused"),
         (("Listen", "SitIdle"), "Cute"), (("Clap",), "Laugh"), (("Bow",), "Shy"), (("Think", "IdleScratch"), "Question"),
         (("Shrug",), "Skeptical"), (("ShakeNo",), "Sad"), (("IdleFootTap",), "LookLeft")):
     for _n in _names:
@@ -1470,7 +2013,8 @@ CLIP_DISPLAYS = {
 for _names, _disp in (
         (("Electrocuted", "Hit", "HitHeavy", "Sprint"), "Lightning"), (("GasCough", "MudWalk"), "Warning"),
         (("Celebrate", "DanceSpin"), "Star"), (("Sleep",), "Clock"), (("Scan",), "Signal"),
-        (("Run", "RunFast", "LadderUp", "ClimbUp"), "Heart"), (("Talk", "Wave"), "Hello"), (("Think",), "Loading")):
+        (("Run", "RunFast", "LadderUp", "ClimbUp", "Jog"), "Heart"), (("SprintFull", "Knockback"), "Lightning"),
+        (("Talk", "Wave"), "Hello"), (("Think",), "Loading")):
     for _n in _names:
         CLIP_DISPLAYS[_n] = [[0, _disp]]
 
@@ -1484,6 +2028,7 @@ CLIP_EMISSION = {
     "Sleep": [[0, 0.35], [60, 0.28], [120, 0.35]],
     "IdleYawn": [[0, 1.0], [30, 0.7], [60, 0.7], [90, 1.0]],
     "Celebrate": [[0, 1.0], [20, 1.4], [48, 1.0]],
+    "Knockback": [[0, 1.0], [1, 2.0], [4, 0.4], [7, 1.3], [10, 1.0]],
 }
 
 # Semantic events (besides the measured footsteps) for Unity animation events / sounds.
@@ -1491,12 +2036,14 @@ CLIP_EVENTS = {
     "Jump": [[10, "TakeOff"]], "Land": [[0, "Impact"]], "Interact": [[19, "Press"]], "Death": [[37, "Thud"]],
     "DoubleJump": [[2, "Boost"]], "HitHeavy": [[1, "Impact"]], "Clap": [[8, "Clap"], [23, "Clap"]],
     "ClimbUp": [[42, "Arrive"]], "LedgeGrab": [[9, "Grab"]], "Vault": [[12, "Hop"], [25, "Land"]],
+    "Knockback": [[1, "Impact"], [8, "Land"]], "LandRoll": [[ROLL_TOUCH, "Impact"], [ROLL_UP, "Land"]],
+    "Crank": [[0, "Grab"]],
 }
 
 # Helper geometry the viewer shows to check contacts (the game provides the real geometry).
 CLIP_PROPS = {n: "ledge" for n in ("LedgeGrab", "HangIdle", "ShimmyLeft", "ShimmyRight", "ClimbUp")}
 CLIP_PROPS.update({"HangSwing": "bar", "LadderUp": "ladder", "LadderDown": "ladder", "Push": "box",
-                   "PushStart": "box", "PushStep": "box"})
+                   "PushStart": "box", "PushStep": "box", "CarryIdle": "crate", "CarryWalk": "crate", "Crank": "wheel"})
 
 
 def clip_meta(a):
@@ -1530,6 +2077,10 @@ def prop_info(name, hands):
         if kind == "bar":                   # bar centre just below the knuckles
             return {"type": "bar", "up": round(up - 0.03, 3), "forward": round(fwd + 0.005, 3)}
         return {"type": "box", "forward": round(fwd + 0.01, 3), "top": 0.9}
+    if kind == "crate":                     # 1.19: held at fixed points of the character space (CARRY_ARMS)
+        return {"type": "crate", "size": CRATE_SIZE, "forward": CRATE_FRONT, "bottom": CRATE_BOTTOM}
+    if kind == "wheel":
+        return {"type": "wheel", "up": WHEEL_UP, "forward": WHEEL_FRONT, "radius": WHEEL_R}
     return None
 
 
@@ -1618,7 +2169,7 @@ def build_animations(arm_ob, quiet=False):
 # chin.
 HIDE_HELD_ITEM = {"Think", "LedgeGrab", "HangIdle", "ShimmyLeft", "ShimmyRight", "HangSwing", "ClimbUp", "LadderUp",
                   "LadderDown", "Vault", "PickUp", "TerminalTyping", "Clap", "Wave", "EdgeBalance", "HatTip", "CrawlIdle",
-                  "Crawl"}
+                  "Crawl", "CrawlFast", "CarryIdle", "CarryWalk", "Crank", "LandRoll"}
 
 
 __all__ = [_n for _n in dir() if not _n.startswith("__")]

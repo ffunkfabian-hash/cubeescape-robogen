@@ -1,9 +1,9 @@
-# Cube Escape – Roboter-Charakter (Generator 1.18.2)
+# Cube Escape – Roboter-Charakter (Generator 1.19.0)
 
 Der spielbare Roboter aus dem Cube-Escape-Keyart, vollständig per Skript erzeugt: Geometrie mit Bauteil-Varianten
 und Accessoires, Materialien, gebackene Texturen (Detail- und Ausdrucks-Texturen per ImageMagick), Rig mit Bein- und
-Arm-IK, 73 Animationen, maschinenlesbare Clip-Daten fürs Spiel, automatische QA, Vorschaurender, `.blend`,
-Unity-fertige `.fbx` (Standard, modular und je Robotertyp) und ein eigener **Robot Viewer** zum Anpassen: 73
+Arm-IK, 85 Animationen, maschinenlesbare Clip-Daten fürs Spiel, automatische QA, Vorschaurender, `.blend`,
+Unity-fertige `.fbx` (Standard, modular und je Robotertyp) und ein eigener **Robot Viewer** zum Anpassen: 85
 Animationen in 10 Kategorien (darunter zwei Typ-Emotes), 76 Skins als Daten (Palette mit Zweitfarbe, Oberfläche,
 Werkstoff, Abzeichen, Leuchtlinien, Schichten wie Rost, Moos, Frost, Glutrisse, Tarnung, Abnutzung, Spezialmaterialien
 Glas, Hologramm, Glitch, Schillern, Skizze, Regenbogen, Galaxie, Körperformen facettiert, Voxel, durchbrochen und
@@ -23,7 +23,7 @@ raucht), 24 Robotertypen, Skin-Bogen im Stil der Konzeptbilder und UI-Icons.
 | `output/RobotViewer.app` | **Robot Viewer** – macOS-App zum Anpassen und Ansehen (Doppelklick) |
 | `data/skins.json` | **Skins als Daten** (Format `CubeEscapeRobotSkins` 1): Palette, Zweitfarben-Zonen, Oberfläche, Werkstoff, Schichten, Abnutzung, Abzeichen, Leuchtlinien, Teile, Ausdruck, Display, Stufe/Startset |
 | `data/concept_palettes.json`, `docs/concepts/` | Farbpunkte der Konzeptbögen (`scripts/concept_palettes.py`) und die Bögen selbst |
-| `output/CubeEscape_Robot.fbx` | Unity: Standard-Look als 1 Mesh (3 Materialien) + Rig + 73 Takes |
+| `output/CubeEscape_Robot.fbx` | Unity: Standard-Look als 1 Mesh (3 Materialien) + Rig + 85 Takes |
 | `output/LOD/`, `output/Types/LOD/` | Unity: Detailstufen LOD1/LOD2 (≈ 6 000 / 2 500 Dreiecke) je FBX, gleiches Rig, ohne Takes |
 | `output/CubeEscape_Robot_Modular.fbx` | Unity: alle Bauteil-Varianten und Accessoires als einzelne Meshes am selben Rig (ohne Animation) |
 | `output/Types/CubeEscape_Robot_<Typ>.fbx` | Unity: jeder Robotertyp fertig kombiniert als 1 Mesh + Rig (ohne Animation, Clips aus der Haupt-FBX) |
@@ -242,10 +242,10 @@ Fahrplan: [docs/FAHRPLAN.md](docs/FAHRPLAN.md); Techniken und Lehren (für Cubeg
   passt sich der Ausdruck der Animation an, dann blinzelt der Roboter auch (alle 2,5–6 s, `robot_config.json` › `blink`).
 - **Brust-Display:** 16 Motive (Status, Heart, Battery, Smiley, Wave, Cube, Hello, Music, Lightning, Warning, Thermo,
   Clock, Signal, Star, Planet, Loading) und 3 animierte (Heartbeat, Spinner, Talk); optional passend zur Animation.
-- **Animation:** alle 73 Clips nach Kategorien, Play/Pause (Leertaste), Zeitleiste, Tempo, Wiederholen. Unter dem Clip
+- **Animation:** alle 85 Clips nach Kategorien, Play/Pause (Leertaste), Zeitleiste, Tempo, Wiederholen. Unter dem Clip
   stehen seine Spieldaten (Grundtempo, Höhe, Root Motion, Schritt-Frames, aktuelles Ereignis). Augen, Display,
   „Strom“ (Death schaltet ab, Respawn an) und ausgeblendete Hand-Gegenstände kommen aus den Clip-Daten.
-- **Hilfsobjekte:** Kante, Stange, Leiter oder Kiste an der Stelle, die der Clip voraussetzt – damit sieht man, ob
+- **Hilfsobjekte:** Kante, Stange, Leiter, Kiste, getragene Kiste oder Ventilrad (1.19) an der Stelle, die der Clip voraussetzt – damit sieht man, ob
   Hände und Füße wirklich greifen.
 - **Ansicht:** Iso, Front, Side, Back, Face, Drehteller, Boden; Maus/Trackpad dreht und zoomt.
 - **Look laden/speichern** (`*.robotlook.json`, Version 6; Versionen 1 bis 5 werden übernommen, unbekannte Teile/Namen
@@ -281,7 +281,7 @@ der Inhalt der Seitenleiste in seine Spalte passt; `--window 1710x1000` öffnet 
 ## Anpassbarkeit – wie es technisch funktioniert
 
 - **Varianten:** Jedes Bauteil hängt starr an genau einem Bone; alle Varianten nutzen dieselben Gelenkpunkte. Darum
-  funktionieren alle 73 Animationen mit jeder Kombination – die QA prüft jeden der 24 Robotertypen gegen jeden Clip
+  funktionieren alle 85 Animationen mit jeder Kombination – die QA prüft jeden der 24 Robotertypen gegen jeden Clip
   (Typ-Emotes nur mit ihrem Typ). Jeder Aufsatz steckt in mindestens einem Typ, so ist er in allen Clips geprüft.
 - **Farben ohne neue Texturen:** `T_Robot_ColorMask.png` – R Panzerung, G Mechanik, B Metall; `T_Robot_LightMask.png`
   – Lichter; Rest auf Körper-Flächen = Visier. Ein Shader färbt mit `Farbe × Helligkeit(Albedo) / Helligkeit(Classic-Farbe)` um; Schmutz,
@@ -342,24 +342,30 @@ der Inhalt der Seitenleiste in seine Spalte passt; `--window 1710x1000` öffnet 
 
 ## Animationen
 
-73 Clips in zehn Kategorien nach Inhalt (`robot_config.json` › `clipCategories`, Clip-Feld `category`; seit 1.16 –
+85 Clips in zehn Kategorien nach Inhalt (`robot_config.json` › `clipCategories`, Clip-Feld `category`; seit 1.16 –
 die Bau-Phasen `group` bleiben für Kontaktbögen und QA-Pakete), vollständige Liste mit Frames, Grundtempo, Höhe,
 Schritt-Frames und Unity-Hinweisen in `output/ANIMATIONS.md`:
 
 - **Gehen & Laufen:** Idle, Walk, WalkStart, WalkStop, Run, RunFast (≈ 3,0 m/s), Sprint (≈ 4,2 m/s),
-  TurnLeft/TurnRight (Root Motion), MudWalk, SlopeSlide
-- **Springen & Fallen:** Jump, DoubleJump, Fall, Land
+  TurnLeft/TurnRight (Root Motion), MudWalk, SlopeSlide; **im Spieltempo (1.19):** Jog (5 m/s), SprintFull (8 m/s,
+  zwei Doppelschritte), StrafeLeft/StrafeRight (5 m/s, Hüfte in Laufrichtung, Blick zur Kamera), RunBack (5 m/s),
+  Wade (4 m/s, durch knie- bis hüfttiefes Wasser)
+- **Springen & Fallen:** Jump, DoubleJump, Fall, Land, LandRoll (1.19: Vorwärtsrolle nach tiefem Fall, `Impact` beim
+  Aufsetzen)
 - **Ducken & Kriechen:** Crouch, CrouchWalk (≈ 0,31 m/s), CrouchDeep (Oberkante ≈ 1,05 m), **CrawlIdle** und
   **Crawl** (1.16, Robben in Bauchlage, Oberkante ≈ 0,57 m – unter der Duck-Kapsel 0,65 m; ≈ 0,30 m/s, gemessen an den
-  aufliegenden Händen; gehaltene Gegenstände ausgeblendet)
+  aufliegenden Händen; gehaltene Gegenstände ausgeblendet), **CrawlFast** (1.19: auf Händen und Knien, 2,4 m/s,
+  Oberkante ≈ 0,58 m)
 - **Klettern & Hängen:** LedgeGrab, HangIdle, ShimmyLeft, ShimmyRight, HangSwing, ClimbUp (Root Motion), LadderUp,
   LadderDown (in-place, Controller steigt ≈ 0,28 m/s), Vault. Die Hände greifen per **Arm-IK** feste Punkte: Kante mit
   Oberseite 1,20 m über Root und Vorderkante 0,22 m vor Root, Griffe bei ±0,35 m; ClimbUp endet 1,20 m höher und
   0,36 m weiter vorn auf der Kante. HangSwing hängt an einer Stange vor dem Gesicht (die Arme reichen nicht über den
   großen Kopf), die Leiter wird an den Holmen (±0,33 m, 0,27 m vor Root) gegriffen.
 - **Interaktion & Werkzeuge:** Interact, PickUp, Push, PushStart, PushStep, ToolAim, ToolUse, Scan (Oberkörper-Maske),
-  TerminalTyping, PortalEnter
-- **Treffer & Gefahren:** Hit (additiv nutzbar), HitHeavy, Electrocuted, GasCough, Death, Respawn
+  TerminalTyping, PortalEnter; CarryIdle und CarryWalk (1.19, 0,8-m-Stahlkiste vor der Brust, 5 m/s), Crank (1.19,
+  Ventilrad mit beiden Händen, 1,5 s)
+- **Treffer & Gefahren:** Hit (additiv nutzbar), HitHeavy, Electrocuted, GasCough, Death, Respawn, Knockback (1.19,
+  zurückgeschleudert und gefangen)
 - **Warten & Charakter:** IdleScratch, IdleFootTap, IdleYawn, Talk, Listen, EdgeBalance, Celebrate
 - **Gesten:** Wave, Bow, Clap, Think, Point, Shrug, NodYes, ShakeNo; Typ-Emotes HatTip (Gentleman) und FlagWave (King)
 - **Sitzen & Schlafen:** SitDown, SitIdle, Sleep
@@ -373,7 +379,7 @@ Charakterraum `[rechts, oben, vorn]` in Metern (= Unity-Local-Space), Winkel in 
 
 | Feld | Inhalt |
 |---|---|
-| `naturalSpeed` | Grundtempo eines In-place-Clips. Animator-Tempo = Spielgeschwindigkeit / `naturalSpeed` |
+| `naturalSpeed` | Grundtempo eines In-place-Clips. Animator-Tempo = Spielgeschwindigkeit / `naturalSpeed`. Seit 1.19 gibt es Clips für die Spieltempi selbst (Tempo 1): Jog/Strafe/RunBack/CarryWalk 5, SprintFull 8, Wade 4, CrawlFast 2,4 m/s – ein gesetzter Kontakt läuft dort in jedem Frame genau mit diesem Tempo (`verify_robot.py` prüft jeden Schritt) |
 | `footsteps`, `feet` | Frames mit Fußaufsatz (für Schritt-Sounds/Staub) und Bodenkontakt-Bereiche je Fuß |
 | `events` | Ereignisse wie `TakeOff` (Jump 10), `Press` (Interact 19), `Thud` (Death 37), `Clap`, `Grab`, `Arrive` |
 | `eyeHeight` (oberste Ebene) | Augenhöhe in der Ruhepose (1.16: 1,161 m) für die Ego-Kamera |
@@ -381,11 +387,11 @@ Charakterraum `[rechts, oben, vorn]` in Metern (= Unity-Local-Space), Winkel in 
 | `servo` | Servo-Geräusche (1.13): `[Frame, Gruppe, Stärke 0–1, Dauer]` je Bewegungsansatz von Kopf, Rumpf, Armen, Beinen – aus der Gelenkgeschwindigkeit gemessen |
 | `rootMotion` | Weg (`move`) und Drehung (`turnRight`) vom ersten zum letzten Frame |
 | `height` | kleinste/größte Körperhöhe im Clip (Kapselhöhe beim Ducken, Sitzen, Hängen) |
-| `hands` | Fingergelenke L/R je Frame (Kletter-, Hänge-, Schiebe-Clips) – zum Ausrichten an Kanten |
-| `prop` | Geometrie, die der Clip voraussetzt (Kante, Stange, Leiter, Kiste) |
+| `hands` | Fingergelenke L/R je Frame (Kletter-, Hänge-, Schiebe-, Trage- und Kurbel-Clips) – zum Ausrichten an Kanten |
+| `prop` | Geometrie, die der Clip voraussetzt (Kante, Stange, Leiter, Kiste; 1.19: `crate` mit `size`, `forward` = Vorderseite, `bottom` – die getragene Kiste hängt fest am Root; `wheel` mit `up`, `forward` = Radebene, `radius`) |
 | `expression`, `display` | Augen-Ausdruck und Display-Motiv über die Zeit (`$base` = gewählter Look) |
 | `emission` | „Strom“-Faktor für Augen, Display und Lichter (Death → 0, Respawn fährt hoch, Electrocuted flackert) |
-| `hideHeldItem` | Hand-Gegenstand ausblenden (Klettern, Hängen, Think, Wave, Clap, PickUp, TerminalTyping, Vault, EdgeBalance, HatTip) |
+| `hideHeldItem` | Hand-Gegenstand ausblenden (Klettern, Hängen, Think, Wave, Clap, PickUp, TerminalTyping, Vault, EdgeBalance, HatTip, Kriechen, Tragen, Crank, LandRoll) |
 
 ## Unity-Testpaket
 
@@ -456,7 +462,8 @@ Materials wäre ein einziger Draw Call.
 **Spieler-Prefab:** CharacterController Height 1,40, Radius 0,30, Center (0, 0,70, 0) – seit Cube Escape 0.52 (der
 Roboter ist seit 1.14 1,38 m hoch); Ego-Kamera auf `eyeHeight`. Ducken: Kapsel 0,65 m mit den Kriech-Clips (1.16). Animator-Parameter aus
 `IRobotMotion` (`Speed`, `Grounded`, `Crouch`, Trigger `Land`) plus `Push`, `Interact`, `Dead`; Lauf-Blend-Tree
-CrouchWalk/Walk/Run/RunFast/Sprint nach `naturalSpeed`. Als neue Variante neben dem bestehenden code-basierten
+CrouchWalk/Walk/Run/RunFast/Sprint nach `naturalSpeed`; für das Spieltempo seit 1.19 Jog (5 m/s) und SprintFull (8 m/s) bei
+Tempo 1, mit der Schulterkamera StrafeLeft/StrafeRight/RunBack als 2D-Blend-Tree, im Wasser Wade, unter der Duck-Kapsel CrawlFast. Als neue Variante neben dem bestehenden code-basierten
 `RobotAnimator` einführen (Golden Rule). Für einen festen Robotertyp die FBX aus `output/Types/` nehmen (1 Mesh statt
 eines Meshes je Bauteil).
 
@@ -475,7 +482,7 @@ ersetzt, neuere Versionen abgelehnt – dieselben Regeln gehören in die Spielst
 | Thema | Stand | Was zu tun ist |
 |---|---|---|
 | Unity-Integration | nicht begonnen, nicht im Spiel getestet (Spielprojekt bewusst unverändert) | FBX importieren, Materialien/Animator nach diesem README aufbauen, als neue Variante neben `RobotAnimator` |
-| Tempo Laufen | Clips bis Sprint ≈ 4,2 m/s; Spiel: 5 bzw. 8 m/s – **entschieden 14.10.:** Spieltempo bleibt | Animator-Tempo = Geschwindigkeit / `naturalSpeed`, höchstens 1,4-fach; eine Generator-Version gibt Run und Sprint Schrittlängen für 5 und 8 m/s |
+| Tempo Laufen | **erledigt in 1.19:** Jog 5 m/s, SprintFull 8 m/s, Strafe/RunBack 5, Wade 4, CrawlFast 2,4 m/s bei Tempo 1 | im Spiel die neuen Clips in den Blend-Tree (Spieltempo bleibt, Entscheidung 14.10.) |
 | Standhöhe | Roboter 1,38 m; Spiel-Kapsel seit Cube Escape 0.52 1,40 m (`PlayerController.CapsuleHeight`), Ego-Augenhöhe dort noch 1,0 m – **entschieden 14.10.:** `eyeHeight` | beim Roboter-Import die Ego-Kamera auf `eyeHeight` (1,16 m) setzen |
 | Ducken | Duck-Kapsel 0,65 m bleibt (Entscheidung 13.10.); Ducken bis ≈ 1,05 m, darunter Kriechen (CrawlIdle, Crawl ≤ 0,57 m, seit 1.16) | im Spiel: unter niedriger Decke vom Ducken ins Kriechen wechseln |
 | Formen im Spiel | Mesh-Formen als eigene FBX, Lochung als Formel, Kabel als Teil | Spielversion „Spektrum“: Formen als Meshes bzw. Shader-Variante (Cull Off) mit Fallback |
@@ -493,16 +500,19 @@ ersetzt, neuere Versionen abgelehnt – dieselben Regeln gehören in die Spielst
 - **Bauteile:** alle Teile berühren ihre Konfiguration (keine schwebenden Teile; das Augen-Display ist bewusst
   ein Decal 1,5 mm vor dem Visier), starres Skinning, Transformationen = Identität.
 - **Animationen × Robotertypen und Formen:** für alle 24 Typen und die Formen Facettiert, Voxel und Kabel jeder der
-  73 Clips Frame für Frame (Typ-Emotes nur mit ihrem Typ): kein Vertex unter dem Boden, keine neuen Überschneidungen nicht benachbarter Körperteile, kein gelöstes
+  85 Clips Frame für Frame (Typ-Emotes nur mit ihrem Typ): kein Vertex unter dem Boden, keine neuen Überschneidungen nicht benachbarter Körperteile, kein gelöstes
   Gelenk, Loops schließen exakt. Die Typen tragen zusammen jeden Aufsatz, so ist jeder in jedem Clip geprüft.
   Bewusst erlaubt: Stoff am Hals darf vom gesenkten Kinn eingedrückt werden; Hand-Gegenstände berühren die Finger
   (Griff) und werden in den oben genannten Clips ausgeblendet; in HatTip liegt der Hut in der Hand und verlässt den
   Kopf. Ohr-Aufsätze sitzen nur links: die rechte Hand streift das rechte Ohr in Wave und Think mit unter 1 cm.
+  In LandRoll (1.19) dürfen nur die Aufsätze an Kopf- und Rückensockel und der TV-Kopf den Boden berühren
+  (`ACCEPTED_GROUND`): die Rolle folgt der Hülle aller übrigen Teile, sonst schwebte der Standard-Roboter bis 0,3 m.
 - **Kontakt mit der Umgebung:** Hängen, Hangeln und Hochziehen wurden gegen die Kante geprüft (kein Körperteil in der
   Kante, nur Daumen/Handflächen liegen bis ≈ 2 cm an); im Viewer mit „Hilfsobjekte“ sichtbar.
 - **Export:** `verify_robot.py` öffnet die `.blend`, importiert alle FBX (Standard, modular, je Typ), vergleicht alle
   Takes mit dem Original und prüft Konfiguration, Clip-Daten (Tempo-Reihenfolge, Schritte, Root Motion, Griffpunkte,
-  Strom bei Death), Beispiel-Looks und Viewer-Daten. `viewer/test_viewer.sh` prüft Look-Migration, unbekannte IDs,
+  Strom bei Death; seit 1.19 Spieltempi, rutschfreie Kontakte Frame für Frame, Kiste frei vom Körper), Beispiel-Looks
+  und Viewer-Daten. `viewer/test_viewer.sh` prüft Look-Migration, unbekannte IDs,
   Ablehnung neuerer Versionen und den Round Trip aller Typ-Looks. Seit 1.17 liegt jede Knochengruppe einer Mesh-Form
   innerhalb derselben Gruppe ihres Grundteils (+ eine Voxel-Zelle).
 - IK-Meldungen „… IK clamped“ sind bei Death, SitDown, SitIdle (gestreckte Beine) sowie beim Loslassen der Kante in

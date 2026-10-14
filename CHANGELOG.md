@@ -3,6 +3,48 @@
 Versionen des Roboter-Generators (zählen getrennt von Cube Escape und Cubegen). Jede Version hat einen Tag
 `v<Version>` und einen Release-Branch `release/<Version>`.
 
+## 1.19.0 „Longstride“ – 2026-10-14
+
+**Clips im Spieltempo für Cube Escape 0.58** (Gehen 5 m/s, Sprint 8 m/s, Kriechen unter der 0,65-m-Kapsel 2,4 m/s,
+Wasser 4 m/s, Tragen der Magnetkiste 5 m/s, Schulterkamera mit Seit- und Rückwärtslaufen). Zwölf neue Clips in der
+neuen Bau-Phase `Phase9` („Spieltempo & Aktionen“), jeweils am Ende ihrer Kategorie angehängt. Alle bestehenden Clips,
+Clip-Daten, QA-Ergebnisse und Typ-Maße sind unverändert (73 Clips aus dem Clip-Cache, Berichte `qa`/`clips`/
+`type_bounds` für alle alten Einträge identisch).
+
+| Clip | Kategorie | Frames (30 fps) | Loop | `naturalSpeed` | Schritte |
+|---|---|---|---|---|---|
+| Jog | Move | 0–16 | ja | 5,0 m/s | 0 L, 8 R |
+| SprintFull | Move | 0–20 (zwei Doppelschritte) | ja | 8,0 m/s | 0 L, 5 R, 10 L, 15 R |
+| StrafeLeft / StrafeRight | Move | 0–16 | ja | 5,0 m/s | 0 L, 8 R |
+| RunBack | Move | 0–16 | ja | 5,0 m/s | 0 L, 8 R |
+| Wade | Move | 0–18 | ja | 4,0 m/s | 0 L, 9 R |
+| CrawlFast | Crouch | 0–14 | ja | 2,4 m/s (Hände) | 0 Hand_L, 7 Hand_R; Höhe 0,55–0,58 m |
+| CarryIdle / CarryWalk | Interact | 0–60 / 0–16 | ja | – / 5,0 m/s | – / 0 L, 8 R |
+| Crank | Interact | 0–45 (1,5 s) | ja | – | Ereignis `Grab` bei 0 |
+| Knockback | Damage | 0–26 (0,87 s) | nein | – | `Impact` 1, `Land` 8 |
+| LandRoll | Air | 0–27 (0,9 s) | nein | – | `Impact` 0 (Aufsetzen), `Land` 19 |
+
+* **Gesetzte Füße rutschen nicht:** Ein Bodenkontakt läuft mit konstantem Neigungs- und Gierwinkel genau mit
+  `naturalSpeed` gegen die Laufrichtung (Schrittlänge = Tempo × gesetzte Frames / 30) und überspannt mindestens zwei
+  Frame-Schritte, damit `measure_clips` ihn misst. Bei 8 m/s reicht ein Doppelschritt dafür nicht – SprintFull hat zwei.
+  Bei CrawlFast rollt die Faust über die Knöchel: das Knöchelziel läuft 2,4 % schneller, gemessen 2,40 m/s.
+* **Strafe:** Hüfte 70° in die Laufrichtung gedreht, Beine auf zwei Spuren (kreuzen nie), Brust und Kopf zurück zur
+  Kamera. **RunBack** auf den Fußballen. **Wade** mit hohen Knien und seitlich balancierenden Armen.
+* **Kiste und Ventilrad:** CarryIdle/CarryWalk halten die 0,8-m-Kiste an festen Punkten des Charakterraums (sie wippt
+  nicht mit), Daten in `clips.<Name>.prop` = `{"type": "crate", "size": 0.8, "forward": 0.30, "bottom": 0.36}` und
+  `hands`; Crank dreht ein Rad `{"type": "wheel", "up": 0.72, "forward": 0.40, "radius": 0.20}` wie ein Lenkrad um 36°
+  und greift nach. Der Viewer zeigt beide als Hilfsobjekt.
+* **LandRoll** rollt über Kopf und Rücken: der Körper wird je Frame so weit angehoben, dass die Hülle aller Teile
+  (alle Slot-Varianten, die Formen des Standard-Roboters) den Boden gerade berührt (`lifted()`, `roll_hull()`). Die
+  Aufsätze an Kopf- und Rückensockel und der hohe TV-Kopf würden den Standard-Roboter bis 0,3 m über den Boden heben;
+  sie sind aus der Hülle genommen und dürfen beim Rollen den Boden berühren – benannte QA-Ausnahme
+  `ACCEPTED_GROUND` (nur LandRoll, nur diese Knochengruppen). Der Standard-Roboter schwebt dabei höchstens 4 cm.
+* QA aller 24 Typen gegen alle neuen Clips ohne Befund. Neue Prüfungen in `verify_robot.py` (`verify_longstride`):
+  Tempi ±1 %, Schritte, Loops, Root Motion 0, CrawlFast unter 0,60 m, Ereignisse, Hilfsobjekte, Kategorien am Ende,
+  **jeder Frame-Schritt eines gesetzten Kontakts** innerhalb 3 % von `naturalSpeed` und in Gegenrichtung,
+  stehende Füße in CarryIdle, Crank, Knockback, LandRoll unter 2 mm je Frame, Kiste frei vom Körper und Hände an ihren
+  Seiten.
+
 ## 1.18.2 – 2026-10-14
 
 * Fahrplan und README: Tempo, Kapselbreite und Augenhöhe des Spieler-Roboters entschieden (Spieltempo bleibt,

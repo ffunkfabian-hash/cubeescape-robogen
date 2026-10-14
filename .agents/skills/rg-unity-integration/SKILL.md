@@ -37,6 +37,9 @@ Skills (`ce-player-portals`, `ce-editor-assets`, `ce-world-story`, `ce-testing`)
   `events`, `servo` ([Frame, Gruppe, Stärke 0–1, Dauer]) → `GameEvents`, Klang macht `GameFeedback`;
   `hideHeldItem` blendet Hand-Gegenstände aus; `expression`/`display`/`emission` steuern Gesicht und Leuchten.
   Keine Allokation pro Bild (Spielregel 33): Ereignisse beim Laden in Arrays umsetzen.
+- **Spieltempo (1.19):** Jog/StrafeLeft/StrafeRight/RunBack/CarryWalk 5 m/s, SprintFull 8, Wade 4, CrawlFast 2,4 m/s
+  laufen bei Tempo 1 rutschfrei; die Kiste (`prop.type` `crate`) hängt am Root (Hände greifen feste Punkte), das
+  Ventilrad (`wheel`) steht vor dem Roboter. LandRoll: Kopf- und Rückenaufsätze dürfen den Boden streifen.
 - **Treffer-Kapseln** (`hitCapsules`): Punkte im Charakterraum der Ruhepose → einmal per Bindpose in den
   Knochenraum, dann als `CapsuleCollider` am Knochen (Vorlage: `TestbedPipeline.CheckCapsules`).
 - **Emitter** (`emitters`): Partikelsystem am genannten Socket, nur sichtbar mit dem Aufsatz (`slot`/`variant`).

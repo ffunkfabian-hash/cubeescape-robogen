@@ -99,6 +99,11 @@ ACCEPTED_OVERLAPS = {("*", "Head", "Socket_Neck"), ("*", "Eyes", "Socket_Neck"),
 ACCEPTED_DETACH = {("HatTip", "Socket_Head", "Head")}
 
 
+# Bone groups that may touch the floor in a clip (1.19): rolling over the head and back, the accessories on the head and
+# back sockets and the taller TV head squash into the floor instead of lifting every robot off it (clips.ROLL_SQUASH).
+ACCEPTED_GROUND = {"LandRoll": ("Socket_Head", "Antenna", "Socket_Back", "Cape", "Head")}
+
+
 def type_emotes():
     """Clips that belong to one robot type (ROBOT_TYPES[...]["emote"]): checked and played only with that type."""
     names = {a.name for a in ANIMS}         # a --groups filter may have dropped them
@@ -171,6 +176,8 @@ def run_qa(ob, arm_ob, actions, label="Classic", quiet=False, clips=None):
                            (par, child) in baseline) and (name, child, par) not in ACCEPTED_DETACH]
         pa, pb = topo.pair_index(pairs)
         ja, jb = topo.pair_index(joint_pairs)
+        squash = ACCEPTED_GROUND.get(name)
+        floor_mask = None if not squash else np.array([g not in squash for g in vgroup])
         for f in range(0, frames + 1):
             scene.frame_set(f)
             co = evaluated_coords(ob)
@@ -178,7 +185,8 @@ def run_qa(ob, arm_ob, actions, label="Classic", quiet=False, clips=None):
                 first = co.copy()
             if f == frames:
                 last = co
-            iz = int(co[:, 2].argmin())
+            zs = co[:, 2] if floor_mask is None else np.where(floor_mask, co[:, 2], np.inf)
+            iz = int(zs.argmin())
             if co[iz, 2] < min_z:
                 min_z = float(co[iz, 2])
                 min_z_where = "%s@%d" % (vgroup[iz], f)

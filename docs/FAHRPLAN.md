@@ -111,7 +111,10 @@ Meshes mit demselben Rig, Lochung als Formel, Kabel als Teil), 76 Skins (Pixel, 
 nach Inhalt in zehn Kategorien. **1.17 Slimline** (13.10., v1.17.0): Optimierung ohne Modelländerung –
 Ausgaben-Cache (quick warm 22 → 9–12 s), Vorschau-Skins aus `Textures/` in den Cache, Viewer-Daten rund dreimal
 kleiner, Voxel-Form mit einem Drittel weniger Dreiecken, Zeitband statt festem Budget, Generator in 16 Module aufgeteilt.
-Als Nächstes 2.0 Bodyplan.
+**1.19 Longstride** (14.10., v1.19.0): zwölf Clips im Spieltempo
+für Cube Escape 0.58 – Jog 5 m/s, SprintFull 8 m/s, StrafeLeft/StrafeRight und RunBack 5 m/s, Wade 4 m/s, CrawlFast
+2,4 m/s auf Händen und Knien unter 0,60 m, CarryIdle/CarryWalk mit der 0,8-m-Kiste, Crank am Ventilrad, Knockback und
+LandRoll; gesetzte Kontakte rutschen nicht (jeder Frame-Schritt geprüft). Als Nächstes 2.0 Bodyplan.
 
 1.13.1–1.13.3: Prüfungen parallel (`check_output.sh`), QA-Cache und Render-Cache – mit warmem Cache Standardlauf
 etwa 45 s, Volllauf 90–115 s statt rund 7 Minuten; eine sichtbare Änderung rendert nur ihre eigenen Bilder neu.
@@ -269,6 +272,6 @@ Der schwerere Teil ist Unity: Was der Viewer zeigt, muss im Spiel genauso ausseh
 - [x] **Doppelte Namen:** Galaxie geht in Nebula auf, Magma heißt Magma; Void (Glitch, B) und Obsidian (B) behalten ihre Namen.
 - [x] **Reihenfolge:** erst der Spieler-Roboter, dann NPCs und Gegner – wie in den Spiel-Versionen oben.
 - [ ] **Gegner – zurückgestellt bis vor Generator 2.0:** Empfehlung bleibt das feste Muster: Pfad und Takt als Daten (Sequenzer, Wegpunkte), vorhersehbar, in der Werkbank baubar und für jede Levelgröße gleich billig. Echte Verfolger bräuchten eine Navigation zur Laufzeit über Spielerlevel aus JSON (bis 100 000 Objekte) und machen Rätsel unberechenbar; sie lohnen nur, wenn Verfolgung selbst zur Spielidee wird.
-- [x] **Tempo, Kapselbreite, Augenhöhe** (14.10., Cube Escape 0.57): Das Spieltempo 5/8 m/s bleibt (Level sind darauf gebaut); bis längere Schritte kommen, läuft die Animation mit Geschwindigkeit / `naturalSpeed`, höchstens 1,4-fach, und eine Generator-Version gibt Run und Sprint Schrittlängen für 5 und 8 m/s. Die Kapsel behält Radius 0,30 m (ein breiterer schlösse Durchgänge in bestehenden Leveln), Überstand von Armen und Schultern ist in Ordnung. Die Ego-Kamera übernimmt `eyeHeight` (1,16 m) mit dem Spieler-Roboter.
+- [x] **Tempo, Kapselbreite, Augenhöhe** (14.10., Cube Escape 0.57): Das Spieltempo 5/8 m/s bleibt (Level sind darauf gebaut); bis längere Schritte kommen, läuft die Animation mit Geschwindigkeit / `naturalSpeed`, höchstens 1,4-fach, und eine Generator-Version gibt Run und Sprint Schrittlängen für 5 und 8 m/s – erledigt mit 1.19 „Longstride“ (Jog, SprintFull und weitere Clips bei Tempo 1). Die Kapsel behält Radius 0,30 m (ein breiterer schlösse Durchgänge in bestehenden Leveln), Überstand von Armen und Schultern ist in Ordnung. Die Ego-Kamera übernimmt `eyeHeight` (1,16 m) mit dem Spieler-Roboter.
 - [x] **Alter Stand gesichtet (12.10.):** Der Branch `claude/cube-escape-robot-model-04030e` hatte keine eigenen Commits (Spitze = Cube Escape 0.43.2, in main) und keinen Worktree mehr. Gearbeitet wurde im Ordner `CubeEscape-Robot`, der vollständig als 1.7.0 ins Repo übernommen ist (Unterschied nur die Bildpfade im README). Nichts entsteht doppelt; Branch gelöscht, Ordner in den Papierkorb verschoben (12.10.).
 - [ ] **Freischalten** von Skins im Spiel: alle sofort frei oder über Discoveries/Flags? Fabian entscheidet später, spätestens zur Werkstatt-Version.

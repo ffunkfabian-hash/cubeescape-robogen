@@ -272,7 +272,8 @@ struct ClipMeta: Decodable {
 }
 
 /// Helper geometry for the viewer (character space, m): ledge (top, edge), bar (up, forward),
-/// ladder (forward = rung plane, rail = half width, spacing), box (forward = front face, top = height).
+/// ladder (forward = rung plane, rail = half width, spacing), box (forward = front face, top = height),
+/// crate (1.19: size, forward = near face, bottom), wheel (1.19: up, forward = wheel plane, radius).
 struct PropInfo: Decodable {
     let type: String
     let top: Double?
@@ -281,6 +282,9 @@ struct PropInfo: Decodable {
     let forward: Double?
     let rail: Double?
     let spacing: Double?
+    let size: Double?
+    let bottom: Double?
+    let radius: Double?
 }
 
 struct TypeBounds: Decodable {

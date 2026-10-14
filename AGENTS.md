@@ -32,7 +32,8 @@ Agenten lesen die passende `SKILL.md` vor der Arbeit):
 - Schwebende Teile nur absichtlich (`FLOATING_PARTS`), Partikel nie als Mesh, sondern als `EMITTERS`.
 - Nachschwingen nur gebacken (`SPRINGS`); Grenzen so, dass nichts in den Körper schwingt.
 - Typ-Emotes (`robotTypes[].emote`) gehören zu ihrem Typ: QA und Spiel nur mit diesem Typ. Gewollte Ausnahmen der QA
-  stehen benannt in `ACCEPTED_OVERLAPS` / `ACCEPTED_DETACH`, nie pauschal.
+  stehen benannt in `ACCEPTED_OVERLAPS` / `ACCEPTED_DETACH` / `ACCEPTED_GROUND` (Bodenkontakt je Clip und
+  Knochengruppe), nie pauschal.
 
 ## Proportionen und Körperformen (1.14)
 
@@ -49,6 +50,10 @@ Agenten lesen die passende `SKILL.md` vor der Arbeit):
 - Jeder neue Clip bekommt eine Kategorie in `CLIP_CATEGORIES` (der Generator bricht sonst ab); die Bau-Phase
   (`group`) ist nur für Kontaktbögen, QA-Pakete und `--groups`. Kategorie-IDs sind ewig.
 - Clips, die unter eine Spielkapsel passen müssen, prüft `verify_robot.py` an `clips.<Name>.height` (Kriechen < 0,62 m).
+- Bestehende Clips nie ändern (Spielvertrag); neue Clips am Ende anhängen (`ANIMS`, Kategorie-Listen), eigene Bau-Phase.
+- Lauf-Clips im Spieltempo (1.19): ein gesetzter Kontakt läuft mit konstantem Winkel genau mit dem Zieltempo
+  (Schrittlänge = Tempo × gesetzte Frames / 30) und überspannt mindestens zwei Frame-Schritte, sonst misst
+  `measure_clips` kein `naturalSpeed`; `verify_longstride` prüft jeden Frame-Schritt.
 
 ## Sprache
 
@@ -112,7 +117,7 @@ pausierter Befehl kann in die Zeitgrenze seines Werkzeugs laufen – dann führt
    Vorschaubilder kommen aus `cache/render`, solange die Szene beim Rendern gleich aussieht („render cache: N images
    reused“); Fehlersuche mit `ROBOT_KEEP_WORKER_LOGS=1` und `ROBOT_RENDER_DIGEST_DUMP` (`docs/TECHNIK.md` › 12).
    Ohne Änderung an Modell, Rig, Clips und Export-Code schreibt der zweite Lauf keine FBX und keine Viewer-Daten
-   („unchanged outputs kept: main, modular, forms, viewer“) und misst keine Clips („73 clips from the cache“);
+   („unchanged outputs kept: main, modular, forms, viewer“) und misst keine Clips („85 clips from the cache“);
    Fehlersuche mit `ROBOT_OUTPUT_DIGEST_DUMP=<Datei>`.
 5. Sichtbare Änderungen ansehen: `Previews/skins.png`, `Previews/hero.png`, bei Animationen die Kontaktbögen.
 6. Bei Viewer-Änderungen `viewer/build.sh` und `viewer/test_viewer.sh`.

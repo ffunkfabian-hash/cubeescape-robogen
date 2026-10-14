@@ -80,6 +80,16 @@ Cache-Lage, mit Toleranz je Last (ruhig 30 %, leicht × 2,6, schwer = nicht bewe
 Referenz. Ein „SLOWER“ auf ruhiger Maschine ist ein Befund; unter Last nichts schließen, sondern ruhig nachmessen
 (Abschnitt unten). Das Budget (`TIERS`) bleibt Zielwert.
 
+## Cloud-Sitzungen (claude.ai/code)
+
+Der SessionStart-Hook `.claude/hooks/session-start.sh` (lokal tut er nichts) macht die Teststufen in der Cloud lauffähig:
+Blender 5.2 LTS als Python-Modul von PyPI (`bpy`; download.blender.org ist gesperrt) hinter dem Befehl `blender`
+(`.claude/hooks/blender_cli.py`, auch für die Worker), ImageMagick 6 hinter einem kleinen `magick`, Arial/Hiragino als
+Liberation Sans/IPA Gothic. Dort also `blender -b … --python scripts/generate_robot.py -- --tier quick` statt des
+macOS-Pfads. Grenzen: headless auf der CPU; Texturen und Zeiten sind nicht mit dem Mac vergleichbar (anderes
+ImageMagick, andere Schriften, wenige Kerne) – `qa`/`clips`/`type_bounds` nur gegen einen Cloud-Lauf vergleichen.
+Viewer (Swift), Unity-Testpaket und Blender-MCP gibt es nur lokal; der Lieferstand (`full`) entsteht weiter dort.
+
 ## Ganze Leistung des Geräts (gemeinsame Regel mit Cube Escape und Cubegen)
 
 Braucht eine Sitzung den Rechner für sich (Messungen, Benchmarks, Zeitbudgets, Abnahmen), darf sie andere

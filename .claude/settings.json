@@ -1,0 +1,13 @@
+{
+  "extraKnownMarketplaces": {
+    "ce-agent-tools": {
+      "source": {
+        "source": "github",
+        "repo": "ffunkfabian-hash/ce-agent-tools"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "ce-shared@ce-agent-tools": true
+  }
+}

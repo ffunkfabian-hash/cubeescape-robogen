@@ -3,6 +3,27 @@
 Versionen des Roboter-Generators (zählen getrennt von Cube Escape und Cubegen). Jede Version hat einen Tag
 `v<Version>` und einen Release-Branch `release/<Version>`.
 
+## 1.18.0 „Ground Crew“ – unveröffentlicht
+
+**Agenten-Werkzeuge ohne Modelländerung** (gemeinsamer Auftrag mit Cube Escape 0.56 „Pit Crew“ und Cubegen 0.23.0
+„Wingman“). Generator, Ausgaben und QA sind unverändert; nur die Versionsnummer steht in `robot_config.json` und den
+Vorschaubildern.
+
+1. **Subagents** in `.claude/agents/`: `rg-test-runner` (Teststufe, Berichtsvergleich `qa`/`clips`/`type_bounds`,
+   Zeitband, Cache-Treffer, Viewer- und Unity-Prüfungen – berichtet nur) und `rg-doc-keeper` (Changelog, README,
+   `docs/TECHNIK.md`, AGENTS.md und Skills auf Endstand, nur Markdown; Änderungen am Fahrplan meldet er für das Claude
+   Doc). Was jeder Agent mit seinen Werkzeugen darf, steht in `.claude/agent-guard.json`.
+2. **Gemeinsames Plugin `ce-shared`** (privates Repo `ffunkfabian-hash/ce-agent-tools`, eingetragen in
+   `.claude/settings.json`): Force-Push und nacktes `git stash` blockiert jetzt das Plugin für alle drei Repos (die
+   eigenen Hook-Dateien entfallen), dazu neu Teleport aus einer Sitzung, Unity auf Cube-Escape-Checkouts und Unity-CLI
+   ohne `--project-path`, Warnung bei GitHub-Workflows. Die alte Force-Push-Regel traf `-f` irgendwo nach „push“.
+3. **Fahrplan:** die zwei in 1.9.2 geprüften Neural-Engine-Vorschläge (Bildvergleich per Vision, Vorlagen per
+   Bildgenerator) sind im Claude Doc und in `docs/FAHRPLAN.md` als verworfen abgehakt.
+
+Geprüft: `quick` und `standard` mit dem UV-Cache von 1.17 – `qa`, `clips`, `type_bounds` identisch. Mit kaltem Cache
+wich nur die Voxel-Form in Lauf-Clips minimal ab (Standgeschwindigkeit bis 0,002 m/s): neu gepackte UVs (Blenders
+Insel-Packen ist nicht deterministisch, Cache-Regeln) ändern die abgetasteten Texel – kein Code-Unterschied.
+
 ## 1.17.0 „Slimline“ – 2026-10-13
 
 **Optimierung ohne Modelländerung** (Vorschlag vom 13.10., Nutzer: „1–5 ausführen“). QA, Clip-Daten und Typ-Maße sind

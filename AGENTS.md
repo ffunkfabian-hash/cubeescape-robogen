@@ -123,13 +123,18 @@ Text. Gemeinsam mit Cube Escape und Cubegen (dort je eine eigene Tabelle in `AGE
 | `github` | Pull Requests, Issues, Release-Branches und Tags auf GitHub (oder `gh`) |
 | `engineering` | `debug`, `testing-strategy`, `documentation` |
 | `design` | `design-critique` für Vorschauen und den Viewer |
-| `hookify` | Regeln als `.claude/hookify.<name>.local.md` (eingecheckt) |
+| `hookify` | Repo-eigene Regeln als `.claude/hookify.<name>.local.md` (eingecheckt) |
+| `ce-shared` | eigenes Plugin für Cube Escape, Cubegen und den Roboter-Generator (privates GitHub-Repo ffunkfabian-hash/ce-agent-tools, eingetragen in `.claude/settings.json`): gemeinsame Regeln und die Werkzeug-Profile der Subagents (`.claude/agent-guard.json`) |
 | `unity`, `unity-perf` | erst, wenn der Roboter in Cube Escape eingebaut wird – dann gelten die Regeln dort |
 
-**Hooks** (hookify) **blockieren** Änderungen von Hand an `output/`, Änderungen am Spielprojekt Cube Escape, nacktes
-`git stash` (geteilter Stash-Stapel) und Force-Push; sie **halten das Sitzungsende an**, bis nach einer Änderung in
-`scripts/` eine Teststufe lief, und **warnen** bei Commit/Merge/Tag/Push (nur auf Wunsch), bei Code rund um
-`unwrap()`/Backen (Schemaversion) und bei Viewer-Änderungen. Ändert sich eine dieser Regeln, ändert sich ihre Hook-Datei mit.
+**Hooks blockieren** (hookify) Änderungen von Hand an `output/` und Änderungen am Spielprojekt Cube Escape, (Plugin
+`ce-shared`) nacktes `git stash` (geteilter Stash-Stapel), Force-Push, Teleportieren einer Cloud-Sitzung und Unity bzw.
+die Unity-CLI auf Cube-Escape-Checkouts oder ohne `--project-path`; sie **halten das Sitzungsende an**, bis nach einer
+Änderung in `scripts/` eine Teststufe lief, und **warnen** bei Commit/Merge/Tag/Push (nur auf Wunsch), bei Code rund
+um `unwrap()`/Backen (Schemaversion), bei Viewer-Änderungen und GitHub-Workflows. Ändert sich eine dieser Regeln,
+ändert sich ihre Hook-Datei mit (gemeinsame im Plugin-Repo, mit Tests).
+**Subagents** (`.claude/agents/`): `rg-test-runner` (Teststufe und Prüfablauf, berichtet nur) und `rg-doc-keeper`
+(Doku auf Endstand, nur Markdown) – Befehle und Schreibpfade begrenzt `.claude/agent-guard.json`.
 
 ## Cache-Regeln (`<out>/cache`)
 

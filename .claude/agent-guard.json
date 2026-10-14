@@ -1,0 +1,30 @@
+{
+  "about": "Werkzeug-Profile der Subagents in .claude/agents (1.18.0). Durchgesetzt vom Plugin ce-shared (Marketplace ce-agent-tools): Bash-Befehle muessen einem Muster in 'bash' entsprechen (oder lesend sein, 'readonly_shell'), Edit/Write nur auf Pfade in 'edit' ausser 'deny_edit' (Globs relativ zum Repository). Aenderungen hier zusammen mit dem Agenten-Text.",
+  "agents": {
+    "rg-test-runner": {
+      "readonly_shell": true,
+      "bash": [
+        "[\"']?(/Applications/Blender\\.app/Contents/MacOS/Blender|blender)[\"']?\\s+-b\\b.*--python\\s+scripts/(generate_robot|verify_robot)\\.py\\b",
+        "(bash\\s+)?scripts/check_output\\.sh\\b",
+        "(bash\\s+)?viewer/(build|test_viewer)\\.sh\\b",
+        "(bash\\s+)?unity/run_testbed\\.sh\\b",
+        "cp\\s+[\"']?output/(_\\w+/)?logs/robot_report\\.json[\"']?\\s+[\"']?[^\\s\"']+[\"']?$"
+      ],
+      "edit": []
+    },
+    "rg-doc-keeper": {
+      "readonly_shell": true,
+      "bash": [],
+      "edit": [
+        "README.md",
+        "AGENTS.md",
+        "CLAUDE.md",
+        "CHANGELOG.md",
+        "docs/*.md",
+        ".agents/skills/README.md",
+        ".agents/skills/*/SKILL.md"
+      ],
+      "deny_edit": []
+    }
+  }
+}

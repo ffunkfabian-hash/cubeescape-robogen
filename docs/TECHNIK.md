@@ -1,6 +1,6 @@
 # Techniken des Roboter-Generators – Übertrag auf Cubegen
 
-Stand: Generator 1.20.2 „Powdercoat“. Diese Datei sammelt, **wie** der Generator arbeitet und was sich dabei bewährt
+Stand: Generator 1.20.4 „Powdercoat“. Diese Datei sammelt, **wie** der Generator arbeitet und was sich dabei bewährt
 oder als Falle erwiesen hat. Ziel: Der Modell-Editor von Cubegen soll genauso leistungsfähig werden. Jede Technik
 nennt die Fundstelle im Generator und was Cubegen davon übernehmen sollte. Pflegen bei jeder Generator-Version
 (neue Technik → neuer Abschnitt, geänderte Messwerte → hier ändern).
@@ -541,3 +541,81 @@ Vorschaulicht; einen geänderten Standard nie still umdeuten, sondern den alten 
 **Für Cubegen:** Caches in einen Ordner außerhalb der Arbeitskopie legen, Schlüssel ohne Pfade, Kopien als Klone,
 atomar schreiben, nach Größe und letzter Nutzung aufräumen; bei nicht deterministischen Schritten (Backen, Bild-Werkzeuge
 mit Zeitstempeln) die Ergebnisse bytegleich weiterreichen statt neu zu erzeugen.
+
+## 21. Betriebsdetails aus AGENTS.md (1.20.4)
+
+`AGENTS.md` hält nur die Regeln, die jede Aufgabe braucht; die Hintergründe dazu stehen hier.
+
+- **Cloud-Sitzungen (claude.ai/code):** Der SessionStart-Hook `.claude/hooks/session-start.sh` (lokal tut er nichts)
+  installiert Blender 5.2 LTS als Python-Modul von PyPI (`bpy`; download.blender.org ist gesperrt) hinter dem Befehl
+  `blender` (`.claude/hooks/blender_cli.py`, auch für die Worker), ImageMagick 6 hinter einem kleinen `magick` und
+  Arial/Hiragino als Liberation Sans/IPA Gothic. Grenzen: headless auf der CPU; Texturen und Zeiten sind nicht mit dem
+  Mac vergleichbar (anderes ImageMagick, andere Schriften, wenige Kerne) – `qa`/`clips`/`type_bounds` nur gegen einen
+  Cloud-Lauf vergleichen. Viewer (Swift), Unity-Testpaket und Blender-MCP gibt es nur lokal; der Lieferstand (`full`)
+  entsteht dort.
+- **Zeitband:** Jeder Lauf schreibt Schrittzeiten, Systemlast und Worker-Statistik nach `<out>/logs/robot_report.json`
+  und bewertet die Zeit (`timings.band`, Referenzen in `<out>/cache/timings.json`) gegen den Median ruhiger Läufe
+  derselben Stufe und Cache-Lage, mit Toleranz je Last (ruhig 30 %, leicht × 2,6, schwer = nicht bewertet). Nur ruhige
+  Läufe werden Referenz. Ein „SLOWER“ auf ruhiger Maschine ist ein Befund; unter Last nichts schließen, sondern ruhig
+  nachmessen. Das Budget (`TIERS`) bleibt Zielwert.
+- **Pause durch `full` und `check_output.sh` (`scripts/quiet.py`, seit 1.20.2):** Laufen Unity, Blender oder der Generator
+  anderer Sitzungen oder liegt die Last über 0,3 je Kern, während Befehle anderer Sitzungen die CPU nutzen, starten sich
+  die Läufe über `pause_sessions.py` (Cube Escape, `.agents/skills/ce-testing/scripts/`) neu; das Werkzeug hält nur die
+  Befehle anderer Claude-/Codex-Sitzungen an (SIGSTOP), setzt sie danach immer fort (SIGCONT) und lässt die Sitzungen
+  selbst, den Unity-Editor und das Blender des Nutzers unberührt. Der Bericht nennt es (`robot_report.json` › `quiet`,
+  letzte Zeile von `check_output.sh`). Pausiert schon eine andere Sitzung, laufen sie normal (zwei Pausen hielten sich
+  gegenseitig für immer an). `ROBOGEN_NO_PAUSE=1` schaltet es ab; fehlt das Werkzeug, laufen sie mit Warnung normal. Ein
+  pausierter Befehl kann in die Zeitgrenze seines Werkzeugs laufen – dann führt die andere Sitzung ihn erneut aus.
+- **Schwerer-Lauf-Sperre (seit 1.20.3, gemeinsam mit Cube Escape 0.59 und Cubegen 0.25):** exklusives `flock` auf
+  `~/Library/Caches/CubeEscape/heavy-run.lock` (`scripts/heavy_lock.py`); der Halter schreibt eine JSON-Zeile
+  `pid`/`what`/`checkout`/`since`, Wartende nennen sie. **Erst die Sperre, dann die Pause:** andere schwere Läufe warten
+  dann an der Sperre und rechnen nicht; `quiet.py` pausiert nur noch, wenn danach Last übrig bleibt, die nicht an der
+  Sperre wartet. Kinder des Halters bekommen `CE_HEAVY_HELD=1` und warten nicht erneut (`run_testbed.sh` in
+  `check_output.sh`); `CE_HEAVY_LOCK=0` überspringt die Sperre; der Dateideskriptor wird nie vererbt (`O_CLOEXEC`).
+  `python3 scripts/heavy_lock.py status` zeigt den Halter; der Bericht nennt die Sperre. Den Vertrag nur zusammen mit
+  den beiden anderen Repos ändern.
+- **Prüfablauf, Schritt 4 (`quick` zweimal):** Beim zweiten Lauf müssen UV-Cache und Bake-Cache treffen (Log „UV cache
+  hit“, „bake cache hit“); dank des geteilten Caches meist schon beim ersten Lauf eines neuen Worktrees. QA-Ergebnisse
+  kommen aus `qa/`, solange Mesh, Rig, Clip und QA-Code gleich sind („QA cache: N clip results reused“); nach
+  Änderungen an der QA selbst reicht das (der Code steckt im Schlüssel), `--no-cache` prüft alles neu. Vorschaubilder
+  kommen aus `render/`, solange die Szene beim Rendern gleich aussieht („render cache: N images reused“); Fehlersuche mit
+  `ROBOT_KEEP_WORKER_LOGS=1` und `ROBOT_RENDER_DIGEST_DUMP` (§ 12). Ohne Änderung an Modell, Rig, Clips und Export-Code
+  schreibt der zweite Lauf keine FBX und keine Viewer-Daten („unchanged outputs kept: main, modular, forms, viewer“)
+  und misst keine Clips („85 clips from the cache“); Fehlersuche mit `ROBOT_OUTPUT_DIGEST_DUMP=<Datei>`.
+- **Release (`scripts/release.py`, seit 1.20.3):** Prüft vor jeder Änderung: beide Checkouts sauber, Haupt-Checkout auf
+  `main`, nur Fast-Forward (der Branch enthält `main` und `origin/main`, sonst erst `git merge main` im Branch), Tag und
+  `release/<Version>` noch nicht vergeben, `CHANGELOG.md` hat `## <Version>`, keine Datei über 100 MB, keine
+  Zugangsdaten (Zeile mit `release-check: allow` ist bewusst ausgenommen). Mit `--apply`: `merge --ff-only` im
+  Haupt-Checkout, annotierter Tag `v<Version>` (Text `-m`/`-F`, sonst der neueste Commit-Betreff mit der Version),
+  Branch `release/<Version>`, **ein** atomarer Push von `main`, Tag und Release-Branch ohne `--force`, Links im Bericht.
+  Bricht ein Schritt ab, setzt derselbe Befehl fort.
+- **Cache im Detail (zu den Cache-Regeln, § 20):** Unterordner je Art: `uv`, `ao`, `bake`, `textures`, `skins`, `source`,
+  `render`, `qa`, `clips`, `outputs` (FBX, Formen, Viewer-Daten); Haupt-Checkout, Worktrees und Nachtläufe teilen ihn,
+  er überlebt gelöschte Worktrees (Linux: `$XDG_CACHE_HOME/RobotGen/cache`). In `<out>/cache` bleibt nur
+  Checkout-Zustand: `outputs.json` (Pfade relativ zur Ausgabe), `timings.json` und die Arbeitskopien der Vorschau-Skins
+  (`skin_textures`; in `Textures/` liegt nur der Standard-Skin). `robocache.prune` läuft am Ende eines Laufs
+  (`ROBOGEN_CACHE_LIMIT_GB`, Standard 6): am längsten nicht benutzte Einträge zuerst, nichts aus den letzten 2 Stunden,
+  ein Treffer berührt den Eintrag. Schlüssel: Geometrie in kanonischer Ecken-Reihenfolge (Blenders Flächenreihenfolge und
+  Insel-Packen sind nicht deterministisch), Materialien als Node-Signatur, dazu Quelltexturen und Einstellungen; Bilder
+  nach Inhalt oder Dateiname, nie mit Ordner. Beim ersten Lauf übernimmt `robocache.prepare` alte Caches (`<out>/cache`
+  bis 1.20.1): die eigene Ausgabe verschiebt er, die Ausgaben des Haupt-Checkouts (`output`, `_quick`, `_standard`) klont
+  er einmal (`migrated.json`) samt Quelltexturen, statischen Texturen, Skins und Exporten – bytegleich; alte,
+  pfadhaltige Bake-Schlüssel erkennt `bake_textures` über `legacy_sources.json` (§ 20). Code im Schlüssel (`QA_CODE_PARTS`,
+  `CLIP_CODE_PARTS`, `EXPORT_CODE_PARTS`) wird per Funktionsname über alle `robogen`-Module gesucht (`code_source`).
+  ImageMagick-Texturen hängen am Skript-Hash von `make_textures.py` und an der ImageMagick-Version.
+- **Plugins im Roboter-Generator (Claude Code; gemeinsam mit Cube Escape und Cubegen):**
+
+  | Plugin | Einsatz |
+  |---|---|
+  | Blender-MCP | laufendes Blender des Nutzers als Prüfstand: `CubeEscape_Robot.blend` und Exporte laden, nachmessen, Ansichten rendern – in eigener Szene, nichts speichern |
+  | `quick-gate-python` | Ruff (und pytest, wo es reine Python-Teile gibt) für `scripts/`; Pyright kennt `bpy` nicht. Verbindlich bleiben die Teststufen |
+  | `code-review` | Slash-Befehl `code-review` vor jedem Release auf `main` |
+  | `github` | Pull Requests, Issues, Release-Branches und Tags auf GitHub (oder `gh`) |
+  | `engineering` | `debug`, `testing-strategy`, `documentation` |
+  | `design` | `design-critique` für Vorschauen und den Viewer |
+  | `hookify` | Repo-eigene Regeln als `.claude/hookify.<name>.local.md` (eingecheckt) |
+  | `ce-shared` | gemeinsames Plugin (privates GitHub-Repo ffunkfabian-hash/ce-agent-tools, eingetragen in `.claude/settings.json`): gemeinsame Regeln und die Werkzeug-Profile der Subagents (`.claude/agent-guard.json`; Befehle und Schreibpfade von `rg-test-runner` und `rg-doc-keeper`) |
+  | `unity`, `unity-perf` | erst, wenn der Roboter in Cube Escape eingebaut wird – dann gelten die Regeln dort |
+
+  Die Hook-Regeln aus `AGENTS.md` (Plugin `ce-shared` und hookify) stehen in `.claude/hookify.*.local.md` und im
+  Plugin-Repo (mit Tests).

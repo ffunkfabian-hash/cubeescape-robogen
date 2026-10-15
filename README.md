@@ -1,4 +1,4 @@
-# Cube Escape – Roboter-Charakter (Generator 1.20.2)
+# Cube Escape – Roboter-Charakter (Generator 1.20.4)
 
 Der spielbare Roboter aus dem Cube-Escape-Keyart, vollständig per Skript erzeugt: Geometrie mit Bauteil-Varianten
 und Accessoires, Materialien, gebackene Texturen (Detail- und Ausdrucks-Texturen per ImageMagick), Rig mit Bein- und
@@ -89,6 +89,9 @@ auf die rechnerweite Sperre, die auch Cube Escape und Cubegen nutzen (`scripts/h
 überspringt sie, `python3 scripts/heavy_lock.py status` zeigt den Halter); erst danach entscheidet `quiet.py` über eine
 Pause. `python3 scripts/release.py <Version> [--apply]` erledigt Merge, Tag, Release-Branch und Push mit Prüfungen
 (`AGENTS.md` › Release).
+
+**1.20.4 – schlankere Agenten-Regeln:** `AGENTS.md` (in jeder Sitzung geladen) ist um rund ein Drittel kürzer; Hintergründe
+und Einzelheiten stehen in `docs/TECHNIK.md` › 21. Modell und Lieferstand unverändert.
 
 ### Ablauf und Worker
 

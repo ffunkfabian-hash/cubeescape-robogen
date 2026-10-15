@@ -3,6 +3,17 @@
 Versionen des Roboter-Generators (zählen getrennt von Cube Escape und Cubegen). Jede Version hat einen Tag
 `v<Version>` und einen Release-Branch `release/<Version>`.
 
+## 1.20.4 „Powdercoat“ – 2026-10-15
+
+Nur Doku, Modell und Lieferstand unverändert (der Generator trägt nur die neue Versionsnummer).
+
+* **`AGENTS.md` schlanker:** in jeder Sitzung geladen, daher auf das gekürzt, was jede Aufgabe braucht (263 → 184 Zeilen,
+  20,7 → 13,7 KB). Alle Regeln bleiben, Überschriften (`Teststufen`, `Prüfablauf`, `Release`, `Cache-Regeln` …) und
+  Prüfablauf-Schritte 0–7 unverändert, damit Verweise aus Skripten, Hooks und Subagents stimmen.
+* **Verschoben nach `docs/TECHNIK.md` › 21 (Betriebsdetails):** Cloud-Sitzungen (Hook, Grenzen), Zeitband und seine
+  Toleranzen, Pause und Schwerer-Lauf-Sperre im Einzelnen, Log-Zeilen und Fehlersuche des zweiten `quick`, Release-Prüfungen,
+  Cache im Detail (Unterordner, Aufräumen, Migration, Code im Schlüssel) und die Plugin-Tabelle.
+
 ## 1.20.3 „Powdercoat“ – 2026-10-15
 
 Nur Werkzeuge und Ablauf, Modell und Lieferstand unverändert (`qa`, `clips`, `type_bounds` identisch zu 1.20.2).

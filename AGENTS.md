@@ -79,7 +79,7 @@ Kommentare und Log-Ausgaben auf **Englisch**.
 | `standard` | vor jedem Commit | `output/_standard` |
 | `full` | vor Release, für den Lieferstand | `output` |
 
-Werkzeug-Tests ohne Blender (geteilter Cache, Prüfplan, ruhige Maschine): `python3 -m unittest discover -s tests`.
+Werkzeug-Tests ohne Blender (geteilter Cache, Prüfplan, ruhige Maschine, Sperre, Release): `python3 -m unittest discover -s tests`.
 
 Jeder Lauf schreibt Schrittzeiten, Systemlast und Worker-Statistik nach `<out>/logs/robot_report.json` und bewertet
 die Zeit im **Zeitband** (`timings.band`, `<out>/cache/timings.json`): gegen den Median ruhiger Läufe derselben Stufe und
@@ -110,6 +110,17 @@ der Generator anderer Sitzungen oder liegt die Last über 0,3 je Kern, während 
 nutzen, starten sie sich über das Werkzeug neu; der Bericht nennt es (`robot_report.json` › `quiet`, letzte Zeile von
 `check_output.sh`). Pausiert schon eine andere Sitzung, laufen sie normal (zwei Pausen hielten sich gegenseitig für
 immer an). `ROBOGEN_NO_PAUSE=1` schaltet es ab; fehlt das Werkzeug, laufen sie mit Warnung normal.
+
+**Ein schwerer Lauf zur Zeit (seit 1.20.3, gemeinsam mit Cube Escape 0.59 und Cubegen 0.25):** `full`,
+`scripts/check_output.sh` und `unity/run_testbed.sh` warten auf die rechnerweite Sperre
+`~/Library/Caches/CubeEscape/heavy-run.lock` (`scripts/heavy_lock.py`; exklusives `flock`, der Halter schreibt eine
+JSON-Zeile `pid`/`what`/`checkout`/`since`, Wartende nennen sie). Reihenfolge: **erst die Sperre, dann die Pause** –
+andere schwere Läufe warten dann an der Sperre und rechnen nicht; `quiet.py` pausiert nur noch, wenn danach Last übrig
+bleibt, die nicht an der Sperre wartet (Prozesse, die wirklich rechnen). Kinder des Halters bekommen `CE_HEAVY_HELD=1`
+und warten nicht erneut (`run_testbed.sh` in `check_output.sh`); `CE_HEAVY_LOCK=0` überspringt die Sperre. Der
+Dateideskriptor wird nie vererbt (`O_CLOEXEC`). `python3 scripts/heavy_lock.py status` zeigt den Halter; der Bericht
+nennt die Sperre (`robot_report.json` › `quiet`, letzte Zeile von `check_output.sh`). Vertrag nur zusammen mit den
+beiden anderen Repos ändern.
 
 ## Prüfablauf vor dem Commit
 
@@ -154,6 +165,17 @@ Doku –, nicht Modell, Rig, Clips, UVs, Backen, Export, Viewer-, Shader- oder C
 5. Zielzeit: unter 15 Minuten vom fertigen Diff bis zum Release. Fällt dabei etwas auf (Cache-Fehltreffer, rote
    Prüfung, unerwartete Änderung im Bericht), gilt ab da der volle Prüfablauf oben.
 
+### Release (seit 1.20.3)
+
+`python3 scripts/release.py <Version>` – aus dem Worktree oder dem Haupt-Checkout, ohne `--apply` nur Probelauf.
+Prüft: beide Checkouts sauber, Haupt-Checkout auf `main`, nur Fast-Forward (der Branch enthält `main` und
+`origin/main`, sonst erst `git merge main` im Branch), Tag und `release/<Version>` noch nicht vergeben,
+`CHANGELOG.md` hat `## <Version>`, keine Datei über 100 MB, keine Zugangsdaten (Zeile mit `release-check: allow` ist
+bewusst ausgenommen). Mit `--apply`: `merge --ff-only` im Haupt-Checkout, annotierter Tag `v<Version>` (Text `-m`/`-F`,
+sonst der neueste Commit-Betreff mit der Version), Branch `release/<Version>`, **ein** atomarer Push von `main`, Tag
+und Release-Branch ohne `--force`; meldet die Links. Bricht ein Schritt ab, setzt derselbe Befehl fort. Danach die
+Schritte „nach dem Merge“ aus `testplan.py` und den Worktree entfernen.
+
 ### Aufträge an andere Sitzungen
 
 Wer Arbeit an eine andere Sitzung oder einen Subagent gibt, schreibt den Auftrag so, dass keine Erkundungsläufe nötig
@@ -163,7 +185,7 @@ sind – Vorlage:
 Änderung: <was, welche Dateien; Art: Doku | Daten | Modell/Rig/Clips | Export | Viewer | Unity | Werkzeug>
 Prüfweg: <Ausgabe von `python3 scripts/testplan.py` (Weg und Schritte), ggf. `--path data`>
 Erwartet im Bericht: <qa/clips/type_bounds identisch | gewollte Abweichung: welcher Schlüssel, welche Clips/Typen>
-Release: <ja: Version x.y.z „Name“, Tag, Release-Branch, full im Haupt-Checkout | nein: nur Commit/Branch>
+Release: <ja: Version x.y.z „Name“ mit `python3 scripts/release.py x.y.z --apply`, danach im Haupt-Checkout `testplan.py --base <vorheriger Tag> --after-merge --run` | nein: nur Commit/Branch>
 Melden: Commit/Tag, Zeiten je Schritt, Cache-Treffer, Pause ja/nein, Prüfergebnisse (Zahlen), Offenes
 ```
 

@@ -1,5 +1,5 @@
 {
-  "about": "Werkzeug-Profile der Subagents in .claude/agents (1.18.0; 1.20.2: testplan.py, Werkzeug-Tests, quiet.py status). Durchgesetzt vom Plugin ce-shared (Marketplace ce-agent-tools): Bash-Befehle muessen einem Muster in 'bash' entsprechen (oder lesend sein, 'readonly_shell'), Edit/Write nur auf Pfade in 'edit' ausser 'deny_edit' (Globs relativ zum Repository). Aenderungen hier zusammen mit dem Agenten-Text.",
+  "about": "Werkzeug-Profile der Subagents in .claude/agents (1.18.0; 1.20.2: testplan.py, Werkzeug-Tests, quiet.py status; 1.20.3: heavy_lock.py status, release.py nur als Probelauf). Durchgesetzt vom Plugin ce-shared (Marketplace ce-agent-tools): Bash-Befehle muessen einem Muster in 'bash' entsprechen (oder lesend sein, 'readonly_shell'), Edit/Write nur auf Pfade in 'edit' ausser 'deny_edit' (Globs relativ zum Repository). Aenderungen hier zusammen mit dem Agenten-Text.",
   "agents": {
     "rg-test-runner": {
       "readonly_shell": true,
@@ -7,6 +7,8 @@
         "python3\\s+scripts/testplan\\.py\\b",
         "python3\\s+-m\\s+unittest\\s+discover\\s+-s\\s+tests\\b",
         "python3\\s+scripts/quiet\\.py\\s+status\\b",
+        "python3\\s+scripts/heavy_lock\\.py\\s+status\\b",
+        "python3\\s+scripts/release\\.py\\s+(?!.*--apply)\\S",
         "[\"']?(/Applications/Blender\\.app/Contents/MacOS/Blender|blender)[\"']?\\s+-b\\b.*--python\\s+scripts/(generate_robot|verify_robot)\\.py\\b",
         "(bash\\s+)?scripts/check_output\\.sh\\b",
         "(bash\\s+)?viewer/(build|test_viewer)\\.sh\\b",

@@ -3,6 +3,40 @@
 Versionen des Roboter-Generators (zählen getrennt von Cube Escape und Cubegen). Jede Version hat einen Tag
 `v<Version>` und einen Release-Branch `release/<Version>`.
 
+## 1.20.3 „Powdercoat“ – 2026-10-15
+
+Nur Werkzeuge und Ablauf, Modell und Lieferstand unverändert (`qa`, `clips`, `type_bounds` identisch zu 1.20.2).
+
+* **Ein schwerer Lauf zur Zeit** (`scripts/heavy_lock.py`, gemeinsam mit Cube Escape 0.59 „Turnstile“ und Cubegen
+  0.25): `full`, `scripts/check_output.sh` und `unity/run_testbed.sh` warten auf die rechnerweite Sperre
+  `~/Library/Caches/CubeEscape/heavy-run.lock` (exklusives `flock`; der Halter schreibt `{"pid", "what", "checkout",
+  "since"}`, Wartende nennen ihn und melden sich alle fünf Minuten). Der Dateideskriptor wird nie vererbt
+  (`O_CLOEXEC`), Kinder des Halters bekommen `CE_HEAVY_HELD=1` (das Unity-Testbett in `check_output.sh` wartet nicht
+  auf seinen Elternprozess), `CE_HEAVY_LOCK=0` überspringt die Sperre; Signale an den Wartenden gehen an den Befehl
+  weiter. `python3 scripts/heavy_lock.py status` zeigt den Halter.
+* **Erst die Sperre, dann die Pause** (`scripts/quiet.py`): Wer die Sperre hält, zählt schwere Prozesse anderer
+  Sitzungen nur noch, wenn sie rechnen (über 5 % CPU) – wer an der Sperre wartet, ist kein Grund zu pausieren. Der
+  Bericht nennt die Sperre (`robot_report.json` › `quiet`, letzte Zeile von `check_output.sh`: „heavy lock: held,
+  waited N s“).
+* **Release-Befehl** `scripts/release.py <Version>`: Probelauf als Standard, `--apply` führt aus; aus Worktree oder
+  Haupt-Checkout. Prüft saubere Checkouts, Fast-Forward gegen `main` und `origin/main`, freie Tag- und Branch-Namen,
+  `## <Version>` im CHANGELOG, keine Datei über 100 MB im Push, keine Zugangsdaten in neuen Zeilen oder Dateien; dann
+  `merge --ff-only`, annotierter Tag, `release/<Version>` und ein atomarer Push ohne `--force`, Links im Bericht. Ein
+  abgebrochener Release setzt mit demselben Befehl fort. AGENTS.md › Release, Vorlage für Aufträge verweist darauf;
+  Hook `git-nur-auf-wunsch` warnt auch bei `release.py --apply`, `rg-test-runner` darf den Probelauf.
+* `testplan.py`: Regeln für die neuen Skripte, Test „jede versionierte Datei hat eine Regel“.
+* **Tests:** `python3 -m unittest discover -s tests` – 79 Tests ohne Blender (33 neu): Halterzeile und Status (auch
+  mit dem Werkzeug von Cube Escape gelesen), Warten und Freigabe, kein Erben durch ein Hintergrundkind,
+  `CE_HEAVY_LOCK=0`/`CE_HEAVY_HELD=1`, `quiet.py run` mit Sperre, wartende Läufe kein Pausengrund, `run_testbed.sh`
+  wartet bzw. nicht im Halter; Release in temporären Repositories (Probelauf ändert nichts, Worktree-Release mit
+  Fast-Forward, annotiertem Tag, Release-Branch, atomarem Push, Fortsetzen nach abgelehntem Push, dreckige Checkouts,
+  kein Fast-Forward, entfernter Stand weiter, vergebener Tag, große Dateien, Zugangsdaten). Gefunden beim Volllauf:
+  Blender setzt SIGINT außerhalb von Python – das Zurücksetzen des Handlers schlug fehl; jetzt nur, was Python setzte.
+* **Prüfung** (`testplan.py --run`, voller Weg, 3:48 min): `quick` ×2 (alle Cache-Treffer), `standard`, `full` –
+  `qa`/`clips`/`type_bounds` (und Formen, Dreiecke, LODs, Kapseln) identisch zu 1.20.2, 1 649/1 649 Bilder aus dem
+  Cache, keine FBX neu; `check_output.sh` grün (verify 323/323, Viewer 50 PASS, Unity 29/29 + 16/16). Die Sperre hielt
+  der Volllauf sichtbar für Cube Escapes `heavy_lock.py status`.
+
 ## 1.20.2 „Powdercoat“ – 2026-10-15
 
 Nur Werkzeuge und Ablauf, Modell und Lieferstand unverändert (Volllauf: `qa`, `clips`, `type_bounds`, Dreiecke, LODs,

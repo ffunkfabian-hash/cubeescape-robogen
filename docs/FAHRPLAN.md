@@ -118,7 +118,9 @@ LandRoll; gesetzte Kontakte rutschen nicht (jeder Frame-Schritt geprüft). **1.2
 Oberfläche „Standard“ matt für alle Skins (wie bisher „Matt“, passend zur dunklen Station), der frühere Glanz bleibt
 als neue Oberfläche „Lack“ wählbar, „Matt“ eine Stufe matter. 1.20.1: schneller Prüfweg für reine Datenänderungen;
 1.20.2: ein Cache für alle Checkouts (neuer Worktree ab dem ersten Lauf warm), Prüfplan aus dem Diff
-(`scripts/testplan.py`), schwere Schritte pausieren andere Sitzungen selbst. Als Nächstes 2.0 Bodyplan.
+(`scripts/testplan.py`), schwere Schritte pausieren andere Sitzungen selbst; 1.20.3: ein schwerer Lauf zur Zeit
+über alle drei Repos (gemeinsame Sperre mit Cube Escape und Cubegen) und der Release-Befehl `scripts/release.py`.
+Als Nächstes 2.0 Bodyplan.
 
 1.13.1–1.13.3: Prüfungen parallel (`check_output.sh`), QA-Cache und Render-Cache – mit warmem Cache Standardlauf
 etwa 45 s, Volllauf 90–115 s statt rund 7 Minuten; eine sichtbare Änderung rendert nur ihre eigenen Bilder neu.

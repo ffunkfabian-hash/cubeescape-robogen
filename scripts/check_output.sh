@@ -5,10 +5,12 @@
 #   scripts/check_output.sh [output]      default: output (full run); e.g. output/_standard
 # 1.20.2: on a busy machine (other sessions' Unity/Blender/generator, high load) the checks run through Cube Escape's
 # pause_sessions.py (scripts/quiet.py); ROBOGEN_NO_PAUSE=1 never pauses.
+# 1.20.3: first they queue on the machine-wide heavy-run lock shared with Cube Escape and Cubegen (scripts/heavy_lock.py,
+# CE_HEAVY_LOCK=0 skips it); unity/run_testbed.sh below runs inside that lock (CE_HEAVY_HELD=1) and does not wait again.
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 if [ -z "${ROBOGEN_QUIET_ACTIVE:-}" ]; then
-  exec python3 "$ROOT/scripts/quiet.py" run -- "$ROOT/scripts/check_output.sh" "$@"
+  exec python3 "$ROOT/scripts/quiet.py" run --what "check_output.sh ${1:-output}" -- "$ROOT/scripts/check_output.sh" "$@"
 fi
 OUT="$(cd "${1:-$ROOT/output}" && pwd)"
 BLENDER="${BLENDER:-/Applications/Blender.app/Contents/MacOS/Blender}"

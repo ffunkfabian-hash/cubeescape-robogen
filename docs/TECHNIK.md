@@ -46,6 +46,8 @@ nennt die Fundstelle im Generator und was Cubegen davon übernehmen sollte. Pfle
 | Ein Cache für alle Checkouts | `scripts/robocache.py` | erster Volllauf im neuen Worktree 628 s → 87 s, alle 1 649 Bilder aus dem Cache | Cache außerhalb der Arbeitskopie, Einträge nach Inhalt, atomar, nach Größe aufräumen |
 | Prüfplan aus dem Diff | `scripts/testplan.py` | nur die nötigen Stufen statt „alles, sicherheitshalber“ | Zuordnung Datei → Prüfweg als Tabelle mit Tests |
 | Ruhige Maschine | `scripts/quiet.py` | schwere Schritte pausieren andere Sitzungen selbst | Last messen, bevor gemessen wird |
+| Ein schwerer Lauf zur Zeit | `scripts/heavy_lock.py` | Volllauf, Prüfungen und Unity-Testbett warten aufeinander, auch über Repos | Rechnerweite Sperre mit Halterzeile statt Raten aus der Prozessliste |
+| Release als ein Befehl | `scripts/release.py` | Fast-Forward, Tag, Release-Branch und atomarer Push mit Prüfungen | Erst prüfen, dann ändern; Probelauf als Standard |
 
 ## 1. Skin = Daten
 
@@ -525,6 +527,16 @@ Vorschaulicht; einen geänderten Standard nie still umdeuten, sondern den alten 
   nutzen (sonst stammt sie vom eigenen vorigen Schritt). Ist die Maschine belegt, startet sich der Volllauf über
   `pause_sessions.py` neu und pausiert die anderen genau so lange. **Falle:** zwei Läufe, die sich gegenseitig
   pausieren, halten sich für immer an – darum nie pausieren, solange eine andere Pause läuft (Sperre, Prozess, Status).
+
+- **Erst die Sperre, dann die Pause (1.20.3):** Cube Escape (0.59) und Cubegen (0.25) stellen schwere Läufe an
+  einer rechnerweiten Sperre an (`~/Library/Caches/CubeEscape/heavy-run.lock`, exklusives `flock`, Halterzeile als
+  JSON); der Generator tut es mit `full`, `check_output.sh` und `run_testbed.sh` (`scripts/heavy_lock.py`). Wer die
+  Sperre hält, sieht die anderen schweren Läufe nur noch wartend – `quiet.py` zählt dann nur Prozesse, die wirklich
+  rechnen (über 5 % CPU), und pausiert nur für Last, die nicht ansteht. **Fallen:** Ein vererbter Dateideskriptor
+  hielte die Sperre über das Ende des Laufs hinaus (ein Hintergrundkind wie ein Worker) – darum `O_CLOEXEC`; ein
+  schwerer Schritt im schweren Schritt würde auf seinen eigenen Elternprozess warten – darum `CE_HEAVY_HELD=1` für
+  die Kinder des Halters; ein Signal für den Wartenden geht an den Befehl weiter, sonst wäre die Sperre frei, während
+  der Befehl noch läuft.
 
 **Für Cubegen:** Caches in einen Ordner außerhalb der Arbeitskopie legen, Schlüssel ohne Pfade, Kopien als Klone,
 atomar schreiben, nach Größe und letzter Nutzung aufräumen; bei nicht deterministischen Schritten (Backen, Bild-Werkzeuge

@@ -43,11 +43,14 @@ RULES = [
     (".claude/hookify.*", "docs"),
     (".claude/agent-guard.json", "docs"),
     (".claude/settings.json", "docs"),
+    (".claude/skills", "docs"),                    # link to .agents/skills
     (".gitignore", "docs"),
     (".claude/hooks/*", "tooling"),
     ("tests/*", "tooling"),
     ("scripts/testplan.py", "tooling"),
     ("scripts/quiet.py", "tooling"),
+    ("scripts/heavy_lock.py", "tooling"),
+    ("scripts/release.py", "tooling"),
     ("scripts/check_output.sh", "tooling"),
     ("scripts/debug_*.py", "debug"),
     ("scripts/diag_parts.py", "debug"),
@@ -106,7 +109,7 @@ BLENDER_TIER = "{blender} -b --factory-startup --python-exit-code 1 --python scr
 # the slowest of its three parallel checks). where: worktree = before the commit, main = after the merge.
 STEPS = {
     "unit": {"cmd": "python3 -m unittest discover -s tests", "est": 5, "where": "worktree",
-             "text": "unit tests (shared cache, testplan, quiet)"},
+             "text": "unit tests (shared cache, testplan, quiet, heavy lock, release)"},
     "quick1": {"cmd": BLENDER_TIER.replace("{tier}", "quick"), "est": 12, "where": "worktree", "tier": "quick",
                "compare": True, "text": "quick once; qa/clips/type_bounds against the saved report"},
     "quick2": {"cmd": BLENDER_TIER.replace("{tier}", "quick"), "est": 12, "where": "worktree", "tier": "quick",
@@ -114,7 +117,7 @@ STEPS = {
     "standard": {"cmd": BLENDER_TIER.replace("{tier}", "standard"), "est": 70, "where": "worktree", "tier": "standard",
                  "compare": True, "text": "standard once; qa/clips/type_bounds against the saved report"},
     "full": {"cmd": BLENDER_TIER.replace("{tier}", "full"), "est": 100, "where": "worktree", "tier": "full",
-             "compare": True, "heavy": True, "text": "full (pauses other sessions on a busy machine)"},
+             "compare": True, "heavy": True, "text": "full (heavy lock, pauses other sessions on a busy machine)"},
     "check": {"cmd": "scripts/check_output.sh output", "est": 65, "where": "worktree", "heavy": True,
               "text": "check_output.sh: verify_robot.py, viewer build + tests, Unity testbed in parallel"},
     "verify": {"cmd": "{blender} -b output/CubeEscape_Robot.blend --python-exit-code 1 --python scripts/verify_robot.py "
@@ -213,8 +216,9 @@ def print_plan(plan: dict, source: str) -> None:
             print("     %s" % STEPS[s]["cmd"].format(blender=blender_path()))
     if plan["path"] == "none" and not plan["steps"]:
         print("Nothing to run: no Blender tier, no checks.")
-    print("Heavy steps (full, check_output.sh) pause other sessions themselves on a busy machine (scripts/quiet.py, "
-          "ROBOGEN_NO_PAUSE=1 = never).")
+    print("Heavy steps (full, check_output.sh, run_testbed.sh) queue on the heavy-run lock shared with Cube Escape "
+          "and Cubegen (scripts/heavy_lock.py, CE_HEAVY_LOCK=0 = skip), then pause other sessions on a still busy "
+          "machine (scripts/quiet.py, ROBOGEN_NO_PAUSE=1 = never).")
 
 
 # ---------------------------------------------------------------------------------------------------------------

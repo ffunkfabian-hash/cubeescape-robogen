@@ -84,6 +84,12 @@ ersten Lauf warm. `scripts/testplan.py` nennt aus dem Diff die nötigen Stufen u
 `scripts/check_output.sh` pausieren auf einer belasteten Maschine andere Sitzungen selbst (`scripts/quiet.py`).
 Werkzeug-Tests ohne Blender: `python3 -m unittest discover -s tests`.
 
+**1.20.3 – ein schwerer Lauf zur Zeit, Release-Befehl:** `full`, `check_output.sh` und `unity/run_testbed.sh` warten
+auf die rechnerweite Sperre, die auch Cube Escape und Cubegen nutzen (`scripts/heavy_lock.py`; `CE_HEAVY_LOCK=0`
+überspringt sie, `python3 scripts/heavy_lock.py status` zeigt den Halter); erst danach entscheidet `quiet.py` über eine
+Pause. `python3 scripts/release.py <Version> [--apply]` erledigt Merge, Tag, Release-Branch und Push mit Prüfungen
+(`AGENTS.md` › Release).
+
 ### Ablauf und Worker
 
 1. Hauptprozess: ImageMagick-Quelltexturen, Materialien, Geometrie, UVs (Cache).

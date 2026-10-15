@@ -4,9 +4,15 @@
 # expression and some animation frames with the URP shader, then runs the EditMode tests.
 #   unity/run_testbed.sh [generator output]      default: ../output      report: <output>/UnityTestbed
 # Needs Unity (version in RobotTestbed/ProjectSettings/ProjectVersion.txt, via Unity Hub) and ImageMagick.
+# 1.20.3: one heavy run at a time on this Mac - queues on the heavy-run lock shared with Cube Escape and Cubegen
+# (scripts/heavy_lock.py) unless a parent holds it already (CE_HEAVY_HELD=1, e.g. check_output.sh) or CE_HEAVY_LOCK=0.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/.." && pwd)"
+if [ "${CE_HEAVY_HELD:-}" != 1 ] && [ "$(echo "${CE_HEAVY_LOCK:-1}" | tr -d '[:space:]')" != 0 ]; then
+  exec python3 "$ROOT/scripts/heavy_lock.py" run --what "robogen unity/run_testbed.sh ${1:-output}" --checkout "$ROOT" \
+    -- "$HERE/run_testbed.sh" "$@"
+fi
 OUT="$(cd "${1:-$ROOT/output}" && pwd)"
 PROJ="$HERE/RobotTestbed"
 VERSION="$(sed -n 's/^m_EditorVersion: //p' "$PROJ/ProjectSettings/ProjectVersion.txt")"

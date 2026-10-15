@@ -34,24 +34,16 @@ import quiet  # noqa: E402 - heavy runs pause other sessions (1.20.2)
 from robogen.config import *  # noqa: E402,F401,F403 - every step of the generator
 
 
-HEAVY_LOCK = []     # the heavy-run lock of a full run: held until this process ends (released by the OS at exit)
-
-
 def quiet_full_run(args):
     """1.20.2: a full run on a busy machine runs again through pause_sessions.py (quiet.py) - this process only waits.
     1.20.3: first it queues on the machine-wide heavy-run lock (heavy_lock.py, shared with Cube Escape and Cubegen) and
-    holds it for the whole run - lock first, then pause. Returns the exit code of that run, or None to go on here."""
+    holds it for the whole run - lock first, then pause. 1.20.6: the run is a child also on a quiet machine (quiet.run):
+    before, it went on in this process, which held the lock itself - a TERM ended Blender at once and freed the lock while
+    its workers still ran. Now TERM/HUP/INT go on to the child's whole process group (run_forwarding) and the lock is
+    free once that group is empty. Returns the exit code of that run, or None to go on here."""
     if args.tier != "full" or args.worker_queue or os.environ.get("ROBOGEN_QUIET_ACTIVE"):
         return None
-    HEAVY_LOCK.append(quiet.take_heavy_lock("full (%s)" % os.path.abspath(args.out)))
-    p = quiet.plan(heavy=HEAVY_LOCK[0])
-    print("quiet: %s; heavy lock: %s" % (p["why"], HEAVY_LOCK[0].state()), flush=True)
-    argv, env = quiet.command_for([bpy.app.binary_path] + sys.argv[1:], p)
-    if p["mode"] != "pause":
-        os.environ.update(ROBOGEN_QUIET_ACTIVE="1", ROBOGEN_QUIET_INFO=env["ROBOGEN_QUIET_INFO"])
-        return None
-    print("quiet: running the full tier through pause_sessions.py (other sessions paused while it runs)", flush=True)
-    return quiet.heavy_lock.run_forwarding(argv, env)     # a TERM for this process goes on: the lock outlives no run
+    return quiet.run([bpy.app.binary_path] + sys.argv[1:], what="full (%s)" % os.path.abspath(args.out))
 
 
 def main():

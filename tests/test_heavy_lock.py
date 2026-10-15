@@ -1,5 +1,6 @@
 """One heavy run at a time (scripts/heavy_lock.py, 1.20.3): the lock shared with Cube Escape and Cubegen, and how the
 heavy steps (quiet.py run, unity/run_testbed.sh) use it."""
+import ast
 import json
 import os
 import signal
@@ -16,6 +17,7 @@ import quiet
 
 ROOT = os.path.dirname(SCRIPTS)
 CE_TOOL = "/Users/ffunk/Claude/Cube Escape/Tools/heavy_lock.py"
+BLENDER = os.environ.get("BLENDER", "/Applications/Blender.app/Contents/MacOS/Blender")
 
 
 class LockCase(unittest.TestCase):
@@ -32,6 +34,18 @@ class LockCase(unittest.TestCase):
     def env(self, **extra):
         e = dict(os.environ, **extra)
         return e
+
+    def free(self):
+        """True when nobody holds the lock (takes and drops it at once)."""
+        import fcntl
+        fd = os.open(self.lock, os.O_RDWR | os.O_CREAT | os.O_CLOEXEC, 0o644)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return True
+        except BlockingIOError:
+            return False
+        finally:
+            os.close(fd)
 
     def python(self, code, **kw):
         return subprocess.Popen([sys.executable, "-c", code], env=self.env(CE_HEAVY_HELD=""), stdout=subprocess.PIPE,
@@ -123,18 +137,6 @@ class Contract(LockCase):
         for number, handler in ((sig.SIGTERM, sig.SIG_DFL), (sig.SIGHUP, sig.SIG_DFL),
                                 (sig.SIGINT, sig.default_int_handler)):
             real(number, handler)
-
-    def free(self):
-        """True when nobody holds the lock (takes and drops it at once)."""
-        import fcntl
-        fd = os.open(self.lock, os.O_RDWR | os.O_CREAT | os.O_CLOEXEC, 0o644)
-        try:
-            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            return True
-        except BlockingIOError:
-            return False
-        finally:
-            os.close(fd)
 
     def grandchild_run(self, grandchild, then):
         """heavy_lock.py run with a command that starts a grandchild (same process group), says 'go <pid>', then `then`."""
@@ -245,6 +247,52 @@ class Quiet(LockCase):
             rc = quiet.run([sys.executable, "-c", "pass"], log=self.lines.append)
         self.assertEqual(rc, 0)
         self.assertEqual(self.lines, [])
+
+
+    def test_a_term_to_a_full_run_reaches_its_workers_before_the_lock_is_free(self):
+        """1.20.6: on a quiet machine the full tier went on in the Blender that held the lock - a TERM ended it at once
+        (the default action) and freed the lock while its workers still ran. It is a child now (quiet.run), also in
+        Blender (subTest when Blender is installed): the TERM reaches the workers and the lock outlives them."""
+        holders = {"python": [sys.executable, os.path.join(SCRIPTS, "quiet.py"), "run", "--what", "full", "--"]}
+        if os.path.exists(BLENDER):
+            holders["blender"] = [BLENDER, "-b", "--factory-startup", "-noaudio", "--python-exit-code", "1",
+                                  "--python-expr", "import sys; sys.path.insert(0, %r); import quiet; "
+                                  "sys.exit(quiet.run(sys.argv[sys.argv.index('--') + 1:], what='full'))" % SCRIPTS, "--"]
+        for name, holder_argv in holders.items():
+            with self.subTest(holder=name):
+                marker = os.path.join(self.tmp, "%s-worker-ended" % name)
+                worker = ("import signal, sys, time\n"     # like a Blender worker: same process group, no session
+                          "def done(*a): time.sleep(0.8); open(%r, 'w').write('x'); sys.exit(0)\n"
+                          "signal.signal(signal.SIGTERM, done)\nopen(%r, 'w').close()\ntime.sleep(60)\n"
+                          % (marker, marker + ".ready"))
+                run = "import subprocess, sys, time\nsubprocess.Popen([sys.executable, '-c', %r])\ntime.sleep(60)\n" % worker
+                holder = subprocess.Popen(holder_argv + [sys.executable, "-c", run],
+                                          env=self.env(ROBOGEN_NO_PAUSE="1", CE_HEAVY_HELD=""),
+                                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                self.addCleanup(lambda h=holder: h.poll() is None and h.kill())
+                deadline = time.monotonic() + 60
+                while not os.path.exists(marker + ".ready"):   # the worker runs and has set its handler
+                    self.assertLess(time.monotonic(), deadline, "the worker did not start")
+                    self.assertIsNone(holder.poll(), "the holder ended early")
+                    time.sleep(0.02)
+                self.assertFalse(self.free())                      # the holder has the lock
+                holder.terminate()
+                self.assertNotEqual(holder.wait(timeout=30), 0)
+                self.assertTrue(os.path.exists(marker))           # the worker got the TERM and ended first
+                self.assertTrue(self.free())
+
+    def test_the_full_tier_never_runs_in_the_process_that_holds_the_lock(self):
+        """1.20.6: generate_robot.py's quiet_full_run hands the full tier to quiet.run in every mode (no own lock)."""
+        with open(os.path.join(SCRIPTS, "generate_robot.py"), encoding="utf-8") as fh:
+            tree = ast.parse(fh.read())
+        func = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "quiet_full_run")
+        calls = {ast.unparse(n.func) for n in ast.walk(func) if isinstance(n, ast.Call)}
+        self.assertIn("quiet.run", calls)
+        self.assertFalse(calls & {"quiet.take_heavy_lock", "quiet.plan", "os.environ.update"}, calls)
+        returns = [n for n in ast.walk(func) if isinstance(n, ast.Return)]
+        self.assertTrue(all(isinstance(r.value, ast.Constant) and r.value.value is None or
+                            isinstance(r.value, ast.Call) and ast.unparse(r.value.func) == "quiet.run" for r in returns),
+                        "None only where it goes on as the child (or not full)")
 
 
 class Testbed(LockCase):

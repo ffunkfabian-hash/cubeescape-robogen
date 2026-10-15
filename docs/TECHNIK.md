@@ -1,6 +1,6 @@
 # Techniken des Roboter-Generators – Übertrag auf Cubegen
 
-Stand: Generator 1.20.5 „Powdercoat“. Diese Datei sammelt, **wie** der Generator arbeitet und was sich dabei bewährt
+Stand: Generator 1.20.6 „Powdercoat“. Diese Datei sammelt, **wie** der Generator arbeitet und was sich dabei bewährt
 oder als Falle erwiesen hat. Ziel: Der Modell-Editor von Cubegen soll genauso leistungsfähig werden. Jede Technik
 nennt die Fundstelle im Generator und was Cubegen davon übernehmen sollte. Pflegen bei jeder Generator-Version
 (neue Technik → neuer Abschnitt, geänderte Messwerte → hier ändern).
@@ -538,7 +538,11 @@ Vorschaulicht; einen geänderten Standard nie still umdeuten, sondern den alten 
   die Kinder des Halters; ein Signal für den Wartenden geht an den Befehl weiter, sonst wäre die Sperre frei, während
   der Befehl noch läuft. Seit 1.20.5 läuft der Befehl in einer eigenen Prozessgruppe (`start_new_session`): Signale gehen
   an die ganze Gruppe, und die Sperre bleibt, bis die Gruppe leer ist – vorher war sie frei, sobald der direkte
-  Kindprozess endete, auch wenn darunter noch Blender lief (etwa nach dem Tod von `check_output.sh`).
+  Kindprozess endete, auch wenn darunter noch Blender lief (etwa nach dem Tod von `check_output.sh`). Seit 1.20.6 ist
+  `full` immer ein Kind (`quiet.run`), auch auf ruhiger Maschine: Vorher lief der Volllauf dort im Blender weiter, der die
+  Sperre selbst hielt – ein TERM beendete ihn sofort (Standardaktion), die Sperre war frei, während seine Worker noch
+  rechneten. Kosten: ein zusätzlicher Blender-Start (≈ 0,6 s). **Regel:** Wer die Sperre hält, startet den schweren
+  Schritt über `run_forwarding` und wartet nur – nie im Halter selbst rechnen.
 
 **Für Cubegen:** Caches in einen Ordner außerhalb der Arbeitskopie legen, Schlüssel ohne Pfade, Kopien als Klone,
 atomar schreiben, nach Größe und letzter Nutzung aufräumen; bei nicht deterministischen Schritten (Backen, Bild-Werkzeuge

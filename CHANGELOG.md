@@ -3,6 +3,20 @@
 Versionen des Roboter-Generators (zählen getrennt von Cube Escape und Cubegen). Jede Version hat einen Tag
 `v<Version>` und einen Release-Branch `release/<Version>`.
 
+## 1.20.6 „Powdercoat“ – 2026-10-15
+
+Nur Werkzeuge, Modell und Lieferstand unverändert (der Generator trägt nur die neue Versionsnummer). Baut auf 1.20.5 auf.
+
+* **`full` rechnet nie im Halter der Sperre** (`scripts/generate_robot.py` › `quiet_full_run`, gemeinsam mit Cube Escape
+  0.61.4): Auf ruhiger Maschine (kein Grund zu pausieren) lief der Volllauf im Blender weiter, der die Sperre für schwere
+  Läufe selbst hielt – ein TERM/HUP beendete ihn sofort (Standardaktion), die Sperre war frei, während seine Worker noch
+  rechneten. Jetzt startet `full` sich in jedem Modus über `quiet.run` neu (wie bisher nur mit Pause): Der erste Blender
+  hält die Sperre und wartet nur, `run_forwarding` gibt Signale an die ganze Prozessgruppe des Laufs weiter und kehrt
+  erst zurück, wenn sie leer ist. Kosten: ein zusätzlicher Blender-Start (≈ 0,6 s gemessen).
+* **Neue Tests** (`tests/test_heavy_lock.py`): ein TERM an den Halter eines vollen Laufs (Python und – wenn installiert –
+  Blender als Halter) erreicht die Worker, bevor die Sperre frei wird; `quiet_full_run` gibt den Lauf in jedem Modus an
+  `quiet.run` (keine eigene Sperre, kein Weiterlaufen im Halter).
+
 ## 1.20.5 „Powdercoat“ – 2026-10-15
 
 Nur Werkzeuge, Modell und Lieferstand unverändert (der Generator trägt nur die neue Versionsnummer).

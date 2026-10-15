@@ -161,20 +161,52 @@ def bake_textures(objs, mats, size, ao_samples, tex_dir, cache_dir=None, check_c
     colours only pass through mixes and multiplies with scalar factors), so base = C + sum(w_k * palette_k) with
     grey weight maps w_k. One bake with the palette black gives C, one bake per three palette colours (one per RGB
     channel) gives the weights - six bakes for any number of skins, each skin is then composed with numpy.
-    check_compose bakes the default skin directly and compares. With cache_dir, the layers and the static textures
-    of an unchanged model (geometry, UVs, materials, source textures, settings) are reused without baking."""
+    check_compose bakes the default skin directly and compares. With cache_dir (the shared cache, robocache), the
+    layers and the static textures of an unchanged model (geometry, UVs, materials, source textures, settings) are
+    reused without baking - also in a new checkout: the static textures come from the entry textures/<key>."""
     os.makedirs(tex_dir, exist_ok=True)
     geo_key = bake_geometry_key(objs, size, ao_samples)
     key = bake_key(geo_key, mats)
-    ao_cache = os.path.join(cache_dir, "ao_%s.npz" % geo_key[:20]) if cache_dir else None
+    bake_dir = robocache.kind_dir("bake", cache_dir) if cache_dir else None
+    if bake_dir and not os.path.exists(os.path.join(bake_dir, "bake_%s.npz" % key[:20])):
+        # 1.20.2 migration: the same bake under its old key (with the source folder of the output it came from); the
+        # old key stays in use (skin stamps and renders hang on it), remembered in bake/alias_<new key>
+        alias = os.path.join(bake_dir, "alias_%s.txt" % key[:20])
+        old = read_text(alias)
+        if not (old and os.path.exists(os.path.join(bake_dir, "bake_%s.npz" % old[:20]))):
+            old = None
+            for src in robocache.legacy_sources(cache_dir):
+                k = bake_key(geo_key, mats, src)
+                if os.path.exists(os.path.join(bake_dir, "bake_%s.npz" % k[:20])):
+                    old = k
+                    robocache.write_text(alias, k)
+                    break
+        if old:
+            robocache.touch(alias)
+            LOG.info("  bake cache: migrated bake (key %s) - textures, skins and renders stay identical", old[:12])
+            key = old
+    ao_cache = os.path.join(robocache.kind_dir("ao", cache_dir), "ao_%s.npz" % geo_key[:20]) if cache_dir else None
     stamp_path = os.path.join(tex_dir, ".bake.stamp")
-    cache_path = os.path.join(cache_dir, "bake_%s.npz" % key[:20]) if cache_dir else None
+    cache_path = os.path.join(robocache.kind_dir("bake", cache_dir), "bake_%s.npz" % key[:20]) if cache_dir else None
+    tex_entry = os.path.join(robocache.kind_dir("textures", cache_dir), key[:20]) if cache_dir else None
     layers = None
-    if cache_path and os.path.exists(cache_path) and read_text(stamp_path) == key and \
-            all(os.path.exists(os.path.join(tex_dir, n)) for n in STATIC_TEXTURES):
-        layers = load_layers(cache_path)
-        LOG.info("  bake cache hit (%s): static textures and skin layers reused", key[:12])
-        RUN_STATE["bake_hit"] = True
+    if cache_path and os.path.exists(cache_path):
+        local = read_text(stamp_path) == key and all(os.path.exists(os.path.join(tex_dir, n)) for n in STATIC_TEXTURES)
+        if not local and os.path.exists(stamp_path):
+            os.remove(stamp_path)
+        if local or robocache.get_dir(tex_entry, tex_dir, STATIC_TEXTURES):
+            try:
+                layers = load_layers(cache_path)
+                robocache.touch(cache_path)
+            except (OSError, ValueError):       # pruned meanwhile: bake
+                layers = None
+        if layers is not None:
+            if not local:
+                with open(stamp_path, "w", encoding="utf-8") as fh:
+                    fh.write(key)
+            LOG.info("  bake cache hit (%s): static textures and skin layers reused%s", key[:12],
+                     "" if local else " (static textures from the shared cache)")
+            RUN_STATE["bake_hit"] = True
     if layers is None:
         if os.path.exists(stamp_path):
             os.remove(stamp_path)
@@ -182,15 +214,15 @@ def bake_textures(objs, mats, size, ao_samples, tex_dir, cache_dir=None, check_c
         with open(stamp_path, "w", encoding="utf-8") as fh:
             fh.write(key)
         if cache_path:
-            os.makedirs(cache_dir, exist_ok=True)
-            for fn in os.listdir(cache_dir):
-                if fn.startswith("bake_") and fn.endswith(".npz"):
-                    os.remove(os.path.join(cache_dir, fn))
+            # 1.20.2: older bakes stay (shared cache, pruned by size); the static textures are an entry of their own
             save_layers(cache_path, layers)
+            robocache.put_dir(tex_entry, {n: os.path.join(tex_dir, n) for n in STATIC_TEXTURES})
     paths = {n: os.path.join(tex_dir, n) for n in STATIC_TEXTURES}
     # 1.17: only the default skin is a deliverable (the game and the viewer recolour through the masks); the other
-    # composed skins are for the preview renders and live in cache/skin_textures, rewritten only when they change
+    # composed skins are for the preview renders and live in cache/skin_textures, rewritten only when they change.
+    # 1.20.2: every composed skin is also an entry of the shared cache (skins/<stamp>_base|emit.png)
     skin_dir = skin_texture_dir(tex_dir)
+    shared_skins = robocache.kind_dir("skins", cache_dir) if cache_dir else None
     os.makedirs(skin_dir, exist_ok=True)
     for fn in os.listdir(tex_dir):          # skins written into Textures by generators before 1.17
         if fn.startswith(("T_Robot_BaseColor_", "T_Robot_Emission_")) and fn.endswith(".png"):
@@ -212,21 +244,28 @@ def bake_textures(objs, mats, size, ao_samples, tex_dir, cache_dir=None, check_c
         out = {n: os.path.join(folder, n) for n in names}
         stamp = hashlib.sha1((code + repr(sorted(SKIN_DATA[skin].items()))).encode()).hexdigest()
         if stamps.get(skin) == stamp and all(os.path.exists(f) for f in out.values()):
-            return skin, stamp, out, False
+            return skin, stamp, out, ""
+        shared = {n: os.path.join(shared_skins, "%s_%s.png" % (stamp, part))
+                  for n, part in zip(names, ("base", "emit"))} if shared_skins else {}
+        if shared and all(robocache.get_file(shared[n], out[n]) for n in names):
+            return skin, stamp, out, "shared"
         base, emit = decorate_skin(layers, SKIN_DATA[skin], *compose_skin(layers, SKINS[skin]))
         for name, arr in zip(names, (base * layers["ao_soft"][..., None], emit)):
             write_png(out[name], linear_to_srgb(arr), size, size, 3, level=6)   # 38 skins: level 9 cost seconds
-        return skin, stamp, out, True
+            if shared:
+                robocache.put_file(out[name], shared[name])
+        return skin, stamp, out, "composed"
 
     t0 = time.time()
-    written = 0
+    done = collections.Counter()
     with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
-        for skin, stamp, out, wrote in pool.map(write_skin, list(SKINS)):
+        for skin, stamp, out, how in pool.map(write_skin, list(SKINS)):
             paths.update(out)
             stamps[skin] = stamp
-            written += wrote
+            done[how] += 1
     write_json_atomic(stamp_file, stamps)
-    LOG.info("  composed %d of %d skins in %.1fs (unchanged ones kept)", written, len(SKINS), time.time() - t0)
+    LOG.info("  composed %d of %d skins in %.1fs (unchanged ones kept, %d from the shared cache)", done["composed"],
+             len(SKINS), time.time() - t0, done["shared"])
     if compare_dir:            # half-size textures for the weathering comparison renders
         os.makedirs(compare_dir, exist_ok=True)
         half = {k: (v[::2, ::2] if isinstance(v, np.ndarray) else {n: w[::2, ::2] for n, w in v.items()})
@@ -582,9 +621,7 @@ def save_layers(path, layers):
         for k, w in layers[kind].items():
             flat["%s__%s" % (kind, k)] = w
     q = {n: np.round(np.clip(a, 0.0, 4.0) * LAYER_SCALE).astype(np.uint16) for n, a in flat.items()}
-    tmp = path + ".tmp.npz"
-    np.savez_compressed(tmp, **q)
-    os.replace(tmp, path)
+    robocache.write_atomic(path, lambda tmp: np.savez_compressed(tmp, **q))
 
 
 def load_layers(path):
@@ -622,8 +659,9 @@ def _sig_value(v):
         return v
 
 
-def node_tree_signature(nt):
-    """Everything in a material that changes a bake - except the palette colours (skins are composed)."""
+def node_tree_signature(nt, legacy_src=None):
+    """Everything in a material that changes a bake - except the palette colours (skins are composed).
+    legacy_src: the key as generator 1.20.1 made it in the output whose source textures were in that folder."""
     rows = []
     for nd in sorted(nt.nodes, key=lambda n: n.name):
         row = [nd.name, nd.bl_idname, nd.label]
@@ -632,7 +670,10 @@ def node_tree_signature(nt):
                 row.append((a, str(getattr(nd, a))))
         img = getattr(nd, "image", None)
         if img is not None:
-            row.append(("image", img.name, img.filepath, img.colorspace_settings.name))
+            # the file name, not its folder (1.20.2: the same bake in every checkout; the content is in bake_key)
+            name = os.path.basename(bpy.path.abspath(img.filepath))
+            row.append(("image", img.name, os.path.join(legacy_src, name) if legacy_src and name else name,
+                        img.colorspace_settings.name))
         for sock in nd.inputs:
             if not sock.is_linked and hasattr(sock, "default_value"):
                 row.append((sock.identifier, _sig_value(sock.default_value)))
@@ -649,28 +690,27 @@ def node_tree_signature(nt):
 def load_ao(path):
     if not path or not os.path.exists(path):
         return None
-    with np.load(path) as data:
-        return data["ao"].astype(np.float32) / LAYER_SCALE
+    try:
+        with np.load(path) as data:
+            ao = data["ao"].astype(np.float32) / LAYER_SCALE
+    except (OSError, ValueError, KeyError):      # pruned meanwhile
+        return None
+    robocache.touch(path)
+    return ao
 
 
 def save_ao(path, ao):
     if not path:
         return
-    folder = os.path.dirname(path)
-    os.makedirs(folder, exist_ok=True)
-    for fn in os.listdir(folder):
-        if fn.startswith("ao_") and fn.endswith(".npz"):
-            os.remove(os.path.join(folder, fn))
-    tmp = path + ".tmp.npz"
-    np.savez_compressed(tmp, ao=np.round(np.clip(ao, 0.0, 4.0) * LAYER_SCALE).astype(np.uint16))
-    os.replace(tmp, path)
+    q = np.round(np.clip(ao, 0.0, 4.0) * LAYER_SCALE).astype(np.uint16)
+    robocache.write_atomic(path, lambda tmp: np.savez_compressed(tmp, ao=q))
 
 
-def bake_key(geo_key, mats):
+def bake_key(geo_key, mats, legacy_src=None):
     """Content hash of everything the bakes depend on: geometry key + materials + source textures."""
     h = hashlib.sha256(geo_key.encode())
     for key in MAT_ORDER:
-        sig = node_tree_signature(mats[key].node_tree)
+        sig = node_tree_signature(mats[key].node_tree, legacy_src)
         h.update(key.encode())
         h.update(sig.encode())
     for k in sorted(SRC):

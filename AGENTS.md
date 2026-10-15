@@ -79,8 +79,10 @@ Kommentare und Log-Ausgaben auf **Englisch**.
 | `standard` | vor jedem Commit | `output/_standard` |
 | `full` | vor Release, für den Lieferstand | `output` |
 
+Werkzeug-Tests ohne Blender (geteilter Cache, Prüfplan, ruhige Maschine): `python3 -m unittest discover -s tests`.
+
 Jeder Lauf schreibt Schrittzeiten, Systemlast und Worker-Statistik nach `<out>/logs/robot_report.json` und bewertet
-die Zeit im **Zeitband** (`timings.band`, `cache/timings.json`): gegen den Median ruhiger Läufe derselben Stufe und
+die Zeit im **Zeitband** (`timings.band`, `<out>/cache/timings.json`): gegen den Median ruhiger Läufe derselben Stufe und
 Cache-Lage, mit Toleranz je Last (ruhig 30 %, leicht × 2,6, schwer = nicht bewertet). Nur ruhige Läufe werden
 Referenz. Ein „SLOWER“ auf ruhiger Maschine ist ein Befund; unter Last nichts schließen, sondern ruhig nachmessen
 (Abschnitt unten). Das Budget (`TIERS`) bleibt Zielwert.
@@ -103,18 +105,30 @@ Sitzungen pausieren. Werkzeug: `pause_sessions.py` aus Cube Escape
 Befehle anderer Claude-/Codex-Sitzungen an (SIGSTOP), setzt sie danach immer fort (SIGCONT), lässt die Sitzungen selbst,
 den Unity-Editor und Blender des Nutzers unberührt. Nur so lange wie nötig pausieren und es im Bericht nennen. Ein
 pausierter Befehl kann in die Zeitgrenze seines Werkzeugs laufen – dann führt die andere Sitzung ihn erneut aus.
+Seit 1.20.2 tun das `full` und `scripts/check_output.sh` selbst (`scripts/quiet.py`): Laufen Unity, Blender oder
+der Generator anderer Sitzungen oder liegt die Last über 0,3 je Kern, während Befehle anderer Sitzungen die CPU
+nutzen, starten sie sich über das Werkzeug neu; der Bericht nennt es (`robot_report.json` › `quiet`, letzte Zeile von
+`check_output.sh`). Pausiert schon eine andere Sitzung, laufen sie normal (zwei Pausen hielten sich gegenseitig für
+immer an). `ROBOGEN_NO_PAUSE=1` schaltet es ab; fehlt das Werkzeug, laufen sie mit Warnung normal.
 
 ## Prüfablauf vor dem Commit
 
+0. **Zuerst `python3 scripts/testplan.py`:** liest den Diff (gegen `main`, auch Ungesichertes) und nennt Weg, Stufen,
+   Prüfungen und Zeit – nur Doku: nichts; nur Daten: schneller Weg (unten); Modell-, Rig-, Clip-, UV-, Bake-, Export-
+   oder Cache-Code: der volle Ablauf hier; Viewer: Build und Tests; Export/Clips/Texturen/Masken/Looks/Shader:
+   Unity-Testbett. `--run` führt den Worktree-Teil aus (sichert und vergleicht die Berichte, prüft die Cache-Treffer),
+   `--base <Tag> --after-merge --run` im Haupt-Checkout den Rest. Ändern sich nur Werte in einer Code-Tabelle
+   (`FINISH_PARAMS` …), sieht der Diff das nicht: `--path data`. Die Zuordnung ist eine Tabelle in `testplan.py`
+   (`RULES`, `AREAS`) mit Tests – neue Dateien dort eintragen.
 1. Vor der Änderung den `robot_report.json` der betroffenen Stufe sichern.
 2. Stufe(n) laufen lassen; `qa` (und `clips`, `type_bounds`) gegen den gesicherten Bericht vergleichen. Ohne
    gewollte Modelländerung müssen sie **identisch** sein; gewollte Änderungen im Bericht benennen.
 3. Auf dem Volllauf: `scripts/check_output.sh` (Ausgabe als Argument, Standard `output`) – `verify_robot.py`,
    Viewer-Build und -Tests und Unity-Testpaket **gleichzeitig**; alle grün. Einzeln wie in 6 und 7.
-4. `quick` zweimal: Beim zweiten Lauf müssen UV-Cache und Bake-Cache treffen (Log: „UV cache hit“, „bake cache hit“).
-   QA-Ergebnisse kommen aus `cache/qa`, solange Mesh, Rig, Clip und QA-Code gleich sind („QA cache: N clip results
+4. `quick` zweimal: Beim zweiten Lauf müssen UV-Cache und Bake-Cache treffen (Log: „UV cache hit“, „bake cache hit“);
+   dank des geteilten Caches meist schon beim ersten Lauf eines neuen Worktrees. QA-Ergebnisse kommen aus `qa/`, solange Mesh, Rig, Clip und QA-Code gleich sind („QA cache: N clip results
    reused“); nach Änderungen an der QA selbst reicht das (der Code steckt im Schlüssel), `--no-cache` prüft alles neu.
-   Vorschaubilder kommen aus `cache/render`, solange die Szene beim Rendern gleich aussieht („render cache: N images
+   Vorschaubilder kommen aus `render/`, solange die Szene beim Rendern gleich aussieht („render cache: N images
    reused“); Fehlersuche mit `ROBOT_KEEP_WORKER_LOGS=1` und `ROBOT_RENDER_DIGEST_DUMP` (`docs/TECHNIK.md` › 12).
    Ohne Änderung an Modell, Rig, Clips und Export-Code schreibt der zweite Lauf keine FBX und keine Viewer-Daten
    („unchanged outputs kept: main, modular, forms, viewer“) und misst keine Clips („85 clips from the cache“);
@@ -124,6 +138,34 @@ pausierter Befehl kann in die Zeitgrenze seines Werkzeugs laufen – dann führt
 7. Bei Änderungen an Export, Clips, Texturen, Masken oder Looks: `unity/run_testbed.sh` (eigenes Unity-Projekt, nie das
    Spiel; Bericht `output/UnityTestbed/report.json`; Skill `rg-unity-testbed`). Shader-Formeln in `decorate_skin()`, Viewer und
    `unity/RobotTestbed/Assets/RobotTestbed/Shaders/RobotBody.shader` gleich halten.
+
+### Schneller Weg für reine Datenänderungen (seit 1.20.1)
+
+Gilt, wenn sich **nur Werte** ändern – Tabellen und Konfiguration wie `FINISH_PARAMS`, Skins, Farben, Looks, Texte,
+Doku –, nicht Modell, Rig, Clips, UVs, Backen, Export, Viewer-, Shader- oder Cache-Code. Dann statt des vollen Ablaufs:
+
+1. Im Worktree `quick` **einmal** und `standard` **einmal**, `qa`/`clips`/`type_bounds` gegen den gesicherten Bericht
+   (Schritt 2); kein zweiter `quick` (Schritt 4), kein `full` und kein kalter Lauf im Worktree.
+2. Nach dem Merge genau **ein** `full` im Haupt-Checkout (warm aus dem geteilten Cache) und darauf **einmal**
+   `scripts/check_output.sh`. Das ist zugleich der Lieferstand in `output/`.
+3. Ansehen: `Previews/skins.png` und `Previews/hero.png` (Schritt 5); Viewer- und Unity-Testbett laufen in
+   `check_output.sh` mit.
+4. Unter Last pausieren `full` und `check_output.sh` andere Sitzungen selbst (oben) – im Bericht nennen.
+5. Zielzeit: unter 15 Minuten vom fertigen Diff bis zum Release. Fällt dabei etwas auf (Cache-Fehltreffer, rote
+   Prüfung, unerwartete Änderung im Bericht), gilt ab da der volle Prüfablauf oben.
+
+### Aufträge an andere Sitzungen
+
+Wer Arbeit an eine andere Sitzung oder einen Subagent gibt, schreibt den Auftrag so, dass keine Erkundungsläufe nötig
+sind – Vorlage:
+
+```text
+Änderung: <was, welche Dateien; Art: Doku | Daten | Modell/Rig/Clips | Export | Viewer | Unity | Werkzeug>
+Prüfweg: <Ausgabe von `python3 scripts/testplan.py` (Weg und Schritte), ggf. `--path data`>
+Erwartet im Bericht: <qa/clips/type_bounds identisch | gewollte Abweichung: welcher Schlüssel, welche Clips/Typen>
+Release: <ja: Version x.y.z „Name“, Tag, Release-Branch, full im Haupt-Checkout | nein: nur Commit/Branch>
+Melden: Commit/Tag, Zeiten je Schritt, Cache-Treffer, Pause ja/nein, Prüfergebnisse (Zahlen), Offenes
+```
 
 ## Plugins und Hooks (Claude Code)
 
@@ -151,34 +193,34 @@ um `unwrap()`/Backen (Schemaversion), bei Viewer-Änderungen und GitHub-Workflow
 **Subagents** (`.claude/agents/`): `rg-test-runner` (Teststufe und Prüfablauf, berichtet nur) und `rg-doc-keeper`
 (Doku auf Endstand, nur Markdown) – Befehle und Schreibpfade begrenzt `.claude/agent-guard.json`.
 
-### Schneller Weg für reine Datenänderungen (seit 1.20.1)
+## Cache-Regeln (geteilter Cache, seit 1.20.2)
 
-Gilt, wenn sich **nur Werte** ändern – Tabellen und Konfiguration wie `FINISH_PARAMS`, Skins, Farben, Looks, Texte,
-Doku –, nicht Modell, Rig, Clips, UVs, Backen, Export, Viewer-, Shader- oder Cache-Code. Dann statt des vollen Ablaufs:
-
-1. Im Worktree `quick` **einmal** und `standard` **einmal**, `qa`/`clips`/`type_bounds` gegen den gesicherten Bericht
-   (Schritt 2); kein zweiter `quick` (Schritt 4), kein `full` und kein kalter Lauf im Worktree.
-2. Nach dem Merge genau **ein** `full` im Haupt-Checkout (mit dessen eigenem, warmem Cache – nie einen Cache zwischen
-   Checkouts kopieren) und darauf **einmal** `scripts/check_output.sh`. Das ist zugleich der Lieferstand in `output/`.
-3. Ansehen: `Previews/skins.png` und `Previews/hero.png` (Schritt 5); Viewer- und Unity-Testbett laufen in
-   `check_output.sh` mit.
-4. Unter Last (andere Sitzungen mit Unity/Blender) `full` und `check_output.sh` über `pause_sessions.py run --`
-   starten, nur so lange wie nötig, und es im Bericht nennen.
-5. Zielzeit: unter 15 Minuten vom fertigen Diff bis zum Release. Fällt dabei etwas auf (Cache-Fehltreffer, rote
-   Prüfung, unerwartete Änderung im Bericht), gilt ab da der volle Prüfablauf oben.
-
-## Cache-Regeln (`<out>/cache`)
-
+- **Ein Cache für alle Checkouts:** `scripts/robocache.py`, Ordner `~/Library/Caches/RobotGen/cache` (`ROBOGEN_CACHE`;
+  Linux `$XDG_CACHE_HOME/RobotGen/cache`), je Art ein Unterordner (`uv`, `ao`, `bake`, `textures`, `skins`, `source`,
+  `render`, `qa`, `clips`, `outputs` = FBX, Formen, Viewer-Daten). Haupt-Checkout, Worktrees und Nachtläufe teilen
+  ihn; er überlebt gelöschte Worktrees. In `<out>/cache` bleibt nur Checkout-Zustand: `outputs.json` (Pfade relativ
+  zur Ausgabe), `timings.json` (Zeitband dieser Ausgabe) und die Arbeitskopien der Vorschau-Skins (`skin_textures`).
+- **Gleichzeitige Läufe:** schreiben nur atomar (`robocache.write_atomic`/`put_file`/`put_dir`: Temp-Datei, dann
+  Umbenennen) und löschen nie einen Eintrag, weil es einen neueren gibt – ein anderer Checkout braucht ihn vielleicht.
+  Aufgeräumt wird nur nach Größe (`robocache.prune` am Ende eines Laufs, `ROBOGEN_CACHE_LIMIT_GB`, Standard 6):
+  am längsten nicht benutzte Einträge zuerst, nichts, was in den letzten 2 Stunden benutzt wurde; ein Treffer
+  berührt den Eintrag. Neue Cache-Arten über diese Funktionen, nie mit `open()` + `os.replace` von Hand.
+- Schlüssel ohne Pfade: Was in einem anderen Checkout gleich ist, muss denselben Schlüssel geben (Bilder nach Inhalt
+  oder Dateiname, nie mit Ordner).
 - Schlüssel hängen am Inhalt, nicht an Dateizeiten: Geometrie in kanonischer Ecken-Reihenfolge (Blenders
   Flächenreihenfolge und Insel-Packen sind nicht deterministisch), Materialien als Node-Signatur, Quelltexturen,
   Einstellungen.
 - Was der Schlüssel nicht sehen kann, braucht eine Schemaversion: `UV_SCHEMA` bei Änderungen an `unwrap()`,
   `BAKE_SCHEMA` bei Änderungen am Backen. Im Zweifel erhöhen – ein falscher Treffer ist schlimmer als ein Neu-Backen.
 - `--no-cache` liest keinen Cache, schreibt die UVs aber trotzdem (die Render-Worker brauchen sie).
+- Beim ersten Lauf übernimmt `robocache.prepare` alte Caches (`<out>/cache` bis 1.20.1): die eigene Ausgabe
+  verschiebt er, die Ausgaben des Haupt-Checkouts (`output`, `_quick`, `_standard`) klont er einmal (`migrated.json`)
+  samt Quelltexturen, statischen Texturen, Skins und Exporten – bytegleich, sonst träfe kein Vorschaubild mehr; alte,
+  pfadhaltige Bake-Schlüssel erkennt `bake_textures` über `legacy_sources.json` (`docs/TECHNIK.md` › 20).
 - Code im Schlüssel (QA, Clip-Daten, Export: `QA_CODE_PARTS`, `CLIP_CODE_PARTS`, `EXPORT_CODE_PARTS`) wird per
   Funktionsname über alle `robogen`-Module gesucht (`code_source`). Schreibt eine neue Funktion an einer gecachten
   Ausgabe mit, gehört ihr Name in die passende Liste – sonst bleibt eine veraltete Datei liegen.
-- Vorschau-Skins liegen in `cache/skin_textures`, in `Textures/` nur der Standard-Skin (Lieferstand).
+- Vorschau-Skins liegen in `<out>/cache/skin_textures` (Kopien aus `skins/`), in `Textures/` nur der Standard-Skin.
 - ImageMagick-Texturen hängen am Skript-Hash von `make_textures.py` und an der ImageMagick-Version.
 
 ## Code-Aufbau (1.17)

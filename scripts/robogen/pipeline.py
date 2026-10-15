@@ -166,40 +166,8 @@ def export_digest(ob):
     return h.hexdigest()
 
 
-class OutputCache:
-    """cache/outputs.json: per output a key and the files it wrote with their sizes (+ a small result, e.g. the
-    triangle counts for the report). fresh() is true when the key matches and every file is still there unchanged."""
-
-    def __init__(self, folder):
-        self.path = os.path.join(folder, "outputs.json") if folder else None
-        self.entries = {}
-        if self.path and os.path.exists(self.path):
-            with open(self.path, encoding="utf-8") as fh:
-                self.entries = json.load(fh)
-        self.hits = []
-
-    def fresh(self, name, key):
-        e = self.entries.get(name)
-        if not self.path or not e or e["key"] != key:
-            return None
-        for f, size in e["files"].items():
-            if not os.path.exists(f) or os.path.getsize(f) != size:
-                return None
-        self.hits.append(name)
-        return e
-
-    def store(self, name, key, files, result=None):
-        if not self.path:
-            return
-        found = []
-        for f in files:
-            if os.path.isdir(f):
-                found += [os.path.join(d, n) for d, _, ns in os.walk(f) for n in ns]
-            elif os.path.exists(f):
-                found.append(f)
-        self.entries[name] = {"key": key, "files": {f: os.path.getsize(f) for f in sorted(found)}, "result": result}
-        os.makedirs(os.path.dirname(self.path), exist_ok=True)
-        write_json_atomic(self.path, self.entries)
+# outputs.json lives in robocache (pure Python, unit-tested): checkout-bound, paths relative to the output (1.20.2)
+OutputCache = robocache.OutputCache
 
 
 BAND_RUNS = 10
@@ -208,14 +176,12 @@ BAND_TOLERANCE = {"quiet": 1.3, "light": 2.6}
 
 
 def timing_band(folder, tier, state, total, load_start):
-    """Verdict of a run time and the history update (cache/timings.json)."""
+    """Verdict of a run time and the history update (<out>/cache/timings.json: per output - other checkouts run other
+    code, their times would shift this output's band)."""
     cores = os.cpu_count() or 1
     level = "quiet" if load_start < LOAD_QUIET * cores else "light" if load_start < LOAD_LIGHT * cores else "heavy"
     path = os.path.join(folder, "timings.json") if folder else None
-    hist = {}
-    if path and os.path.exists(path):
-        with open(path, encoding="utf-8") as fh:
-            hist = json.load(fh)
+    hist = robocache.read_json(path, {}) if path else {}
     runs = hist.get("%s/%s" % (tier, state), [])
     band = {"tier": tier, "caches": state, "load": level, "reference_runs": len(runs)}
     if level == "heavy":
@@ -247,9 +213,10 @@ def cached_clip_data(ob, arm_ob, actions, folder):
         paths[a.name] = os.path.join(folder, "%s_%s_%s.json" % (base, a.name,
                                                                 hashlib.sha1(clip.encode()).hexdigest()[:16]))
         if os.path.exists(paths[a.name]):
-            with open(paths[a.name], encoding="utf-8") as fh:
-                found[a.name] = json.load(fh)
-            os.utime(paths[a.name])
+            data = robocache.read_json(paths[a.name])
+            if data is not None:            # None: pruned meanwhile - measure
+                found[a.name] = data
+                robocache.touch(paths[a.name])
     missing = [a.name for a in ANIMS if a.name not in found]
     res = measure_clips(ob, arm_ob, actions, missing) if missing else {}
     for n, d in res.items():
@@ -279,18 +246,8 @@ def qa_code_digest():
 
 
 
-QA_CACHE_DAYS = 7
-
-
-def prune_qa_cache(folder):
-    """Removes cached QA results nobody used for QA_CACHE_DAYS (every model change starts a new generation)."""
-    if not os.path.isdir(folder):
-        return 0
-    limit = time.time() - QA_CACHE_DAYS * 86400
-    old = [f for f in os.scandir(folder) if f.is_file() and f.stat().st_mtime < limit]
-    for f in old:
-        os.remove(f.path)
-    return len(old)
+# 1.20.2: no pruning by age any more - the shared cache is pruned by size, least recently used first
+# (robocache.prune at the end of a run).
 
 
 
@@ -330,14 +287,14 @@ class JobContext:
             if c not in self.action_keys:
                 self.action_keys[c] = action_digest(self.actions[c])[:16]
             paths[c] = os.path.join(self.qa_cache, "%s_%s_%s.json" % (key, c, self.action_keys[c]))
-            if os.path.exists(paths[c]):
-                with open(paths[c], encoding="utf-8") as fh:
-                    found[c] = json.load(fh)
-                os.utime(paths[c])          # used: survives prune_qa_cache
+            data = robocache.read_json(paths[c]) if os.path.exists(paths[c]) else None
+            if data is not None:
+                found[c] = data
+                robocache.touch(paths[c])   # used: pruned last
         missing = [c for c in clips if c not in found]
-        if not missing and os.path.exists(rest_path):
-            with open(rest_path, encoding="utf-8") as fh:
-                res = json.load(fh)
+        res = robocache.read_json(rest_path) if not missing else None
+        if res is not None:
+            robocache.touch(rest_path)
         else:
             res = run_qa(self.qa_mesh(tname), self.arm_ob, self.actions, tname, quiet=True, clips=missing)
             write_json_atomic(rest_path, {"rest_min_z": res["rest_min_z"], "rest_height": res["rest_height"]})
@@ -468,7 +425,7 @@ def start_workers(first, n, lanes, args, out, queue, textures=None):
         cmd = [bpy.app.binary_path, "-b", "--factory-startup", "-noaudio", "-t", str(threads), "--python-exit-code", "1",
                "--python", GENERATOR, "--", "--tier", args.tier, "--out", wdir, "--src-dir", out,
                "--worker-queue", queue.path, "--worker-lanes", ",".join(lanes), "--worker-id", str(i)]
-        cmd += ["--use-textures", textures, "--uv-cache", os.path.join(out, "cache")] if textures else ["--skip-bake"]
+        cmd += ["--use-textures", textures, "--uv-cache", robocache.kind_dir("uv")] if textures else ["--skip-bake"]
         if args.no_cache:
             cmd += ["--no-cache"]           # the workers would otherwise reuse cache/qa and cache/render
         if args.groups:

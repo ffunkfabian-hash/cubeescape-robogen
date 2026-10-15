@@ -184,36 +184,37 @@ def unwrap(objs, cache_dir=None, read=True, require=False):
     reading it): render workers take the main process's UVs from there (require: never unwrap). Returns True on a hit."""
     key = geometry_key(objs)
     cache_path = os.path.join(cache_dir, "uv_%s.npz" % key[:20]) if cache_dir else None
+    data = None
     if cache_path and (read or require) and os.path.exists(cache_path):
-        with np.load(cache_path) as data:
-            if all(o.name in data.files and len(data[o.name]) == len(o.data.loops) * 2 for o in objs):
-                for o in objs:
-                    if not o.data.uv_layers:
-                        o.data.uv_layers.new(name="UVMap")
-                    o.data.uv_layers[0].name = "UVMap"
-                    perm, _ = canonical_order(o.data)
-                    uv = np.empty((len(o.data.loops), 2), dtype=np.float32)
-                    uv[perm] = data[o.name].reshape(-1, 2)
-                    o.data.uv_layers[0].data.foreach_set("uv", uv.ravel())
-                LOG.info("  UV cache hit (%s)", key[:12])
-                return True
+        try:
+            with np.load(cache_path) as npz:
+                data = {n: npz[n] for n in npz.files}
+        except (OSError, ValueError):       # pruned meanwhile or damaged: unwrap afresh
+            data = None
+    if data is not None and all(o.name in data and len(data[o.name]) == len(o.data.loops) * 2 for o in objs):
+        for o in objs:
+            if not o.data.uv_layers:
+                o.data.uv_layers.new(name="UVMap")
+            o.data.uv_layers[0].name = "UVMap"
+            perm, _ = canonical_order(o.data)
+            uv = np.empty((len(o.data.loops), 2), dtype=np.float32)
+            uv[perm] = data[o.name].reshape(-1, 2)
+            o.data.uv_layers[0].data.foreach_set("uv", uv.ravel())
+        robocache.touch(cache_path)
+        LOG.info("  UV cache hit (%s)", key[:12])
+        return True
     if require:
         return False
     unwrap_fresh(objs)
     if cache_path:
-        os.makedirs(cache_dir, exist_ok=True)
-        for fn in os.listdir(cache_dir):
-            if fn.startswith("uv_") and fn.endswith(".npz"):
-                os.remove(os.path.join(cache_dir, fn))
+        # 1.20.2: other UV files stay - the cache is shared, another checkout may build other geometry (prune by size)
         arrays = {}
         for o in objs:
             uv = np.empty(len(o.data.loops) * 2, dtype=np.float32)
             o.data.uv_layers[0].data.foreach_get("uv", uv)
             perm, _ = canonical_order(o.data)
             arrays[o.name] = uv.reshape(-1, 2)[perm].ravel()
-        tmp = cache_path + ".tmp.npz"
-        np.savez_compressed(tmp, **arrays)
-        os.replace(tmp, cache_path)
+        robocache.write_atomic(cache_path, lambda tmp: np.savez_compressed(tmp, **arrays))
     return False
 
 

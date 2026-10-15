@@ -30,11 +30,30 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import robogen.preview  # noqa: E402
+import quiet  # noqa: E402 - heavy runs pause other sessions (1.20.2)
 from robogen.config import *  # noqa: E402,F401,F403 - every step of the generator
+
+
+def quiet_full_run(args):
+    """1.20.2: a full run on a busy machine runs again through pause_sessions.py (quiet.py) - this process only waits.
+    Returns the exit code of that run, or None to go on here."""
+    if args.tier != "full" or args.worker_queue or os.environ.get("ROBOGEN_QUIET_ACTIVE"):
+        return None
+    p = quiet.plan()
+    print("quiet: %s" % p["why"], flush=True)
+    argv, env = quiet.command_for([bpy.app.binary_path] + sys.argv[1:], p)
+    if p["mode"] != "pause":
+        os.environ.update(ROBOGEN_QUIET_ACTIVE="1", ROBOGEN_QUIET_INFO=env["ROBOGEN_QUIET_INFO"])
+        return None
+    print("quiet: running the full tier through pause_sessions.py (other sessions paused while it runs)", flush=True)
+    return subprocess.call(argv, env=env)
 
 
 def main():
     args = parse_args()
+    code = quiet_full_run(args)
+    if code is not None:
+        return code
     out = os.path.abspath(args.out)
     os.makedirs(out, exist_ok=True)
     setup_logging(out)
@@ -47,7 +66,15 @@ def main():
     load_start = os.getloadavg()[0]     # times are only comparable on an otherwise idle machine
     preview_dir = os.path.join(out, "Previews") if not worker else os.path.join(args.src_dir, "Previews")
     tex_dir = args.use_textures or os.path.join(out, "Textures")
-    cache_dir = os.path.join(out, "cache")
+    # 1.20.2: content-addressed entries live in the shared cache of all checkouts (robocache, ROBOGEN_CACHE); only
+    # checkout-bound state stays in <out>/cache (outputs.json, the working copies of the preview skins)
+    cache_dir = robocache.root()
+    if not worker:
+        robocache.prepare(out, SCRIPTS_DIR, cache_dir, log=LOG.info)
+        LOG.info("  shared cache: %s%s", cache_dir, " (not read: --no-cache)" if args.no_cache else "")
+        if os.environ.get("ROBOGEN_QUIET_INFO"):
+            report["quiet"] = os.environ["ROBOGEN_QUIET_INFO"]
+            LOG.info("  quiet: %s", report["quiet"])
     os.makedirs(preview_dir, exist_ok=True)
 
     with Step("scene"):
@@ -55,8 +82,9 @@ def main():
         coll = get_collection("Robot")
         preview_coll = get_collection("Preview")
     with Step("ImageMagick source textures"):
-        src_paths = make_textures.make_all(os.path.join(args.src_dir or out, "SourceTextures"), log=LOG.info,
-                                           cache=not args.no_cache or worker)
+        src_paths = source_textures(os.path.join(args.src_dir or out, "SourceTextures"), LOG.info,
+                                    cache=not args.no_cache or worker,
+                                    shared=None if args.no_cache or worker else robocache.kind_dir("source", cache_dir))
         load_source_textures(src_paths)
         report["source_textures"] = sorted(os.path.basename(p) for p in src_paths.values())
     with Step("materials"):
@@ -87,18 +115,13 @@ def main():
             if not unwrap(list(part_objs.values()), args.uv_cache, require=True):
                 raise RuntimeError("render worker: no cached UVs in %s" % args.uv_cache)
         else:
-            unwrap(list(part_objs.values()), cache_dir, read=not args.no_cache)
+            unwrap(list(part_objs.values()), robocache.kind_dir("uv", cache_dir), read=not args.no_cache)
 
     if part_objs["Body"].data.uv_layers:
         PERFORATION["cells"] = perforation_cells(part_objs["Body"])
     queue, procs = None, []
     if not args.no_cache:
-        RENDER_CACHE["dir"] = os.path.join(args.src_dir or out, "cache", "render")
-    if not worker and args.stage == "full" and not args.no_cache:
-        for kind in ("qa", "render"):
-            pruned = prune_qa_cache(os.path.join(out, "cache", kind))
-            if pruned:
-                LOG.info("  %s cache: removed %d entries unused for %d days", kind, pruned, QA_CACHE_DAYS)
+        RENDER_CACHE["dir"] = robocache.kind_dir("render", cache_dir)
     if not worker and args.stage == "full":
         only = set(filter(None, args.qa_types.split(",")))
         type_names = [t for t in list(ROBOT_TYPES) + QA_FORMS if t != "Classic" and (not only or t in only)]
@@ -169,7 +192,7 @@ def main():
         report["animations"] = {a.name: {"frames": a.frames, "loop": a.loop, "description": a.desc, "group": a.group,
                                          "unity": a.unity} for a in ANIMS}
     ctx = JobContext(part_objs, coll, preview_coll, arm_ob, actions, robot_mesh, preview_dir, tex_dir,
-                     None if args.no_cache else os.path.join(args.src_dir or out, "cache", "qa"), args.src_dir or out)
+                     None if args.no_cache else robocache.kind_dir("qa", cache_dir), args.src_dir or out)
     if worker:
         ready = time.time() - t_start
         LOG.info("worker ready after %.1f s", ready)
@@ -183,7 +206,7 @@ def main():
     write_animation_table(out)
     with Step("clip data"):
         clips = cached_clip_data(robot_mesh, arm_ob, actions,
-                                 None if args.no_cache else os.path.join(out, "cache", "clips"))
+                                 None if args.no_cache else robocache.kind_dir("clips", cache_dir))
         for a in ANIMS:
             clips[a.name] = dict(clip_meta(a), **clips[a.name])
             clips[a.name]["prop"] = prop_info(a.name, clips[a.name].get("hands"))
@@ -204,7 +227,8 @@ def main():
                 LOG.info("  %-10s height %.3f..%.3f m", n, clips[n]["height"]["min"], clips[n]["height"]["max"])
         LOG.info("  width/core width: %s", ", ".join("%s %.2f/%.2f" % (k, v["width"], v["coreWidth"])
                                                      for k, v in bounds.items()))
-    outputs = OutputCache(None if args.no_cache else os.path.join(out, "cache"))
+    outputs = OutputCache(None if args.no_cache else os.path.join(out, "cache"), out,
+                          None if args.no_cache else robocache.kind_dir("outputs", cache_dir))
     with Step("export fbx"):
         # modular and form FBX have no takes: only the main FBX depends on the clips and the LOD setting
         code = code_digest(EXPORT_CODE_PARTS, FBX_EXPORT_TURN, bpy.app.version_string, rig_digest(arm_ob))
@@ -262,8 +286,9 @@ def main():
                                  LOG)
             outputs.store("viewer", key, [vdir])
         if outputs.hits:
-            LOG.info("  unchanged outputs kept: %s (cache/outputs.json; --no-cache writes everything)",
-                     ", ".join(outputs.hits))
+            LOG.info("  unchanged outputs kept: %s (cache/outputs.json; --no-cache writes everything)%s",
+                     ", ".join(outputs.hits), "; copied from the shared cache: " + ", ".join(outputs.shared_hits)
+                     if outputs.shared_hits else "")
     with Step("work packages (main process)"):
         ctx.camera()                # the .blend keeps its preview scene
         count, busy = queue.work(ctx, ["render", "qa"], "main")
@@ -322,6 +347,8 @@ def main():
     band = timing_band(None if args.no_cache else os.path.join(out, "cache"), args.tier, "warm" if warm else "cold",
                        total, load[0])
     report["timings"]["band"] = band
+    pruned = robocache.prune(cache_dir)
+    report["cache"] = {"root": cache_dir, "bytes": pruned["total"], "pruned": pruned["removed"]}
     write_report(out, report)
     slow = sorted(STEP_TIMES.items(), key=lambda kv: -kv[1])[:4]
     ref = ("band up to %.0f s (median %.0f s of %d quiet runs)" % (band["limit"], band["median"], band["reference_runs"])
@@ -340,6 +367,12 @@ def main():
     if report["timings"]["qa_cached"]:
         LOG.info("  QA cache: %d clip results reused (cache/qa; --no-cache checks everything again)",
                  report["timings"]["qa_cached"])
+    if pruned["skipped"]:
+        LOG.info("  shared cache: pruning skipped (another run prunes right now)")
+    else:
+        LOG.info("  shared cache: %.2f GB of %.1f GB%s", pruned["total"] / 1024 ** 3, pruned["limit"] / 1024 ** 3,
+                 ", removed %d least recently used entries (%.0f MB)" % (pruned["removed"], pruned["freed"] / 1024 ** 2)
+                 if pruned["removed"] else "")
     problems = bool(floating)
     for label, qa in report.get("qa", {}).items():
         for name, entry in qa["actions"].items():

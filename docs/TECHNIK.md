@@ -1,6 +1,6 @@
 # Techniken des Roboter-Generators – Übertrag auf Cubegen
 
-Stand: Generator 1.20.0 „Powdercoat“. Diese Datei sammelt, **wie** der Generator arbeitet und was sich dabei bewährt
+Stand: Generator 1.20.2 „Powdercoat“. Diese Datei sammelt, **wie** der Generator arbeitet und was sich dabei bewährt
 oder als Falle erwiesen hat. Ziel: Der Modell-Editor von Cubegen soll genauso leistungsfähig werden. Jede Technik
 nennt die Fundstelle im Generator und was Cubegen davon übernehmen sollte. Pflegen bei jeder Generator-Version
 (neue Technik → neuer Abschnitt, geänderte Messwerte → hier ändern).
@@ -43,6 +43,9 @@ nennt die Fundstelle im Generator und was Cubegen davon übernehmen sollte. Pfle
 | Gesetzte Kontakte im Zieltempo | `planted_stride()`, `run_foot()`, `verify_longstride()` | Lauf-Clips bei 5/8/4/2,4 m/s ohne Rutschen | Schrittlänge aus Tempo × Kontaktzeit, nicht nach Gefühl |
 | Rolle über die Hülle aller Teile | `roll_hull()`, `lifted()` | ein Clip rollt für jeden Typ, nichts sinkt in den Boden | Bodenkontakt aus der Geometrie aller Varianten ableiten |
 | Standard-Oberfläche an der Spielwelt messen | `FINISH_PARAMS`, `verify_powdercoat()` | weißer Skin bleibt in der dunklen Station weiß | Standardwerte im Zielumfeld prüfen, alte Werte als neue ID anhängen |
+| Ein Cache für alle Checkouts | `scripts/robocache.py` | erster Volllauf im neuen Worktree 628 s → 87 s, alle 1 649 Bilder aus dem Cache | Cache außerhalb der Arbeitskopie, Einträge nach Inhalt, atomar, nach Größe aufräumen |
+| Prüfplan aus dem Diff | `scripts/testplan.py` | nur die nötigen Stufen statt „alles, sicherheitshalber“ | Zuordnung Datei → Prüfweg als Tabelle mit Tests |
+| Ruhige Maschine | `scripts/quiet.py` | schwere Schritte pausieren andere Sitzungen selbst | Last messen, bevor gemessen wird |
 
 ## 1. Skin = Daten
 
@@ -487,3 +490,42 @@ Frame-Schritt prüfen; Bodenkontakt für Varianten aus der Hülle aller Variante
 
 **Für Cubegen:** Standardmaterialien der Modelle im Zielumfeld (dunkle, matte Station) prüfen, nicht nur im hellen
 Vorschaulicht; einen geänderten Standard nie still umdeuten, sondern den alten Wert als neue, wählbare ID behalten.
+
+## 20. Geteilter Cache, Prüfplan, ruhige Maschine (1.20.2)
+
+- **Der Cache gehört nicht in die Arbeitskopie:** Bis 1.20.1 lag er in `<out>/cache`; jeder neue Worktree begann
+  leer und renderte rund 1 650 Vorschaubilder neu (alter Generator, frischer Worktree: `quick` 54 s, `standard`
+  328 s, `full` 628 s). Jetzt liegt alles Inhaltsadressierte in `~/Library/Caches/RobotGen/cache`; in der Ausgabe
+  bleibt nur, was zu ihr gehört (`outputs.json`, relativ). Auch die Exporte sind Einträge (`outputs/<Name>_<Schlüssel>`):
+  ein neuer Checkout kopiert die FBX, statt sie neu zu schreiben. Kopien sind APFS-Klone (`clonefile`) – kein
+  zusätzlicher Platz, sofort.
+- **Gleichzeitig sicher:** Schreiben nur über Temp-Datei und Umbenennen (Ordner-Einträge werden fertig gebaut und
+  dann umbenannt); kein Schritt löscht einen Eintrag, weil es einen neueren gibt (`unwrap()` behielt nur die neueste
+  UV-Datei – im geteilten Cache hätte das den Cache eines anderen Checkouts geleert). Aufräumen nur nach Größe:
+  am längsten unbenutzte Einträge zuerst, ein Treffer berührt den Eintrag, nichts aus den letzten 2 Stunden.
+- **Falle: Pfade im Schlüssel.** Die Bake-Signatur enthielt den absoluten Pfad jeder Quelltextur – in einem anderen
+  Checkout nie ein Treffer. Der Schlüssel nimmt jetzt nur den Dateinamen (der Inhalt steht ohnehin darin). Regel:
+  Ein Schlüssel darf nichts enthalten, was sich zwischen zwei Arbeitskopien unterscheidet.
+- **Falle: „gleich“ heißt bytegleich.** Ein neues Backen weicht leicht ab (Cycles; die Normal-Map zweier kalter Läufe
+  unterscheidet sich in 14 500 Pixeln), ImageMagick schreibt Zeitstempel in die PNGs. Der Render-Abdruck hasht
+  Bilder nach Inhalt – also hätte jeder Neu-Bake alle Vorschauen ungültig gemacht. Darum übernimmt die Migration die
+  Quelltexturen, die statischen Texturen und die Skins des Haupt-Checkouts bytegleich, und der alte, pfadhaltige
+  Bake-Schlüssel wird für übernommene Ausgaben nachgebaut (`legacy_sources.json`). Ergebnis: der erste Volllauf
+  einer frischen Ausgabe nimmt alle 1 649 Bilder aus dem Cache. Auch `make_textures.py` bleibt dafür unverändert –
+  sein Hash ist der Schlüssel der Quelltexturen.
+- **Folge des nicht deterministischen Backens:** Die Voxel-Form liest die gebackenen Karten; zwei kalte Bakes geben
+  leicht andere Voxel-Meshes (Bericht `forms`, QA von `Form_Voxel` in der dritten Nachkommastelle). Der geteilte Cache
+  macht das seltener (es wird nur noch einmal je Modelländerung gebacken), behebt es aber nicht.
+- **Prüfen nach Diff statt nach Gefühl:** `scripts/testplan.py` ordnet jede geänderte Datei einem Bereich zu (Tabelle
+  `RULES`) und jedem Bereich einen Weg und Zusatzprüfungen (`AREAS`): Doku nichts, Daten der schnelle Weg, Modell-
+  und Cache-Code der volle Ablauf, Viewer und Unity ihre eigenen Prüfungen. `--run` führt aus, vergleicht die
+  Berichte und prüft die Cache-Treffer.
+- **Last vor dem Messen prüfen:** `scripts/quiet.py` zählt Unity, Blender und Generatorläufe anderer Agenten-Sitzungen
+  (nicht die eigenen, nicht die des Nutzers) und die Last – Last zählt nur, wenn Befehle anderer Sitzungen die CPU
+  nutzen (sonst stammt sie vom eigenen vorigen Schritt). Ist die Maschine belegt, startet sich der Volllauf über
+  `pause_sessions.py` neu und pausiert die anderen genau so lange. **Falle:** zwei Läufe, die sich gegenseitig
+  pausieren, halten sich für immer an – darum nie pausieren, solange eine andere Pause läuft (Sperre, Prozess, Status).
+
+**Für Cubegen:** Caches in einen Ordner außerhalb der Arbeitskopie legen, Schlüssel ohne Pfade, Kopien als Klone,
+atomar schreiben, nach Größe und letzter Nutzung aufräumen; bei nicht deterministischen Schritten (Backen, Bild-Werkzeuge
+mit Zeitstempeln) die Ergebnisse bytegleich weiterreichen statt neu zu erzeugen.

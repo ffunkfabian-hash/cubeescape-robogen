@@ -3,6 +3,54 @@
 Versionen des Roboter-Generators (zählen getrennt von Cube Escape und Cubegen). Jede Version hat einen Tag
 `v<Version>` und einen Release-Branch `release/<Version>`.
 
+## 1.20.2 „Powdercoat“ – 2026-10-15
+
+Nur Werkzeuge und Ablauf, Modell und Lieferstand unverändert (Volllauf: `qa`, `clips`, `type_bounds`, Dreiecke, LODs,
+Kapseln, Formen identisch zu 1.20.0; alle 1 649 Vorschaubilder bytegleich aus dem Cache). Ziel: kürzere Prüf- und
+Release-Zeit – 1.20.0 brauchte rund 55 Minuten, weil jeder neue Worktree mit leerem Cache begann.
+
+* **A – ein Cache für alle Checkouts** (`scripts/robocache.py`): alle inhaltsadressierten Einträge (UVs, AO,
+  Bake-Ebenen, statische Texturen, Skins, ImageMagick-Texturen, Renders, QA, Clip-Daten und neu die Exporte FBX/
+  Formen/Viewer-Daten) in `~/Library/Caches/RobotGen/cache` (`ROBOGEN_CACHE`), geteilt von Haupt-Checkout, Worktrees
+  und Nachtläufen. In `<out>/cache` bleiben nur `outputs.json` (jetzt mit Pfaden relativ zur Ausgabe), das Zeitband
+  und die Skin-Arbeitskopien. Schreiben atomar (Temp-Datei, Umbenennen), Kopien als APFS-Klone; kein Schritt löscht
+  mehr ältere Einträge (`unwrap()` behielt nur die neueste UV-Datei, das Backen nur den neuesten Bake). Aufräumen nur
+  nach Größe am Ende eines Laufs: `ROBOGEN_CACHE_LIMIT_GB` (Standard 6), am längsten unbenutzte zuerst, nichts aus den
+  letzten 2 Stunden; das 7-Tage-Löschen von QA und Renders entfällt. Bake-Schlüssel ohne Ordner der Quelltexturen
+  (sonst traf ein anderer Checkout nie). `--no-cache` wie bisher.
+* **Migration:** Der erste Lauf klont die Caches des Haupt-Checkouts (`output`, `_quick`, `_standard`) samt
+  Quelltexturen, statischen Texturen, Standard-Skin und Exporten bytegleich; den alten, pfadhaltigen Bake-Schlüssel
+  erkennt das Backen wieder (`legacy_sources.json`, `bake/alias_*`). Ein neues Backen wäre nicht bytegleich (Cycles,
+  Normal-Map) und hätte alle Vorschauen ungültig gemacht. Die eigene Ausgabe des Haupt-Checkouts wird verschoben.
+* **B – Prüfplan aus dem Diff** (`scripts/testplan.py`): Datei → Bereich → Weg als Tabelle (`RULES`, `AREAS`): Doku
+  nichts, Daten der schnelle Weg, Modell/Rig/Clips/UV/Bake/Export/Cache der volle Ablauf mit zweitem `quick` und
+  Cache-Treffer-Prüfung, Viewer Build und Tests, Export/Clips/Texturen/Shader das Unity-Testbett; mit Zeitschätzung.
+  `--run` führt den Worktree-Teil aus (sichert und vergleicht `qa`/`clips`/`type_bounds`, prüft die Treffer),
+  `--after-merge` den Teil im Haupt-Checkout, `--path data` für reine Werte in Code-Tabellen. Erster Schritt im
+  Prüfablauf (`AGENTS.md`).
+* **C – ruhige Maschine** (`scripts/quiet.py`): `full` und `scripts/check_output.sh` prüfen vor dem Start, ob Unity,
+  Blender oder der Generator anderer Agenten-Sitzungen laufen oder die Last über 0,3 je Kern liegt, während deren
+  Befehle die CPU nutzen; dann starten sie sich über `pause_sessions.py` aus Cube Escape neu (nur so lange wie der
+  Befehl, der Bericht nennt es: `robot_report.json` › `quiet`). Pausiert schon eine andere Sitzung, laufen sie normal
+  (Sperre `~/Library/Caches/RobotGen/quiet.lock`). `ROBOGEN_NO_PAUSE=1` schaltet ab, `ROBOGEN_PAUSE_TOOL`,
+  `ROBOGEN_QUIET_LOAD` stellen ein; fehlt das Werkzeug, laufen sie mit Warnung normal. Unity-Editor und Blender des
+  Nutzers bleiben unberührt (das Werkzeug hält nur Befehle unter anderen Agenten an).
+* **D – Aufträge an andere Sitzungen:** Vorlage in `AGENTS.md` (Art der Änderung, Prüfweg aus `testplan.py`,
+  erwartete Abweichungen im Bericht, Release ja/nein, was zu melden ist).
+* **Tests:** `python3 -m unittest discover -s tests` – 46 Tests ohne Blender: zweiter Checkout ganz warm, gleichzeitige
+  Schreiber (nie eine halbe Datei, ein Ordner-Eintrag genau einmal), Aufräum-Reihenfolge und Schonfrist, relative
+  `outputs.json`, Migration (klonen/verschieben, Standard-Skin, Exporte, Haupt-Checkout per `git worktree`),
+  Prüfplan-Beispiele, Pausen-Entscheidung (fremde vs. eigene Last, nie zwei Pausen). Subagent `rg-test-runner` darf
+  `testplan.py`, die Werkzeug-Tests und `quiet.py status`.
+* **Gemessen** (Apple M5, andere Sitzungen mit Blender aktiv): alter Generator im frischen Worktree, kalt: `quick`
+  54 s, `standard` 328 s, `full` 628 s (1 649 Bilder gerendert). Neu, erster Volllauf in einem frischen Worktree:
+  87 s (pausiert) bzw. 125 s (unter Last, ohne Pause), 1 649 von 1 649 Bildern aus dem Cache, keine FBX neu
+  geschrieben. Voller Prüfweg im Worktree mit warmem Cache (`testplan.py --run`: Werkzeug-Tests, `quick` ×2,
+  `standard`, `full`, `check_output.sh`): 3:01 min.
+* Bekannt (nicht neu): Die Voxel-Form liest die gebackenen Karten; zwei kalte Bakes geben leicht andere Voxel-Meshes
+  (Bericht `forms`, QA `Form_Voxel` PushStart/MudWalk 0,048 statt 0,05 m/s Standgeschwindigkeit). Der geteilte Cache
+  backt nur noch einmal je Modelländerung.
+
 ## 1.20.1 „Powdercoat“ – 2026-10-15
 
 Nur Arbeitsregel, Ausgabe unverändert: **Schneller Weg für reine Datenänderungen** in `AGENTS.md` › Prüfablauf. Anlass:

@@ -1,4 +1,4 @@
-# Cube Escape – Roboter-Charakter (Generator 1.20.1)
+# Cube Escape – Roboter-Charakter (Generator 1.20.2)
 
 Der spielbare Roboter aus dem Cube-Escape-Keyart, vollständig per Skript erzeugt: Geometrie mit Bauteil-Varianten
 und Accessoires, Materialien, gebackene Texturen (Detail- und Ausdrucks-Texturen per ImageMagick), Rig mit Bein- und
@@ -52,6 +52,8 @@ raucht), 24 Robotertypen, Skin-Bogen im Stil der Konzeptbilder und UI-Icons.
 ## Neu erzeugen
 
 ```bash
+# Was eine Änderung braucht (Stufen, Prüfungen, Zeit) – aus dem Diff; --run führt es aus
+python3 scripts/testplan.py
 # Teststufe: quick (≈ 10 s mit warmem Cache) beim Arbeiten, standard (≈ 1 min) vor dem Commit, full (≈ 3–4 min) für den Lieferstand
 /Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup --python-exit-code 1 --python scripts/generate_robot.py -- --tier quick
 # danach alle Prüfungen gleichzeitig: verify_robot.py, Viewer bauen und testen, Unity-Testpaket (≈ 35 s)
@@ -75,6 +77,12 @@ paralleler Unity- oder Blender-Lauf (z. B. eines anderen Agenten) macht jeden Sc
 
 **1.17 „Slimline“:** mit warmem Cache `quick` 22 s → 9–12 s, `full` 90–115 s → 54–59 s (FBX, Viewer-Daten und Clip-Daten werden nur bei
 geänderten Eingaben neu geschrieben, siehe unten).
+
+**1.20.2 – geteilter Cache, Prüfplan, ruhige Maschine:** Alle inhaltsadressierten Cache-Einträge liegen in einem
+Ordner für alle Checkouts (`~/Library/Caches/RobotGen/cache`, siehe unten), ein neuer Worktree ist deshalb ab dem
+ersten Lauf warm. `scripts/testplan.py` nennt aus dem Diff die nötigen Stufen und Prüfungen; `full` und
+`scripts/check_output.sh` pausieren auf einer belasteten Maschine andere Sitzungen selbst (`scripts/quiet.py`).
+Werkzeug-Tests ohne Blender: `python3 -m unittest discover -s tests`.
 
 ### Ablauf und Worker
 
@@ -100,7 +108,7 @@ Hauptprozess (gleiches Ergebnis).
 
 ### Was die Zeit spart
 
-- **Testzeit (1.13.1):** QA-Ergebnisse je Typ und Clip im Cache (`cache/qa`; Schlüssel = Mesh mit kanonischer
+- **Testzeit (1.13.1):** QA-Ergebnisse je Typ und Clip im Cache (`qa/`; Schlüssel = Mesh mit kanonischer
   Topologie, Rig, Clip-Schlüssel, Quelltext der QA-Funktionen) – ohne Geometrie- oder Animationsänderung entfällt die
   QA fast ganz; Typ-FBX und ihre LODs als parallele Arbeitspakete der Render-Worker; alle Bögen (Icons, Skin-Bogen,
   Gegenüberstellung, Kontaktbögen) in einem Thread-Pool; `scripts/check_output.sh` prüft Verify, Viewer und Unity
@@ -108,12 +116,13 @@ Hauptprozess (gleiches Ergebnis).
   laufen zu sechst; das Unity-Testpaket braucht einen Unity-Start (siehe Unity-Testpaket).
 - **Render-Cache (1.13.3):** jedes Vorschaubild wird unter einem Abdruck dessen gespeichert, was die Kamera sieht
   (Objekte, Pose, Materialwerte, Texturinhalte, Licht, Kamera, Einstellungen) – unveränderte Bilder kommen aus
-  `cache/render`, auch wenn sich Generator-Code geändert hat; eine geänderte Skin-Farbe rendert nur deren Bilder neu.
-  Ungenutzte Einträge (QA wie Render) werden nach 7 Tagen gelöscht, `--no-cache` rendert alles.
+  `render/`, auch wenn sich Generator-Code geändert hat; eine geänderte Skin-Farbe rendert nur deren Bilder neu.
+  `--no-cache` rendert alles.
 - **Ausgaben-Cache (1.17):** Haupt-FBX samt LODs, Modular-FBX, Form-FBX und Viewer-Daten bleiben liegen, wenn ihr
-  Abdruck gleich ist (`cache/outputs.json`: Meshes in kanonischer Reihenfolge mit UVs und Materialien, Rig, Clips,
+  Abdruck gleich ist (`<out>/cache/outputs.json`, Pfade relativ zur Ausgabe: Meshes in kanonischer Reihenfolge mit UVs und Materialien, Rig, Clips,
   Quelltext der Export-Funktionen; eine fehlende oder in der Größe geänderte Datei wird neu geschrieben). Clip-Daten
-  je Clip in `cache/clips`, gemischte Skin-Karten nur bei geänderter Palette (`cache/skin_textures/stamps.json`).
+  je Clip in `clips/`, gemischte Skin-Karten nur bei geänderter Palette (`skins/`, Arbeitskopien in
+  `<out>/cache/skin_textures`, `stamps.json`).
   Log: „unchanged outputs kept: …“, „clip data: N clips from the cache“, „composed N of 76 skins“. Zur Fehlersuche
   schreibt `ROBOT_OUTPUT_DIGEST_DUMP=<Datei>` die Abdrücke je Objekt.
 - **Viewer-Daten (1.17):** Ecken je Teil zusammengefasst (gleiche Position, Normale, UV, Gewichte → ein Vertex),
@@ -126,11 +135,18 @@ Hauptprozess (gleiches Ergebnis).
 - **Ein Objekt pro Back.** Cycles backt jedes ausgewählte Objekt in einer eigenen Sitzung, und auf Metal kostet
   jede eine Geräte-Synchronisation (35 Teile: 9–20 s je Durchgang). Gebacken wird deshalb eine zusammengefügte
   Kopie aller Teile, für die AO eine je Konfiguration: 0,2–1 s je Durchgang, Backen gesamt 50 s statt 24 min.
-- **Cache** in `<out>/cache`: UVs (Blenders Insel-Packen ist nicht deterministisch; gespeichert in einer Ecken-
-  Reihenfolge, die nicht von der wechselnden Flächenreihenfolge abhängt), AO (hängt nur von Geometrie, UVs und dem
-  Bake-Code ab) und alle Bake-Ebenen (zusätzlich Materialien und Quelltexturen). ImageMagick-Texturen entstehen
-  parallel und werden bei unverändertem Skript wiederverwendet. `--no-cache` liest keinen Cache (die UVs werden
-  trotzdem geschrieben, die Render-Worker brauchen sie).
+- **Cache** (seit 1.20.2 geteilt von Haupt-Checkout, Worktrees und Nachtläufen, `scripts/robocache.py`):
+  `~/Library/Caches/RobotGen/cache` (`ROBOGEN_CACHE`), höchstens `ROBOGEN_CACHE_LIMIT_GB` (Standard 6) – am längsten
+  nicht benutzte Einträge gehen zuerst, nichts aus den letzten 2 Stunden. Je Art ein Ordner: UVs (`uv/`; Blenders
+  Insel-Packen ist nicht deterministisch, gespeichert in einer Ecken-Reihenfolge, die nicht von der wechselnden
+  Flächenreihenfolge abhängt), AO (`ao/`, hängt nur von Geometrie, UVs und dem Bake-Code ab), alle Bake-Ebenen
+  (`bake/`, zusätzlich Materialien und Quelltexturen) und die statischen Texturen eines Backs (`textures/`),
+  gemischte Skins (`skins/`), ImageMagick-Texturen (`source/`, bei unverändertem Skript und ImageMagick), Vorschaubilder
+  (`render/`), QA (`qa/`), Clip-Daten (`clips/`), exportierte Ausgaben (`outputs/`: FBX samt LODs, Formen,
+  Viewer-Daten – ein neuer Checkout kopiert sie, statt neu zu exportieren). Schreiben nur atomar, gleichzeitige Läufe sehen nie eine halbe
+  Datei. In `<out>/cache` bleibt nur, was zur Ausgabe gehört (`outputs.json`, Skin-Arbeitskopien). Der erste Lauf
+  übernimmt die alten Caches des Haupt-Checkouts. `--no-cache` liest keinen Cache (die UVs werden trotzdem
+  geschrieben, die Render-Worker brauchen sie).
 - **Vorschau-Schnellmodus.** Gemessen mit macOS `sample`: Ein EEVEE-Render wartete zu ~95 % in
   `ShadowModule::shadow_update_finished`, zweimal je Sample – einmal davon nur, weil das additiv-transparente
   Augenmaterial (`BLENDED`) die Forward-Pipeline erzwingt. Skins, Typen, Animationsbögen und GIFs rendern deshalb

@@ -3,8 +3,13 @@
 # The three only read the output (the viewer writes RobotViewer.app, Unity its report folder), so they run side by
 # side; a sequential chain took about a minute longer.
 #   scripts/check_output.sh [output]      default: output (full run); e.g. output/_standard
+# 1.20.2: on a busy machine (other sessions' Unity/Blender/generator, high load) the checks run through Cube Escape's
+# pause_sessions.py (scripts/quiet.py); ROBOGEN_NO_PAUSE=1 never pauses.
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+if [ -z "${ROBOGEN_QUIET_ACTIVE:-}" ]; then
+  exec python3 "$ROOT/scripts/quiet.py" run -- "$ROOT/scripts/check_output.sh" "$@"
+fi
 OUT="$(cd "${1:-$ROOT/output}" && pwd)"
 BLENDER="${BLENDER:-/Applications/Blender.app/Contents/MacOS/Blender}"
 LOGS="$OUT/logs/checks"
@@ -39,5 +44,5 @@ for name in verify viewer unity; do
   echo "$state $name ($secs s): $summary"
   [ "$state" = FAIL ] && grep -E "FAIL|Error|error CS" "$LOGS/$name.log" | head -5 | sed 's/^/    /'
 done
-echo "checks: $(( $(date +%s) - t0 )) s in parallel (logs: $LOGS)"
+echo "checks: $(( $(date +%s) - t0 )) s in parallel (logs: $LOGS); quiet: ${ROBOGEN_QUIET_INFO:-?}"
 exit $fail

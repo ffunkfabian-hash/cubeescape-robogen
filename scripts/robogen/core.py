@@ -30,9 +30,10 @@ GENERATOR = os.path.join(SCRIPTS_DIR, "generate_robot.py")
 sys.path.insert(0, SCRIPTS_DIR)
 import make_textures  # noqa: E402 - ImageMagick source textures
 import export_viewer  # noqa: E402 - data for the RobotViewer app
+import robocache  # noqa: E402 - the shared cache of all checkouts (1.20.2)
 
 LOG = logging.getLogger("robot")
-VERSION = "1.20.1"
+VERSION = "1.20.2"
 
 # ----------------------------------------------------------------------------------------------
 # Arguments and logging
@@ -248,11 +249,30 @@ def action_digest(act):
     return h.hexdigest()
 
 
+def source_textures(out_dir, log, cache=True, shared=None):
+    """make_textures.make_all with the shared cache (1.20.2): a new checkout copies the set another one made (entry
+    source/<stamp>; stamp = make_textures.py and the ImageMagick version) instead of running ImageMagick - its PNGs
+    carry timestamps, so a fresh set would change every texture digest and every render key downstream."""
+    entry = None
+    if cache and shared:
+        stamp = make_textures.source_stamp(make_textures.find_magick())
+        entry = os.path.join(shared, stamp[:20])
+        names = [fn for _, fn in make_textures.makers().values()]
+        stamp_path = os.path.join(out_dir, make_textures.STAMP)
+        local = robocache._read_text(stamp_path) == stamp and all(os.path.exists(os.path.join(out_dir, n))
+                                                                  for n in names)
+        if not local and robocache.get_dir(entry, out_dir, names):
+            with open(stamp_path, "w", encoding="utf-8") as fh:
+                fh.write(stamp)
+            log("  ImageMagick textures copied from the shared cache (%s)" % entry)
+    paths = make_textures.make_all(out_dir, log=log, cache=cache)
+    if entry:
+        robocache.put_dir(entry, {os.path.basename(p): p for p in paths.values()})
+    return paths
+
+
 def write_json_atomic(path, data):
-    tmp = "%s.%d.tmp" % (path, os.getpid())
-    with open(tmp, "w", encoding="utf-8") as fh:
-        json.dump(data, fh)
-    os.replace(tmp, path)
+    robocache.write_json(path, data)        # unique temp name: two runs may write the same shared entry at once
 
 
 __all__ = [_n for _n in dir() if not _n.startswith("__")]

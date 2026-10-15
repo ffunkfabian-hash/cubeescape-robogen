@@ -358,18 +358,13 @@ def render_still(path):
             with open(os.path.join(folder, "dump_%s_%d.txt" % (os.path.basename(path), os.getpid())), "w") as fh:
                 fh.write("\n".join(_DumpHash.lines))
         LOG.debug("render cache %s %s %s", "hit" if hit else "miss", key[:12], os.path.basename(path))
-        if hit:
-            shutil.copyfile(cached, path)
-            os.utime(cached)
+        if hit and robocache.get_file(cached, path):        # False: pruned meanwhile - render
             RENDER_CACHE["hits"] += 1
             return path
     bpy.ops.render.render(write_still=True)
     RENDER_CACHE["renders"] += 1
     if folder:
-        os.makedirs(folder, exist_ok=True)
-        tmp = "%s.%d.tmp" % (cached, os.getpid())
-        shutil.copyfile(path, tmp)
-        os.replace(tmp, cached)
+        robocache.put_file(path, cached)
     return path
 
 

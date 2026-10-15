@@ -46,7 +46,10 @@ Release-Zeit – 1.20.0 brauchte rund 55 Minuten, weil jeder neue Worktree mit l
   54 s, `standard` 328 s, `full` 628 s (1 649 Bilder gerendert). Neu, erster Volllauf in einem frischen Worktree:
   87 s (pausiert) bzw. 125 s (unter Last, ohne Pause), 1 649 von 1 649 Bildern aus dem Cache, keine FBX neu
   geschrieben. Voller Prüfweg im Worktree mit warmem Cache (`testplan.py --run`: Werkzeug-Tests, `quick` ×2,
-  `standard`, `full`, `check_output.sh`): 3:01 min.
+  `standard`, `full`, `check_output.sh`): 3:01 min; nach dem Merge im Haupt-Checkout `full` 85 s und
+  `check_output.sh` 52 s (beide mit Pause der anderen Sitzungen). **Abnahme:** ein neuer Worktree nach dem Merge,
+  erste Läufe alle warm – `quick` 25 s, `standard` 94 s (425/425 Bilder), `full` 95 s (1 649/1 649 Bilder), keine
+  FBX neu geschrieben, Berichte identisch.
 * Bekannt (nicht neu): Die Voxel-Form liest die gebackenen Karten; zwei kalte Bakes geben leicht andere Voxel-Meshes
   (Bericht `forms`, QA `Form_Voxel` PushStart/MudWalk 0,048 statt 0,05 m/s Standgeschwindigkeit). Der geteilte Cache
   backt nur noch einmal je Modelländerung.

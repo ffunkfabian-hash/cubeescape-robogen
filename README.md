@@ -1,4 +1,4 @@
-# Cube Escape – Roboter-Charakter (Generator 1.20.4)
+# Cube Escape – Roboter-Charakter (Generator 1.20.5)
 
 Der spielbare Roboter aus dem Cube-Escape-Keyart, vollständig per Skript erzeugt: Geometrie mit Bauteil-Varianten
 und Accessoires, Materialien, gebackene Texturen (Detail- und Ausdrucks-Texturen per ImageMagick), Rig mit Bein- und

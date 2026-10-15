@@ -3,6 +3,20 @@
 Versionen des Roboter-Generators (zählen getrennt von Cube Escape und Cubegen). Jede Version hat einen Tag
 `v<Version>` und einen Release-Branch `release/<Version>`.
 
+## 1.20.5 „Powdercoat“ – 2026-10-15
+
+Nur Werkzeuge, Modell und Lieferstand unverändert (der Generator trägt nur die neue Versionsnummer).
+
+* **Die Sperre für schwere Läufe hält bis zum letzten Enkelprozess** (`scripts/heavy_lock.py`, gemeinsam mit Cube Escape
+  0.61.3, Cubegen 0.27.0 und Toolgen; Befund eines Codex-Reviews von Toolgen 0.4 „Fieldstrip“): `run_forwarding` – also
+  `heavy_lock.py run`, `quiet.py run` und der volle Lauf über `pause_sessions.py` – startet den Befehl in einer eigenen
+  Prozessgruppe, gibt TERM/HUP/INT an die ganze Gruppe weiter und kehrt erst zurück, wenn die Gruppe leer ist. Vorher war
+  die Sperre frei, sobald der direkte Kindprozess endete – starb `check_output.sh`, lief Blender ohne Sperre weiter.
+  Bleibt nach dem Ende des Befehls etwas übrig, sagt der Wrapper nach fünf Sekunden, welche Prozessgruppe die Sperre
+  noch hält. Prozesse, die sich absichtlich lösen (`start_new_session`), halten sie nicht.
+* **Neue Tests** (`tests/test_heavy_lock.py`): ein Enkelprozess hält die Sperre, nachdem sein Elternprozess per SIGKILL
+  starb; ein TERM an den Wrapper erreicht den Enkelprozess, bevor die Sperre frei wird.
+
 ## 1.20.4 „Powdercoat“ – 2026-10-15
 
 Nur Doku, Modell und Lieferstand unverändert (der Generator trägt nur die neue Versionsnummer).

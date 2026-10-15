@@ -2,6 +2,7 @@
 heavy steps (quiet.py run, unity/run_testbed.sh) use it."""
 import json
 import os
+import signal
 import subprocess
 import sys
 import time
@@ -122,6 +123,62 @@ class Contract(LockCase):
         for number, handler in ((sig.SIGTERM, sig.SIG_DFL), (sig.SIGHUP, sig.SIG_DFL),
                                 (sig.SIGINT, sig.default_int_handler)):
             real(number, handler)
+
+    def free(self):
+        """True when nobody holds the lock (takes and drops it at once)."""
+        import fcntl
+        fd = os.open(self.lock, os.O_RDWR | os.O_CREAT | os.O_CLOEXEC, 0o644)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return True
+        except BlockingIOError:
+            return False
+        finally:
+            os.close(fd)
+
+    def grandchild_run(self, grandchild, then):
+        """heavy_lock.py run with a command that starts a grandchild (same process group), says 'go <pid>', then `then`."""
+        command = ("import os, subprocess, sys\n"
+                   "subprocess.Popen([sys.executable, '-c', %r], stdout=subprocess.DEVNULL)\n"
+                   "print('go', os.getpid(), flush=True)\n%s" % (grandchild, then))
+        wrapper = subprocess.Popen([sys.executable, os.path.join(SCRIPTS, "heavy_lock.py"), "run", "--what",
+                                    "check_output.sh", "--", sys.executable, "-c", command], env=self.env(),
+                                   stdout=subprocess.PIPE, text=True)
+        self.addCleanup(lambda: wrapper.poll() is None and wrapper.kill())
+        self.addCleanup(wrapper.stdout.close)
+        word, pid = wrapper.stdout.readline().split()
+        self.assertEqual(word, "go")
+        return wrapper, int(pid)
+
+    def test_a_grandchild_keeps_the_lock_after_its_parent_died(self):
+        """1.20.5 (Codex review of Toolgen 0.4): check_output.sh died, Blender below it still ran - the lock was free."""
+        marker = os.path.join(self.tmp, "grandchild-ended")
+        grandchild = "import time; time.sleep(1.5); open(%r, 'w').write('x')" % marker
+        wrapper, command_pid = self.grandchild_run(grandchild, "import time; time.sleep(30)")
+        os.kill(command_pid, signal.SIGKILL)                             # the command dies, the grandchild goes on
+        time.sleep(0.4)
+        self.assertIsNone(wrapper.poll())                                 # the wrapper still waits for it
+        self.assertFalse(os.path.exists(marker))
+        self.assertFalse(self.free())                                     # and still holds the lock
+        self.assertNotEqual(wrapper.wait(timeout=10), 0)                 # the killed command stays a failure
+        self.assertTrue(os.path.exists(marker))                          # held until the grandchild ended
+        self.assertTrue(self.free())
+
+    def test_a_term_reaches_the_grandchildren_before_the_lock_is_free(self):
+        marker = os.path.join(self.tmp, "grandchild-ended")
+        grandchild = ("import signal, sys, time\n"
+                      "def done(*a): time.sleep(0.5); open(%r, 'w').write('x'); sys.exit(0)\n"
+                      "signal.signal(signal.SIGTERM, done)\nopen(%r, 'w').close()\ntime.sleep(30)\n" % (marker, marker + ".ready"))
+        wrapper, _ = self.grandchild_run(grandchild, "import time; time.sleep(30)")
+        ready = marker + ".ready"
+        deadline = time.monotonic() + 10
+        while not os.path.exists(ready):  # the grandchild has set its handler
+            self.assertLess(time.monotonic(), deadline, "the grandchild did not start")
+            time.sleep(0.02)
+        wrapper.terminate()
+        wrapper.wait(timeout=10)
+        self.assertTrue(os.path.exists(marker))                          # it got the TERM and ended first
+        self.assertTrue(self.free())
 
     def test_opt_out_runs_while_another_holds_it(self):
         with heavy_lock.held("other", out=self.lines.append):

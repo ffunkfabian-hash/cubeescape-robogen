@@ -3,6 +3,13 @@
 Versionen des Roboter-Generators (zählen getrennt von Cube Escape und Cubegen). Jede Version hat einen Tag
 `v<Version>` und einen Release-Branch `release/<Version>`.
 
+## 1.20.1 „Powdercoat“ – 2026-10-15
+
+Nur Arbeitsregel, Ausgabe unverändert: **Schneller Weg für reine Datenänderungen** in `AGENTS.md` › Prüfablauf. Anlass:
+1.20.0 änderte nur zwei Werte und ein neues Finish, die Prüfung dauerte trotzdem rund 55 Minuten – kalte Läufe im neuen
+Worktree, zwei Vollläufe im Haupt-Checkout, Last durch andere Sitzungen. Ein warmer Volllauf braucht etwa 100 s
+(standard 70 s, quick 12 s). Ziel jetzt: unter 15 Minuten vom fertigen Diff bis zum Release.
+
 ## 1.20.0 „Powdercoat“ – 2026-10-14
 
 **Oberfläche „Standard“ ist matt – für alle Skins.** Cube Escape 0.58 hat gemessen: Die Station ist dunkel und matt

@@ -151,6 +151,22 @@ um `unwrap()`/Backen (Schemaversion), bei Viewer-Änderungen und GitHub-Workflow
 **Subagents** (`.claude/agents/`): `rg-test-runner` (Teststufe und Prüfablauf, berichtet nur) und `rg-doc-keeper`
 (Doku auf Endstand, nur Markdown) – Befehle und Schreibpfade begrenzt `.claude/agent-guard.json`.
 
+### Schneller Weg für reine Datenänderungen (seit 1.20.1)
+
+Gilt, wenn sich **nur Werte** ändern – Tabellen und Konfiguration wie `FINISH_PARAMS`, Skins, Farben, Looks, Texte,
+Doku –, nicht Modell, Rig, Clips, UVs, Backen, Export, Viewer-, Shader- oder Cache-Code. Dann statt des vollen Ablaufs:
+
+1. Im Worktree `quick` **einmal** und `standard` **einmal**, `qa`/`clips`/`type_bounds` gegen den gesicherten Bericht
+   (Schritt 2); kein zweiter `quick` (Schritt 4), kein `full` und kein kalter Lauf im Worktree.
+2. Nach dem Merge genau **ein** `full` im Haupt-Checkout (mit dessen eigenem, warmem Cache – nie einen Cache zwischen
+   Checkouts kopieren) und darauf **einmal** `scripts/check_output.sh`. Das ist zugleich der Lieferstand in `output/`.
+3. Ansehen: `Previews/skins.png` und `Previews/hero.png` (Schritt 5); Viewer- und Unity-Testbett laufen in
+   `check_output.sh` mit.
+4. Unter Last (andere Sitzungen mit Unity/Blender) `full` und `check_output.sh` über `pause_sessions.py run --`
+   starten, nur so lange wie nötig, und es im Bericht nennen.
+5. Zielzeit: unter 15 Minuten vom fertigen Diff bis zum Release. Fällt dabei etwas auf (Cache-Fehltreffer, rote
+   Prüfung, unerwartete Änderung im Bericht), gilt ab da der volle Prüfablauf oben.
+
 ## Cache-Regeln (`<out>/cache`)
 
 - Schlüssel hängen am Inhalt, nicht an Dateizeiten: Geometrie in kanonischer Ecken-Reihenfolge (Blenders

@@ -50,6 +50,10 @@ RULES = [
     ("scripts/testplan.py", "tooling"),
     ("scripts/quiet.py", "tooling"),
     ("scripts/heavy_lock.py", "tooling"),
+    ("scripts/ce_tools/*", "tooling"),               # embedded shared tools (ce_sync.py)
+    (".ce-repo.json", "tooling"),
+    ("check", "tooling"),
+    ("release", "tooling"),
     ("scripts/release.py", "tooling"),
     ("scripts/check_output.sh", "tooling"),
     ("scripts/debug_*.py", "debug"),

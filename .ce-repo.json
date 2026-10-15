@@ -1,0 +1,47 @@
+{
+  "name": "robogen",
+  "version": {
+    "file": "scripts/robogen/core.py",
+    "pattern": "(?m)^VERSION\\s*=\\s*\"([^\"]+)\""
+  },
+  "check": {
+    "quick": [
+      [
+        "python3",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests"
+      ]
+    ],
+    "full": [
+      [
+        "python3",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests"
+      ],
+      [
+        "python3",
+        "scripts/testplan.py"
+      ]
+    ]
+  },
+  "docs": {
+    "changelog": "CHANGELOG.md",
+    "dir": "docs"
+  },
+  "limits": {
+    "AGENTS.md": 150,
+    "CLAUDE.md": 20
+  },
+  "release": {
+    "branch_prefix": "release/",
+    "tag_prefix": "v"
+  },
+  "tools_dir": "scripts/ce_tools",
+  "heavy_lock": true
+}

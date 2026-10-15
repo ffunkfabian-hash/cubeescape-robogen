@@ -3,6 +3,14 @@
 Versionen des Roboter-Generators (zählen getrennt von Cube Escape und Cubegen). Jede Version hat einen Tag
 `v<Version>` und einen Release-Branch `release/<Version>`.
 
+## 1.20.7 „Powdercoat“ – 2026-10-15
+
+Nur Werkzeuge, Modell und Lieferstand unverändert (der Generator trägt nur die neue Versionsnummer).
+
+* **Gemeinsamer Standard** (Plugin `ce-shared` 0.4): `.ce-repo.json`, `./check` / `./release`, eingebettete Werkzeuge in
+  `scripts/ce_tools/` (per `ce_sync.py`, nicht von Hand ändern); `scripts/heavy_lock.py` leitet auf die gemeinsame Sperre weiter.
+* `AGENTS.md` in der Standard-Gliederung auf 150 Zeilen (Langtext nach `docs/TECHNIK.md` › 22), neu `docs/ENTSCHEIDUNGEN.md`.
+
 ## 1.20.6 „Powdercoat“ – 2026-10-15
 
 Nur Werkzeuge, Modell und Lieferstand unverändert (der Generator trägt nur die neue Versionsnummer). Baut auf 1.20.5 auf.

@@ -1,6 +1,6 @@
 # Techniken des Roboter-Generators – Übertrag auf Cubegen
 
-Stand: Generator 1.20.6 „Powdercoat“. Diese Datei sammelt, **wie** der Generator arbeitet und was sich dabei bewährt
+Stand: Generator 1.20.7 „Powdercoat“. Diese Datei sammelt, **wie** der Generator arbeitet und was sich dabei bewährt
 oder als Falle erwiesen hat. Ziel: Der Modell-Editor von Cubegen soll genauso leistungsfähig werden. Jede Technik
 nennt die Fundstelle im Generator und was Cubegen davon übernehmen sollte. Pflegen bei jeder Generator-Version
 (neue Technik → neuer Abschnitt, geänderte Messwerte → hier ändern).
@@ -625,3 +625,41 @@ mit Zeitstempeln) die Ergebnisse bytegleich weiterreichen statt neu zu erzeugen.
 
   Die Hook-Regeln aus `AGENTS.md` (Plugin `ce-shared` und hookify) stehen in `.claude/hookify.*.local.md` und im
   Plugin-Repo (mit Tests).
+
+## 22. Aus AGENTS.md ausgelagert (1.20.7)
+
+Langtext zu Regeln, die `AGENTS.md` (Grenze 150 Zeilen) nur noch kurz nennt.
+
+- **Cloud-Sitzungen (claude.ai/code):** Der SessionStart-Hook stellt `blender` (PyPI-`bpy`) und `magick` bereit: `blender -b …
+  --python scripts/generate_robot.py -- --tier quick` statt des macOS-Pfads. Berichte nur gegen einen Cloud-Lauf vergleichen;
+  Viewer, Unity-Testpaket und der Lieferstand (`full`) gibt es nur lokal (§ 21).
+- **Ganze Leistung des Geräts:** `pause_sessions.py run -- <Befehl>`
+  (`/Users/ffunk/Claude/Cube Escape/.agents/skills/ce-testing/scripts/`) hält nur Befehle anderer Claude-/Codex-Sitzungen an und
+  setzt sie immer fort. `full` und `scripts/check_output.sh` tun das selbst (`scripts/quiet.py`; Bericht in
+  `robot_report.json` › `quiet`); pausiert schon eine andere Sitzung, laufen sie normal. `ROBOGEN_NO_PAUSE=1` schaltet es ab.
+- **Release (seit 1.20.3):** `python3 scripts/release.py <Version>` – aus Worktree oder Haupt-Checkout; ohne `--apply` nur
+  Probelauf (prüft saubere Checkouts, nur Fast-Forward, freie Tag-/Branch-Namen, `## <Version>` im `CHANGELOG.md`,
+  Dateigröße, Zugangsdaten). Mit `--apply`: `merge --ff-only`, annotierter Tag `v<Version>` (`-m`/`-F`), Branch
+  `release/<Version>`, **ein** atomarer Push ohne `--force`; ein Abbruch setzt mit demselben Befehl fort. Danach die Schritte
+  „nach dem Merge“ aus `testplan.py` und den Worktree entfernen. `./release` (seit 1.20.7) ist der Probelauf der gemeinsamen
+  Prüfung (`scripts/ce_tools/ce_release.py`); ausgeführt wird weiter mit `release.py`.
+- **Code-Aufbau:** Die Module von `scripts/robogen/` teilen einen Namensraum per `from robogen.<vorher> import *`: ein Modul
+  nutzt nur Namen aus sich und früheren Modulen (sonst `NameError`). Gemeinsamer Zustand als Container; ein zur Laufzeit
+  gesetzter einfacher Wert wird in seinem Modul gesetzt (`robogen.preview.PREVIEW_SAMPLE_SCALE`). Pfade über
+  `SCRIPTS_DIR`/`GENERATOR` aus `core`.
+- **Worker:** QA und Vorschau-Renders (`make_jobs`) bauen das Modell in eigenen Blender-Prozessen aus demselben Code neu:
+  nur von Code abhängen, nie von Zustand des Hauptprozesses außer den übergebenen Dateien (UV-Cache, Texturen). Ergebnisse in
+  fester Reihenfolge zusammenführen (nicht davon abhängig, wer rechnete); nur für Vorschauen Umgeschaltetes (schnelle Augen,
+  Raytracing) vor dem Speichern der `.blend` zurücksetzen.
+- **Cache:** Schlüssel hängen am Inhalt, nicht an Pfaden oder Dateizeiten (was in einem anderen Checkout gleich ist, gibt
+  denselben Schlüssel); Geometrie in kanonischer Ecken-Reihenfolge. Nie einen Eintrag löschen, weil es einen neueren gibt.
+  `--no-cache` liest keinen Cache, schreibt die UVs aber trotzdem (Render-Worker brauchen sie).
+- **Vorlage für Aufträge an andere Sitzungen:**
+
+  ```text
+  Änderung: <was, welche Dateien; Art: Doku | Daten | Modell/Rig/Clips | Export | Viewer | Unity | Werkzeug>
+  Prüfweg: <Ausgabe von `python3 scripts/testplan.py` (Weg und Schritte), ggf. `--path data`>
+  Erwartet im Bericht: <qa/clips/type_bounds identisch | gewollte Abweichung: welcher Schlüssel, welche Clips/Typen>
+  Release: <ja: Version x.y.z „Name“ mit `python3 scripts/release.py x.y.z --apply`, danach im Haupt-Checkout `testplan.py --base <vorheriger Tag> --after-merge --run` | nein: nur Commit/Branch>
+  Melden: Commit/Tag, Zeiten je Schritt, Cache-Treffer, Pause ja/nein, Prüfergebnisse (Zahlen), Offenes
+  ```

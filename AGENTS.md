@@ -141,7 +141,7 @@ Modell, Rig, Clips, UVs, Backen, Export, Viewer-, Shader- oder Cache-Code:
 
 ## Plugins und Hooks (Claude Code)
 
-`CLAUDE.md` importiert diese Datei; andere Agenten befolgen dieselben Regeln aus dem Text. Plugins (Blender-MCP, `code-review`
+`CLAUDE.md` importiert diese Datei; andere Agenten befolgen dieselben Regeln aus dem Text. Globale Regeln: Repo `~/Claude/cubeescape-rules` (Links aus `~/.claude`, `~/.codex`). Plugins (Blender-MCP, `code-review`
 vor jedem Release, `github`, `quick-gate-python`, `hookify`, `ce-shared` …): `docs/TECHNIK.md` › 21. **Hooks blockieren**
 Handänderungen an `output/` und am Spielprojekt, nacktes `git stash`, Force-Push, Teleportieren einer Cloud-Sitzung, Unity
 auf Cube-Escape-Checkouts; sie **halten das Sitzungsende an**, bis nach einer Änderung in `scripts/` eine Teststufe lief, und

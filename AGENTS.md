@@ -1,8 +1,8 @@
 # Roboter-Generator – Regeln für KI-Agenten
 
-Gilt für alle Agenten (Claude Code, Codex, …). Langform: `README.md` (Teststufen, Messwerte), `CHANGELOG.md`, `docs/FAHRPLAN.md`
-(führend ist das Claude Doc, Link dort), `docs/TECHNIK.md` (Techniken, Lehren, Betriebsdetails; bei jeder neuen Technik
-mitpflegen), `docs/ENTSCHEIDUNGEN.md` (Entscheidungen des Nutzers). Diese Datei hält nur, was jede Aufgabe braucht.
+Gilt für alle Agenten (Claude Code, Codex, …). Langform: `README.md` (Teststufen), `CHANGELOG.md`, `docs/FAHRPLAN.md` (führend ist das
+Claude Doc), `docs/TECHNIK.md` (**Erfahrungen**: Techniken, Lehren, Fallen – mitpflegen; Schwesterprojekte vor dem Bauen querlesen:
+`~/.claude/CLAUDE.md` › Erfahrungen festhalten und querlesen), `docs/ENTSCHEIDUNGEN.md`. Diese Datei hält nur, was jede Aufgabe braucht.
 
 ## Projekt
 

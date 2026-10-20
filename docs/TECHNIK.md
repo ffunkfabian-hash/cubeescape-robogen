@@ -613,7 +613,7 @@ mit Zeitstempeln) die Ergebnisse bytegleich weiterreichen statt neu zu erzeugen.
 
   | Plugin | Einsatz |
   |---|---|
-  | Blender-MCP | laufendes Blender des Nutzers als Prüfstand: `CubeEscape_Robot.blend` und Exporte laden, nachmessen, Ansichten rendern – in eigener Szene, nichts speichern |
+  | Blender-MCP | **ausdrücklich erwünscht** (Nutzer, 19./20.10.2026; globale Regel › Blender-MCP), ohne Nachfrage, wenn Blender läuft: `CubeEscape_Robot.blend` und Exporte laden, nachmessen, Rig/Posen/Clips und UV/Material am Modell prüfen, Probe-Bakes, Ansichten rendern – in eigener Szene, nie im Nutzerprojekt; Befunde im Generator beheben, nie `output/` von Hand; eigene Szenen nur über `wm.save_as_mainfile` speichern; schwere Bakes über die Sperre |
   | `quick-gate-python` | Ruff (und pytest, wo es reine Python-Teile gibt) für `scripts/`; Pyright kennt `bpy` nicht. Verbindlich bleiben die Teststufen |
   | `code-review` | Slash-Befehl `code-review` vor jedem Release auf `main` |
   | `github` | Pull Requests, Issues, Release-Branches und Tags auf GitHub (oder `gh`) |

@@ -39,6 +39,7 @@ RULES = [
     ("*.md", "docs"),
     ("docs/*", "docs"),
     (".agents/*", "docs"),
+    (".github/*", "docs"),
     (".claude/agents/*", "docs"),
     (".claude/hookify.*", "docs"),
     (".claude/agent-guard.json", "docs"),

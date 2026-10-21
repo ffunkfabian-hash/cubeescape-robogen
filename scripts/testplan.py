@@ -54,6 +54,9 @@ RULES = [
     ("scripts/ce_tools/*", "tooling"),               # embedded shared tools (ce_sync.py)
     (".ce-repo.json", "tooling"),
     ("check", "tooling"),
+    ("ce", "tooling"),
+    (".mcp.json", "tooling"),
+    ("scripts/nightly.sh", "tooling"),
     ("release", "tooling"),
     ("scripts/release.py", "tooling"),
     ("scripts/check_output.sh", "tooling"),

@@ -1,0 +1,48 @@
+# Schnellprüfung als PR-Check. Öffentliches Repo: Standard-Linux-Runner kosten keine Minuten (das 2.000-Minuten-Kontingent
+# gilt nur für private Repos) - globale Regel "GitHub Actions sparsam" (cubeescape-rules 1.15). Führt genau die Befehle aus
+# `.ce-repo.json` › check.quick aus, die eine Sitzung mit ./check lokal laufen lässt; Blender-, Bild- und Mac-Stufen bleiben
+# beim Nachtlauf auf dem Mac. Push nur auf main, andere Branches über ihren Pull Request, Doku löst nichts aus.
+name: check
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ["**.md", "docs/**", "Docs/**", ".claude/**", ".agents/**"]
+  pull_request:
+    paths-ignore: ["**.md", "docs/**", "Docs/**", ".claude/**", ".agents/**"]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: "**/requirements*.txt"
+      - name: Abhängigkeiten
+        run: |
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install numpy
+      - name: check.quick aus .ce-repo.json
+        run: |
+          python3 - <<'PY'
+          import json, shlex, subprocess, sys, time
+          quick = json.load(open(".ce-repo.json"))["check"]["quick"]
+          commands = [quick] if quick and isinstance(quick[0], str) and " " not in quick[0] else quick
+          failed = 0
+          for command in commands:
+              argv = shlex.split(command) if isinstance(command, str) else command
+              start = time.time()
+              code = subprocess.call(argv)
+              print(f"{'ok  ' if code == 0 else 'FAIL'} {' '.join(argv)} ({time.time() - start:.0f} s)", flush=True)
+              failed += code != 0
+          sys.exit(1 if failed else 0)
+          PY

@@ -28,6 +28,12 @@
         "python3",
         "scripts/testplan.py"
       ]
+    ],
+    "nightly": [
+      [
+        "bash",
+        "scripts/nightly.sh"
+      ]
     ]
   },
   "docs": {
@@ -43,5 +49,9 @@
     "tag_prefix": "v"
   },
   "tools_dir": "scripts/ce_tools",
-  "heavy_lock": true
+  "heavy_lock": true,
+  "coordination": {
+    "repo": "ffunkfabian-hash/cubeescape-nexogen",
+    "registry": "https://github.com/ffunkfabian-hash/cubeescape-nexogen/blob/main/repos.json"
+  }
 }

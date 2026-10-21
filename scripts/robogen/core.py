@@ -33,7 +33,7 @@ import export_viewer  # noqa: E402 - data for the RobotViewer app
 import robocache  # noqa: E402 - the shared cache of all checkouts (1.20.2)
 
 LOG = logging.getLogger("robot")
-VERSION = "1.20.7"
+VERSION = "1.21.0"
 
 # ----------------------------------------------------------------------------------------------
 # Arguments and logging

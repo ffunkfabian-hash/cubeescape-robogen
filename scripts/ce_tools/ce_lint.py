@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-# GENERATED from ce-agent-tools 0.4.0 - do not edit
-# ce-sha256: ba4cc06f5cfc05581a812d0f10bb79d749add881c1f5a273cdda635aabab9318
+# GENERATED from ce-agent-tools 0.5.0 - do not edit
+# ce-sha256: 8aa42ad58846e30468203e90895b55525c6d6752cbecacaab5e6140bcf2b48ad
 """ce_lint.py [--repo PATH] [--strict] - checks the repo against the shared standards (.ce-repo.json).
 
 - limits: line counts of the files in "limits" (e.g. {"AGENTS.md": 150, "CLAUDE.md": 20}) - error when exceeded;
@@ -34,6 +34,8 @@ def count_lines(path: Path) -> int:
 def check_limits(root: Path, config: dict) -> list[tuple[str, str]]:
     findings = []
     for name, limit in (config.get("limits") or {}).items():
+        if type(limit) is not int:
+            continue  # policy flags such as no_media are not file line limits
         path = root / name
         if not path.is_file():
             findings.append(("error", f"{name}: file missing (limit {limit} lines)"))
@@ -48,13 +50,16 @@ def agents_sections(text: str) -> list[str]:
     return [line[3:].strip() for line in text.splitlines() if line.startswith("## ")]
 
 
-def check_sections(root: Path) -> list[tuple[str, str]]:
+def check_sections(root: Path, config: dict | None = None) -> list[tuple[str, str]]:
     path = root / "AGENTS.md"
     if not path.is_file():
         return [("error", "AGENTS.md missing")]
     headings = agents_sections(path.read_text(encoding="utf-8", errors="replace"))
+    required = ((config or {}).get("docs") or {}).get("agent_sections", REQUIRED_SECTIONS)
+    if not isinstance(required, list) or not all(isinstance(name, str) for name in required):
+        return [("error", "docs.agent_sections must be a list of heading names")]
     findings, positions = [], []
-    for wanted in REQUIRED_SECTIONS:
+    for wanted in required:
         at = next((i for i, h in enumerate(headings) if h.lower().startswith(wanted.lower())), None)
         if at is None:
             findings.append(("error", f"AGENTS.md: section '## {wanted}' missing"))
@@ -62,7 +67,7 @@ def check_sections(root: Path) -> list[tuple[str, str]]:
             positions.append(at)
     if positions != sorted(positions):
         findings.append(("warning", "AGENTS.md: sections not in the standard order "
-                         + " > ".join(REQUIRED_SECTIONS)))
+                         + " > ".join(required)))
     return findings
 
 
@@ -105,7 +110,7 @@ def check_embedded(root: Path, config: dict) -> list[tuple[str, str]]:
 
 
 def lint(root: Path, config: dict) -> list[tuple[str, str]]:
-    return (check_limits(root, config) + check_sections(root) + check_note_files(root) + check_versions(root, config)
+    return (check_limits(root, config) + check_sections(root, config) + check_note_files(root) + check_versions(root, config)
             + check_embedded(root, config))
 
 

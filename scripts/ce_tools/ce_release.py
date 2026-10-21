@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# GENERATED from ce-agent-tools 0.4.0 - do not edit
+# GENERATED from ce-agent-tools 0.5.0 - do not edit
 # ce-sha256: 439060c879c56f876e1161ae3948400cf987dfd303c4629b4cf52bba46323b68
 """ce_release.py [--repo PATH] [--execute] [--no-push] [--remote origin] - release of the current version.
 

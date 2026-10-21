@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-# GENERATED from ce-agent-tools 0.4.0 - do not edit
-# ce-sha256: 68ece0d2ba9d4fa8d20c4be841c5208bd6aad67930d71c6c316628f4ae182351
+# GENERATED from ce-agent-tools 0.5.0 - do not edit
+# ce-sha256: b786cd2582e9b01ebd7a0a44b45dfd30f570acd720420e733089d8bf72635930
 """ce_sync.py [--repo PATH | --all] [--check] - embedded copies of the shared tools in each repo.
 
 The repos must not depend on the plugin at run time (Codex, cloud sessions and worktrees do not have it). So the tools
@@ -29,7 +29,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import ce_common  # noqa: E402
 
 SYNC_FILES = ["heavy_lock.py", "ce_common.py", "ce_check.py", "ce_lint.py", "ce_release.py", "ce_worktrees.py",
-              "ce_sync.py"]
+              "ce_sync.py", "ce_docs.py", "ce_nightly.py", "ce_session_name.py", "ce_await_mail.py",
+              "ce_codex_quota.py", "ce_codex_cloud.py", "ce_contract.py", "ce_search.py", "ce_report.py", "ce_imagediff.py", "ce_media.py",
+              "ce_judge.py", "ce"]
+DATA_DIRS = ["contracts", "agents"]  # copied verbatim next to the tools (plugins/ce-shared/contracts -> <tools_dir>/contracts)
 DEFAULT_TOOLS_DIR = "scripts/ce_tools"
 DEFAULT_PLUGIN_TOOLS = Path.home() / ".claude" / "plugins" / "marketplaces" / "ce-agent-tools" / "plugins" / "ce-shared" / "tools"
 HEADER = "# GENERATED from ce-agent-tools {version} - do not edit"
@@ -99,6 +102,17 @@ def sync(root: Path, config: dict, source: Path) -> list[str]:
             path.write_text(new, encoding="utf-8")
             path.chmod(0o755)
             changed.append(name)
+    for folder in DATA_DIRS:
+        origin = source.parent / folder
+        if not origin.is_dir():
+            continue
+        for item in sorted(p for p in origin.iterdir() if p.suffix in (".json", ".md")):
+            path = target / folder / item.name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            text = item.read_text(encoding="utf-8")
+            if not path.is_file() or path.read_text(encoding="utf-8") != text:
+                path.write_text(text, encoding="utf-8")
+                changed.append(f"{folder}/{item.name}")
     return changed
 
 
@@ -124,6 +138,17 @@ def check(root: Path, config: dict, source: Path | None = None) -> list[tuple[st
             if digest(current) != stored:
                 findings.append(("warning", f"{where}/{name}: from ce-agent-tools {version}, plugin has "
                                             f"{plugin_version(source) or '?'} - run ce_sync.py"))
+    for folder in DATA_DIRS:
+        origin = source.parent / folder if source else target / folder
+        if not origin.is_dir():
+            findings.append(("error", f"{where}/{folder}: missing data directory"))
+            continue
+        for item in sorted(origin.iterdir()):
+            if item.suffix not in (".json", ".md"):
+                continue
+            copy = target / folder / item.name
+            if not copy.is_file() or copy.read_bytes() != item.read_bytes():
+                findings.append(("error", f"{where}/{folder}/{item.name}: missing or changed - run ce_sync.py"))
     return findings
 
 

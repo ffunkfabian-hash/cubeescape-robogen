@@ -3,6 +3,13 @@
 Versionen des Roboter-Generators (zählen getrennt von Cube Escape und Cubegen). Jede Version hat einen Tag
 `v<Version>` und einen Release-Branch `release/<Version>`.
 
+## 1.21.0 „Crosscurrent“ – unveröffentlicht
+
+- Gemeinsame Werkzeuge, gruppierter `./ce`-Einstieg und Suchserver-Konfiguration angebunden.
+- Kurze Lehren und Nachtlauf mit bestehender Generator-/Abnahme-Pipeline ergänzt.
+- Gemischte Blender-/Unity-Abnahme behält die Gesamtsperre; Modell- und Clipdaten unverändert.
+- [Versionsbericht](docs/versions/1.21.md).
+
 ## 1.20.7 „Powdercoat“ – 2026-10-15
 
 Nur Werkzeuge, Modell und Lieferstand unverändert (der Generator trägt nur die neue Versionsnummer).

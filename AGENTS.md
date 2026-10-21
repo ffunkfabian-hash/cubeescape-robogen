@@ -1,9 +1,8 @@
 # Roboter-Generator – Regeln für KI-Agenten
-
+Zentraler Repo-Einstieg: [Nexogen](https://github.com/ffunkfabian-hash/cubeescape-nexogen) – Repo-Links, Zuständigkeiten, Abhängigkeiten und Live-Status über die Status-CLI im Nexogen-Repo. Globale Regeln dort, Fachwissen und Prüfbelege hier.
 Gilt für alle Agenten (Claude Code, Codex, …). Langform: `README.md` (Teststufen), `CHANGELOG.md`, `docs/FAHRPLAN.md` (führend ist das
 Claude Doc), `docs/TECHNIK.md` (**Erfahrungen**: Techniken, Lehren, Fallen – mitpflegen; Schwesterprojekte vor dem Bauen querlesen:
 `~/.claude/CLAUDE.md` › Erfahrungen festhalten und querlesen), `docs/ENTSCHEIDUNGEN.md`. Diese Datei hält nur, was jede Aufgabe braucht.
-
 ## Projekt
 
 Blender-Generator für den Roboter-Charakter von Cube Escape (Modell, Rig, Clips, Skins, Export, Viewer, Unity-Testbett).
@@ -148,3 +147,4 @@ auf Cube-Escape-Checkouts; sie **halten das Sitzungsende an**, bis nach einer Ä
 **warnen** bei Commit/Merge/Tag/Push, Code rund um `unwrap()`/Backen, Viewer und Workflows. Der Hook `precommit` (`ce-shared`)
 führt bei einem Commit mit geänderten `*.md`/Skills `ce_lint.py` aus (nur Warnung). Ändert sich eine Regel, ändert sich ihre
 Hook-Datei mit. **Subagents:** `rg-test-runner` (berichtet nur), `rg-doc-keeper` (nur Markdown).
+Werkzeug-Erfahrungen: [docs/LESSONS.md](docs/LESSONS.md); die verlinkte Systemdokumentation bleibt die Langform.

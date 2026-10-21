@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
-# GENERATED from ce-agent-tools 0.4.0 - do not edit
-# ce-sha256: 8ab0bab82585ce27efe1059caf35305c9d2a82640c9b36579f05e4fc8e405597
-"""ce_check.py quick|full [--repo PATH] [--verbose] - runs the commands of .ce-repo.json > check.
+# GENERATED from ce-agent-tools 0.5.0 - do not edit
+# ce-sha256: 954d69524aa1727245974f82796958eaf173f44dc8d8e4b8984adc1151ab0c60
+"""ce_check.py quick|full|nightly [--repo PATH] [--verbose] - runs the commands of .ce-repo.json > check.
 
-    "check": {"quick": ["cmd", "arg"], "full": [["cmd1", "a"], ["cmd2", "b"]], "rerun_failed": ["cmd", "--failed"]}
+    "check": {"quick": ["cmd", "arg"], "full": [["cmd1", "a"], ["cmd2", "b"]], "rerun_failed": ["cmd", "--failed"],
+              "nightly": [["cmd", "--tier", "full"], ["bash", "scripts/check_output.sh"]]}
+
+nightly (0.5.0): the bundled image stages of a repo - full tiers, bakes, golden hashes, determinism renders, full
+regressions without a trigger - run once a day on main (the user or launchd starts it, never a GitHub workflow), not
+before every commit. Repos without check.nightly report that and exit 2.
 
 A mode is one argv or a list of argvs (run in order, all of them, from the repo root). `full` that fails runs the
 optional "rerun_failed" argv once (a command that can repeat only what failed); the run counts as green only if that
@@ -113,7 +118,7 @@ def run_mode(root: Path, config: dict, mode: str, targeted: bool = False) -> dic
     results = [run_one(argv, root) for argv in argvs]
     failed = [r for r in results if r["code"] != 0]
     rerun = None
-    if failed and mode == "full" and check.get("rerun_failed"):
+    if failed and len(argvs) == 1 and mode == "full" and check.get("rerun_failed"):
         rerun = run_one(commands_of(check["rerun_failed"])[0], root)
         results.append(rerun)
     green = not failed or (rerun is not None and rerun["code"] == 0)
@@ -165,7 +170,7 @@ def report(name: str, mode: str, outcome: dict, verbose: bool = False) -> str:
 
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("mode", choices=["quick", "full"])
+    parser.add_argument("mode", choices=["quick", "full", "nightly"])
     parser.add_argument("--repo", help="repository (default: current directory)")
     parser.add_argument("--verbose", action="store_true", help="print the output of every command")
     parser.add_argument("--targeted", dest="targeted", action="store_true", default=None,
@@ -176,6 +181,8 @@ def main(argv: list[str]) -> int:
         root, config = ce_common.open_repo(args.repo)
         if args.mode == "full":
             outcome = run_full(root, config)
+        elif args.mode == "nightly":
+            outcome = run_mode(root, config, "nightly")
         else:
             outcome = run_mode(root, config, "quick", targeted=args.targeted is not False)
     except ce_common.RepoError as error:

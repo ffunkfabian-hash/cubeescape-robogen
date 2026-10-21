@@ -21,26 +21,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-python@v7.0.0
         with:
           python-version: "3.12"
+          cache: pip
+          cache-dependency-path: .ce-repo.json
       - name: Abhängigkeiten
         run: |
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           pip install numpy
       - name: check.quick aus .ce-repo.json
-        run: |
-          python3 - <<'PY'
-          import json, shlex, subprocess, sys, time
-          quick = json.load(open(".ce-repo.json"))["check"]["quick"]
-          commands = [quick] if quick and isinstance(quick[0], str) and " " not in quick[0] else quick
-          failed = 0
-          for command in commands:
-              argv = shlex.split(command) if isinstance(command, str) else command
-              start = time.time()
-              code = subprocess.call(argv)
-              print(f"{'ok  ' if code == 0 else 'FAIL'} {' '.join(argv)} ({time.time() - start:.0f} s)", flush=True)
-              failed += code != 0
-          sys.exit(1 if failed else 0)
-          PY
+        run: ./ce check

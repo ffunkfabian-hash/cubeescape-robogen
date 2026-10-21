@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# GENERATED from ce-agent-tools 0.4.0 - do not edit
+# GENERATED from ce-agent-tools 0.5.0 - do not edit
 # ce-sha256: 04970017f630114d1fa46b37c06da84025693e56cf41f1c71ab1f82a436fb98b
 """ce_worktrees.py [--repos PATH ...] [--active-minutes N] [--projects DIR] - all worktrees of the Cube Escape repos.
 

@@ -138,9 +138,9 @@ Modell, Rig, Clips, UVs, Backen, Export, Viewer-, Shader- oder Cache-Code:
 3. `Previews/skins.png` und `Previews/hero.png` ansehen; Pausen im Bericht nennen. Ziel: unter 15 Minuten bis zum Release;
    fällt etwas auf (Cache-Fehltreffer, rote Prüfung), gilt ab da der volle Prüfablauf.
 
-## Plugins und Hooks (Claude Code)
+## Plugins und Hooks
 
-`CLAUDE.md` importiert diese Datei; andere Agenten befolgen dieselben Regeln aus dem Text. Globale Regeln: Repo `~/Claude/cubeescape-nexogen` (Links aus `~/.claude`, `~/.codex`). Plugins (Blender-MCP, `code-review`
+`CLAUDE.md` importiert diese Datei. Der gemeinsame Wächter (Agent Tools 0.12) wird über Nexogen für Codex nach `/hooks`-Vertrauen und für Antigravity auf den gemessenen Oberflächen installiert; das reversible Git-Netz ergänzt ihn für alle Clients. Die begrenzte Commit-Vorabprüfung, Einbau und Grenzen stehen zentral in [Werkzeuge und Durchsetzung](https://github.com/ffunkfabian-hash/cubeescape-nexogen/blob/main/templates/regeln-details.md#werkzeuge-und-durchsetzung). Die folgende Liste nennt Claude-Plugins und repo-eigene Claude-Hooks. Globale Regeln: Repo `~/Claude/cubeescape-nexogen` (Links aus `~/.claude`, `~/.codex`). Plugins (Blender-MCP, `code-review`
 vor jedem Release, `github`, `quick-gate-python`, `hookify`, `ce-shared` …): `docs/TECHNIK.md` › 21. **Hooks blockieren**
 Handänderungen an `output/` und am Spielprojekt, nacktes `git stash`, Force-Push, Teleportieren einer Cloud-Sitzung, Unity
 auf Cube-Escape-Checkouts; sie **halten das Sitzungsende an**, bis nach einer Änderung in `scripts/` eine Teststufe lief, und

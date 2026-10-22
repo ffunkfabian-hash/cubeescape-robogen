@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# GENERATED from ce-agent-tools 0.11.0 - do not edit
+# GENERATED from ce-agent-tools 0.12.0 - do not edit
 # ce-sha256: dc15a3b9902eb8017ae2acd09e7e9e7b4dc4a02b4c8ea38c18f0422acc2de1b5
 """ce_contract.py validate <file.json> ... [--schema NAME] | list - contracts between the repos as JSON Schema.
 

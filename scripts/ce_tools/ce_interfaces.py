@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-# GENERATED from ce-agent-tools 0.11.0 - do not edit
-# ce-sha256: 7944b15b2a0b3e206bb80cd5701e1211c399e18c6d687142ad26049cc693ccb3
+# GENERATED from ce-agent-tools 0.12.0 - do not edit
+# ce-sha256: 3afecc726b6a0d4405f13e3022ff6a63083ba659ea5211e621f18df4870eaddc
 """Read-only interface audit; native validators keep ownership of their contracts.
 
 ``robot-package ROOT`` validates the CE copy set before its first copy. The audit
@@ -244,6 +244,12 @@ def _worker(kind, root, options):
                 errors += [f"{model}: {e}" for e in report["errors"]]
                 notes += [f"{model}: runtime budget: {e}" for e in report.get("runtime", [])]
     elif kind == "toolgen":
+        required = ("scripts/import_concepts.py", "scripts/tool_assets/concept_spec.py")
+        missing = [name for name in required if not (root / name).is_file()]
+        if missing:
+            return dict(checked=0, findings=[
+                "Toolgen concept validation unavailable: missing " + ", ".join(missing) +
+                "; use a Toolgen checkout with concept import support"], notes=[])
         module = runpy.run_path(str(root / "scripts/import_concepts.py"), run_name="ce_native")
         folder = root / "data/concepts"
         errors += module["check"](folder)

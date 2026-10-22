@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# GENERATED from ce-agent-tools 0.11.0 - do not edit
+# GENERATED from ce-agent-tools 0.12.0 - do not edit
 # ce-sha256: c8218c643f8d52b3d50b232ff7b2864fd1fd8d914d42410b6e6da4aec906d835
 """ce_judge.py [--base REF] [--model luna|sol] [--dry-run] [--files ...] - the second reviewer, always with the same checklist.
 

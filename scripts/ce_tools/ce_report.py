@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# GENERATED from ce-agent-tools 0.11.0 - do not edit
+# GENERATED from ce-agent-tools 0.12.0 - do not edit
 # ce-sha256: 1c0e9332264245a800a7a82f0836dd370cb13dfbe647d322f8cbd39e6c8601e3
 """ce_report.py [TRANSCRIPT.jsonl] [--json] - what a session actually did, measured from its Claude Code transcript.
 

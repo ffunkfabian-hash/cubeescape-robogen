@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# GENERATED from ce-agent-tools 0.11.0 - do not edit
+# GENERATED from ce-agent-tools 0.12.0 - do not edit
 # ce-sha256: d90f1684e9661e90d88832f9da46b0db5d5164d1c3e7d13ab8bdd4850a308830
 """ce_media.py sheet|clip|still - the one way to make the evidence the rules ask for (› Belege), same sizes everywhere.
 

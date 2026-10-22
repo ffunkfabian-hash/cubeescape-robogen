@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# GENERATED from ce-agent-tools 0.11.0 - do not edit
+# GENERATED from ce-agent-tools 0.12.0 - do not edit
 # ce-sha256: 1550e9411923963b3ad2730642fc6b3ba494b2ee745f70f510af60cf91a7ca84
 """Claude Cloud -> Codex Cloud; no push, merge, or automatic patch application."""
 import argparse

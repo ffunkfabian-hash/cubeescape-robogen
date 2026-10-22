@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# GENERATED from ce-agent-tools 0.14.0 - do not edit
+# GENERATED from ce-agent-tools 0.15.1 - do not edit
 # ce-sha256: 1e0094ea5472796dd4577fd8bb9d685c2bbfda9c81ebda304f132e4bc93da23c
 """ce_check.py quick|full|nightly [--repo PATH] [--verbose] - runs the commands of .ce-repo.json > check.
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-# GENERATED from ce-agent-tools 0.14.0 - do not edit
-# ce-sha256: c1a2ba3474203616d1c284cc0f33414f147eda3ab8574247986ee6ebe02b888b
+# GENERATED from ce-agent-tools 0.15.1 - do not edit
+# ce-sha256: 61ad28688913919f6f73c77506fb2027e30d8e8f9d7fa88ded8d0654d3ec39fd
 """Proposes the session name `<Repo> <Version> „<Name>“ · <Ort>` and the branch name (CLAUDE.md > Sitzungsnamen, regeln-details.md).
 
 Run in the working repository at the start of a session:
@@ -24,6 +24,7 @@ import platform
 import re
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # 0.14: ce_postfach next to it, also when run through runpy or as embedded copy
@@ -170,11 +171,13 @@ SESSION_FILE = "ce-session.json"
 
 
 def remember(repo: Path, name: str, branch: str) -> None:
-    """The reserved name in the worktree's own git dir, so `./ce session say` sends under exactly this name (0.14)."""
+    """The reserved name in the worktree's own git dir, so `./ce session say` sends under exactly this name (0.14); the time lets the
+    Postfach watcher read from the reservation on and ignore stale ones (0.15)."""
     try:
         git_dir = subprocess.run(["git", "-C", str(repo), "rev-parse", "--absolute-git-dir"], capture_output=True, text=True, timeout=20).stdout.strip()
         if git_dir:
-            (Path(git_dir) / SESSION_FILE).write_text(json.dumps({"name": name, "branch": branch}, ensure_ascii=False), encoding="utf-8")
+            (Path(git_dir) / SESSION_FILE).write_text(json.dumps({"name": name, "branch": branch, "reserved_at": time.time()},
+                                                                 ensure_ascii=False), encoding="utf-8")
     except (OSError, subprocess.TimeoutExpired):
         pass
 
@@ -204,6 +207,7 @@ def reserve(repo: Path, branch: str) -> int:
             print(result.stderr.strip() or f"{' '.join(command)} fehlgeschlagen", file=sys.stderr)
             return 1
     print(f"Reserviert:   {branch} auf origin (git checkout {branch})")
+    print("Postfach:     Wächter startet beim Stopp von selbst (ce-shared 0.15); ohne Plugin: ./ce session mail im Hintergrund")
     return 0
 
 

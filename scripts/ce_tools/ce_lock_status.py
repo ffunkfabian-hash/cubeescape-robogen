@@ -1,4 +1,4 @@
-# GENERATED from ce-agent-tools 0.13.0 - do not edit
+# GENERATED from ce-agent-tools 0.14.0 - do not edit
 # ce-sha256: 3cac562687682cfd6bdb2c2b089d7bfa1723f89d3027a334bf14b913e226cfc5
 """Optional waiter telemetry. It never decides or changes ownership of a resource lock."""
 from datetime import datetime, timezone

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# GENERATED from ce-agent-tools 0.13.0 - do not edit
+# GENERATED from ce-agent-tools 0.14.0 - do not edit
 # ce-sha256: d7fbf6f5e284ab72fda51da65f922014359b56232ccce5e2344950e215514cb3
 """Headless still/orbit preview adapter for an explicitly supplied .blend or FBX."""
 from __future__ import annotations

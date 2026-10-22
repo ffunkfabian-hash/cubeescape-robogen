@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# GENERATED from ce-agent-tools 0.13.0 - do not edit
+# GENERATED from ce-agent-tools 0.14.0 - do not edit
 # ce-sha256: 404c23eefcaaaaf87181aa40ba12e3aa964bf0b3f30de888fbafcb6343ebb6c4
 """Read-only workflow dashboard and portable evidence viewer; reuse the existing CLI and validators.
 

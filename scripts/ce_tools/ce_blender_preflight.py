@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# GENERATED from ce-agent-tools 0.13.0 - do not edit
+# GENERATED from ce-agent-tools 0.14.0 - do not edit
 # ce-sha256: 31c3fa6a541939d515ea5880f87dd0b70bbbeb1e5cb4e90b7655bd8684b8ea2a
 """Validate an explicit generator profile and optionally inspect one Blender asset."""
 from __future__ import annotations

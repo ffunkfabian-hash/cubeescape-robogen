@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-# GENERATED from ce-agent-tools 0.13.0 - do not edit
-# ce-sha256: ba218917b9cbe51e080bf63f1c5262dd0b85fc764c2a5ef01c84a6dba8993c22
+# GENERATED from ce-agent-tools 0.14.0 - do not edit
+# ce-sha256: e60c1a66f03ce062b49c9e11e5acc64a64ee9fbb4322b6adc6615f5fdfeb56f3
 """ce_sync.py [--repo PATH | --all] [--check] - embedded copies of the shared tools in each repo.
 
 The repos must not depend on the plugin at run time (Codex, cloud sessions and worktrees do not have it). So the tools
@@ -33,6 +33,7 @@ SYNC_FILES = ["heavy_lock.py", "ce_common.py", "ce_check.py", "ce_lint.py", "ce_
               "ce_codex_quota.py", "ce_codex_cloud.py", "ce_contract.py", "ce_interfaces.py", "ce_search.py", "ce_report.py", "ce_imagediff.py", "ce_media.py",
               "ce_judge.py", "ce_api.py", "ce_api_budget.py", "ce"]
 SYNC_FILES += ["ce_console.py", "ce_lock_status.py", "ce_blender_preflight.py", "ce_turnaround.py"]
+SYNC_FILES += ["ce_postfach.py"]  # 0.14: ./ce session say|who, announcement of ce_session_name.py --reserve
 DATA_DIRS = ["contracts", "agents"]  # copied verbatim next to the tools (plugins/ce-shared/contracts -> <tools_dir>/contracts)
 DEFAULT_SYNC_NAMES = ["cubeescape", "cubeescape-cubegen", "cubeescape-robogen", "cubeescape-toolgen"]
 DEFAULT_TOOLS_DIR = "scripts/ce_tools"

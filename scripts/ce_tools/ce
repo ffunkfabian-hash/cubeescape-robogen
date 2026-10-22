@@ -1,6 +1,6 @@
 #!/bin/sh
-# GENERATED from ce-agent-tools 0.14.0 - do not edit
-# ce-sha256: 9e9a602fe12c59e47c212811ecccb90c0af3d303128bd7903eb8ca5b5f2e3dc9
+# GENERATED from ce-agent-tools 0.15.1 - do not edit
+# ce-sha256: 550882442aca6188f79dac42cb66cfa2add7cade9e7cf8fb6be030cb35a4bb3c
 # ce - one entry for the shared tools of a repo (0.5.0): ./ce <command> [args]
 #   check [--full|--nightly]   session reserve|patch|topics|mail|say|who   codex quota|cloud|judge
 #   evidence clip|sheet|still|diff   search query|index|status   lock <resource>|status   docs   report   api login|status|budget|ask
@@ -16,7 +16,7 @@ case "$cmd" in
       patch) exec python3 "$tools/ce_session_name.py" --reserve --patch "$@";;
       mail) exec python3 "$tools/ce_await_mail.py" "$@";;
       say|who) exec python3 "$tools/ce_postfach.py" "$sub" "$@";;
-      *) echo "session reserve <Name> | patch <kurzname> | topics | mail --name <Name> | say [--to <Empfänger>] <Thema> [Zeilen] | who"; exit 2;;
+      *) echo "session reserve <Name> | patch <kurzname> | topics | mail [--name <Name>] | say [--to <Empfänger>] <Thema> [Zeilen] | who"; exit 2;;
     esac;;
   codex)
     sub="${1:-help}"; [ $# -gt 0 ] && shift
@@ -57,7 +57,7 @@ case "$cmd" in
   report)   exec python3 "$tools/ce_report.py" "$@";;
   api)      exec python3 "$tools/ce_api.py" "$@";;
   sync)     exec python3 "$tools/ce_sync.py" --repo . "$@";;
-  mail)     exec python3 "$tools/ce_await_mail.py" --name "$@";;
+  mail)     case "${1:-}" in ""|-*) exec python3 "$tools/ce_await_mail.py" "$@";; esac; exec python3 "$tools/ce_await_mail.py" --name "$@";;
   say|who)  exec python3 "$tools/ce_postfach.py" "$cmd" "$@";;
   help|--help|-h) sed -n 2,4p "$0";;
   *)        sed -n 2,4p "$0"; exit 2;;

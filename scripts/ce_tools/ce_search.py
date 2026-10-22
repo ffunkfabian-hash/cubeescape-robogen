@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-# GENERATED from ce-agent-tools 0.5.0 - do not edit
-# ce-sha256: 91d93d3309529ab59ead97c12e1f6a0556538d879ad9212616aba005c1a3cbdc
+# GENERATED from ce-agent-tools 0.11.0 - do not edit
+# ce-sha256: 96626b9dd7f0e260bfa6b04e3e08cb1b2330da615936a5b7f04064269ccd591f
 """ce_search.py - local retrieval over the docs of all Cube Escape repos (RAG without a cloud).
 
 0.5.0: the index is a SQLite file with FTS5 (BM25) over chunks of Markdown (docs, skills, AGENTS, version reports, LESSONS),
@@ -39,6 +39,8 @@ SKIP_DIRS = {".git", "Library", "Temp", "Logs", "obj", "bin", "node_modules", "_
              ".claude/worktrees", "Packages", "ProjectSettings", "UserSettings", "archive"}
 MAX_CHUNK = 1800          # characters per chunk (about 400 tokens)
 EMBED_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+REPO_ALIASES = {"motiongen": "cubeescape-reference", "cubeescape-motiongen": "cubeescape-reference",
+                "formgen": "cubeescape-design", "cubeescape-formgen": "cubeescape-design"}
 
 
 # ----------------------------------------------------------------------------------------------------------------- sources
@@ -170,6 +172,13 @@ def source_files(root: Path):
                 yield path
 
 
+def delete_file_chunks(db: sqlite3.Connection, name: str, rel: str):
+    # External-content FTS5 needs the original indexed values to remove postings.
+    old = db.execute("SELECT id, body, heading, path, repo FROM chunks WHERE repo=? AND path=?", (name, rel)).fetchall()
+    db.executemany("INSERT INTO chunks_fts(chunks_fts, rowid, body, heading, path, repo) VALUES('delete', ?, ?, ?, ?, ?)", old)
+    db.execute("DELETE FROM chunks WHERE repo=? AND path=?", (name, rel))
+
+
 def index_repo(db: sqlite3.Connection, root: Path, model, log) -> tuple[int, int]:
     """(files indexed, chunks written); unchanged files (same sha256) are skipped."""
     try:
@@ -191,9 +200,7 @@ def index_repo(db: sqlite3.Connection, root: Path, model, log) -> tuple[int, int
         if known.get(rel) == sha:
             continue
         files += 1
-        for cid, in db.execute("SELECT id FROM chunks WHERE repo=? AND path=?", (name, rel)):
-            db.execute("INSERT INTO chunks_fts(chunks_fts, rowid, body, heading, path, repo) VALUES('delete', ?, '', '', '', '')", (cid,))
-        db.execute("DELETE FROM chunks WHERE repo=? AND path=?", (name, rel))
+        delete_file_chunks(db, name, rel)
         kind = kind_of(rel)
         rows = [(name, rel, kind, heading, start, end, body) for heading, start, end, body in chunks_of(path, text)]
         vectors = [None] * len(rows)
@@ -210,9 +217,7 @@ def index_repo(db: sqlite3.Connection, root: Path, model, log) -> tuple[int, int
             written += 1
         db.execute("INSERT OR REPLACE INTO files(repo, path, sha256, mtime) VALUES(?,?,?,?)", (name, rel, sha, path.stat().st_mtime))
     for rel in set(known) - seen:  # deleted files
-        for cid, in db.execute("SELECT id FROM chunks WHERE repo=? AND path=?", (name, rel)):
-            db.execute("INSERT INTO chunks_fts(chunks_fts, rowid, body, heading, path, repo) VALUES('delete', ?, '', '', '', '')", (cid,))
-        db.execute("DELETE FROM chunks WHERE repo=? AND path=?", (name, rel))
+        delete_file_chunks(db, name, rel)
         db.execute("DELETE FROM files WHERE repo=? AND path=?", (name, rel))
     db.commit()
     log(f"{name}: {files} Dateien neu, {written} Abschnitte")
@@ -242,15 +247,24 @@ def build(roots: list[Path], index: Path | None, log=print) -> dict:
 def fts_query(text: str) -> str:
     """Tokens ANDed, each as a prefix match; quotes and operators stripped (never a syntax error for the user)."""
     tokens = re.findall(r"[\wÀ-ɏ]+", text)
-    return " ".join(f'"{t}"*' for t in tokens if len(t) > 1) or '""'
+    # unicode61 drops '#' and '+', so C# / C++ are indexed as token "c".
+    # Retain this one-character token only for explicit language spellings.
+    language_c = bool(re.search(r"(?i)(?<!\w)c(?:#|\+{2})(?!\w)", text))
+    terms = [f'"{t}"*' for t in dict.fromkeys(tokens) if len(t) > 1]
+    if language_c:
+        terms.append('"c"')
+    return " ".join(terms) or '""'
 
 
 def search(query: str, k: int = 8, repo: str | None = None, kind: str | None = None, index: Path | None = None) -> list[dict]:
     db = open_index(index)
     where, args = [], [fts_query(query)]
     if repo:
-        where.append("c.repo LIKE ?")
-        args.append(f"%{repo}%")
+        names = {name.casefold(): name for (name,) in db.execute("SELECT DISTINCT repo FROM files")}
+        # An actual index name wins over historical aliases; other substrings still work.
+        exact = names.get(repo.casefold()) or names.get(REPO_ALIASES.get(repo.casefold(), ""))
+        where.append("c.repo = ?" if exact else "c.repo LIKE ?")
+        args.append(exact if exact else f"%{repo}%")
     if kind:
         where.append("c.kind = ?")
         args.append(kind)
@@ -305,7 +319,7 @@ TOOLS = [
                     "only that part. Use before reading a long doc or when asking 'was that solved before?'.",
      "inputSchema": {"type": "object", "required": ["query"],
                      "properties": {"query": {"type": "string"}, "k": {"type": "integer", "default": 8},
-                                    "repo": {"type": "string", "description": "substring of a repo name, e.g. toolgen"},
+                                    "repo": {"type": "string", "description": "index name, public alias (formgen/motiongen), or name substring"},
                                     "kind": {"type": "string", "enum": ["lesson", "doc", "skill", "version", "data", "code"]}}}},
     {"name": "ce_search_status", "description": "When the index was built, which repos and how many chunks it holds.",
      "inputSchema": {"type": "object", "properties": {}}},
@@ -381,6 +395,10 @@ def main(argv: list[str]) -> int:
         roots = repos(args.repo)
         if not roots:
             print("ce_search: keine Repos gefunden (CE_REPOS, --repo oder ~/Claude/<repo>)")
+            return 2
+        missing = [root for root in roots if not root.is_dir()]
+        if missing:
+            print("ce_search: ungültige Repo-Wurzel(n): " + ", ".join(map(str, missing)), file=sys.stderr)
             return 2
         result = build(roots, args.index)
         print(json.dumps(result, ensure_ascii=False))

@@ -3,6 +3,12 @@
 Versionen des Roboter-Generators (zählen getrennt von Cube Escape und Cubegen). Jede Version hat einen Tag
 `v<Version>` und einen Release-Branch `release/<Version>`.
 
+## 1.22.0 „Relaywake“ – 2026-10-22
+
+- Eingebettete gemeinsame Werkzeuge von der geprüften Quelle Agent Tools 0.11 „Wayfinder“ synchronisiert: FTS-Korrektur, öffentliche Such-Aliase, risikobasierter Richter und budgetierter API-Einstieg.
+- Nur Werkzeug-Rollout auf Basis 1.21.0; fachliche Daten, Generator-Ausgabe und Verträge unverändert. Hash-Abgleich und repo-eigener Quick sind die Abnahme.
+- [Versionsbericht](docs/versions/1.22.md).
+
 ## 1.21.0 „Crosscurrent“ – unveröffentlicht
 
 - Gemeinsame Werkzeuge, gruppierter `./ce`-Einstieg und Suchserver-Konfiguration angebunden.

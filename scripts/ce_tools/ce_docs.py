@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# GENERATED from ce-agent-tools 0.5.0 - do not edit
+# GENERATED from ce-agent-tools 0.11.0 - do not edit
 # ce-sha256: 27591dc14dbf3e0996b9e81ea980d92fddbcf7243200753bab7320203bf15650
 """ce_docs.py [--repo PATH] [--json REPORT] - local Markdown links and anchors, skill front matter, JSON and shell syntax.
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-# GENERATED from ce-agent-tools 0.5.0 - do not edit
-# ce-sha256: 8d911ce2b6bff2935eba16f6b76e61f81992b8741dc9f5e629a9478a7d29348b
+# GENERATED from ce-agent-tools 0.11.0 - do not edit
+# ce-sha256: d90f1684e9661e90d88832f9da46b0db5d5164d1c3e7d13ab8bdd4850a308830
 """ce_media.py sheet|clip|still - the one way to make the evidence the rules ask for (› Belege), same sizes everywhere.
 
     ce_media.py sheet  <frames_dir_or_pngs...> --out sheet.png [--columns 6] [--width 1280] [--label]
@@ -32,6 +32,16 @@ def frames_of(sources) -> list[Path]:
     return files
 
 
+def sheet_tile_size(width: int, columns: int) -> int:
+    """Largest square tile that fits the requested width including gutters."""
+    if columns <= 0:
+        raise ValueError("--columns muss positiv sein")
+    tile = (width - 4 * columns) // columns
+    if tile < 1:
+        raise ValueError("--width muss mindestens 5 Pixel je Spalte enthalten")
+    return tile
+
+
 def sheet(sources, out: Path, columns: int, width: int, label: bool) -> int:
     files = frames_of(sources)
     if not files:
@@ -39,7 +49,11 @@ def sheet(sources, out: Path, columns: int, width: int, label: bool) -> int:
         return 2
     step = max(1, len(files) // 36)   # a sheet holds at most 36 frames
     files = files[::step][:36]
-    tile = max(120, width // columns)
+    try:
+        tile = sheet_tile_size(width, columns)
+    except ValueError as error:
+        print(f"ce_media sheet: {error}", file=sys.stderr)
+        return 2
     if shutil.which("magick") or shutil.which("montage"):
         base = ["magick", "montage"] if shutil.which("magick") else ["montage"]
         args = base + [*map(str, files), "-tile", f"{columns}x", "-geometry", f"{tile}x{tile}+2+2", "-background", "#202020"]
@@ -52,11 +66,12 @@ def sheet(sources, out: Path, columns: int, width: int, label: bool) -> int:
         rows = -(-len(files) // columns)
         canvas = Image.new("RGB", (columns * (tile + 4), rows * (tile + 4 + (14 if label else 0))), "#202020")
         for index, file in enumerate(files):
-            image = Image.open(file).convert("RGB")
+            with Image.open(file) as source:
+                image = source.convert("RGBA")
             image.thumbnail((tile, tile))
             x = (index % columns) * (tile + 4) + 2
             y = (index // columns) * (tile + 4 + (14 if label else 0)) + 2
-            canvas.paste(image, (x, y))
+            canvas.paste(image, (x, y), image)
             if label:
                 ImageDraw.Draw(canvas).text((x, y + tile + 1), file.name[:24], fill="#dddddd")
         canvas.save(out)

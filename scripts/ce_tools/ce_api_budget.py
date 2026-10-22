@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# GENERATED from ce-agent-tools 0.11.0 - do not edit
+# GENERATED from ce-agent-tools 0.12.0 - do not edit
 # ce-sha256: b405aad89cf9969a05eafce65bede5912989e1a196c593992d759a4c399c2120
 """Atomic local API cost limits for UTC calendar months, independent of billing."""
 import fcntl

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# GENERATED from ce-agent-tools 0.11.0 - do not edit
+# GENERATED from ce-agent-tools 0.12.0 - do not edit
 # ce-sha256: d3ec6485a9d6840234fcbda6dc08a885ec49dde215fbf16ebc7828b491598358
 """ce_imagediff.py A.png B.png [--out DIFF.png] [--kind ui|world|bake|any] [--json] - how different are two images, as numbers.
 

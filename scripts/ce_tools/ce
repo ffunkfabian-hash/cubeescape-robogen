@@ -1,5 +1,5 @@
 #!/bin/sh
-# GENERATED from ce-agent-tools 0.11.0 - do not edit
+# GENERATED from ce-agent-tools 0.12.0 - do not edit
 # ce-sha256: 1e8bb376b7475ac666420e860509b8409de19fed5b45213acaa3de7be14a7f9a
 # ce - one entry for the shared tools of a repo (0.5.0): ./ce <command> [args]
 #   check [--full|--nightly]   session reserve|topics|mail   codex quota|cloud|judge

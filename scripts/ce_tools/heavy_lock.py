@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# GENERATED from ce-agent-tools 0.11.0 - do not edit
+# GENERATED from ce-agent-tools 0.12.0 - do not edit
 # ce-sha256: 8483f28fb8b043c666d164b3a5b727a2934bc5d2a880e189bc021ce02362fbad
 """One heavy run per resource at a time on this Mac - the queues shared by Cube Escape, Cubegen, the robot generator
 and Toolgen.

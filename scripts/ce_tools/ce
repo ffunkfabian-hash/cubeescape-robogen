@@ -1,6 +1,6 @@
 #!/bin/sh
-# GENERATED from ce-agent-tools 0.12.0 - do not edit
-# ce-sha256: 1e8bb376b7475ac666420e860509b8409de19fed5b45213acaa3de7be14a7f9a
+# GENERATED from ce-agent-tools 0.13.0 - do not edit
+# ce-sha256: 9a4aef912ed0d82d765a362723475885532e0d7dbd52297bc825f94c5026626b
 # ce - one entry for the shared tools of a repo (0.5.0): ./ce <command> [args]
 #   check [--full|--nightly]   session reserve|topics|mail   codex quota|cloud|judge
 #   evidence clip|sheet|still|diff   search query|index|status   lock <resource>|status   docs   report   api login|status|budget|ask
@@ -26,6 +26,8 @@ case "$cmd" in
   evidence)
     sub="${1:-help}"; [ $# -gt 0 ] && shift
     case "$sub" in
+      preflight) exec python3 "$tools/ce_blender_preflight.py" "$@";;
+      turnaround) exec python3 "$tools/ce_turnaround.py" "$@";;
       diff) exec python3 "$tools/ce_imagediff.py" "$@";;
       clip|sheet|still) exec python3 "$tools/ce_media.py" "$sub" "$@";;
       *) echo "evidence clip | sheet | still | diff"; exit 2;;

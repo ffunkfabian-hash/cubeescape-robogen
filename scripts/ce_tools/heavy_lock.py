@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-# GENERATED from ce-agent-tools 0.12.0 - do not edit
-# ce-sha256: 8483f28fb8b043c666d164b3a5b727a2934bc5d2a880e189bc021ce02362fbad
+# GENERATED from ce-agent-tools 0.13.0 - do not edit
+# ce-sha256: d1c0764b8edc270558ffa26e3536905430a26037d659243e860898b0c93f3535
 """One heavy run per resource at a time on this Mac - the queues shared by Cube Escape, Cubegen, the robot generator
 and Toolgen.
 
@@ -196,6 +196,7 @@ class HeavyLock:
         fd = os.open(path, os.O_RDWR | os.O_CREAT | os.O_CLOEXEC, 0o644)  # never inherited (O_CLOEXEC, PEP 446)
         start = last = time.monotonic()
         announced = False
+        waiter = None
         gate = None
         try:
             if self.resource:
@@ -213,6 +214,11 @@ class HeavyLock:
                     waiting_path = (os.environ.get("CE_HEAVY_LOCK_FILE") or DEFAULT) if descriptor == gate else path
                     now = time.monotonic()
                     if not announced:
+                        try:
+                            import ce_lock_status
+                            waiter = ce_lock_status.announce(path, self.resource, self.what, self.checkout, waiting_path)
+                        except Exception:
+                            pass  # older embedded installations still use the same real lock
                         self.out("heavy lock (%s): waiting for %s - held by %s (CE_HEAVY_LOCK=0 skips the queue)"
                                  % (self.resource or "shared", waiting_path, who))
                         announced = True
@@ -221,10 +227,14 @@ class HeavyLock:
                         last = now
                     time.sleep(self.poll)
         except BaseException:
+            if waiter is not None:
+                ce_lock_status.forget(waiter)
             os.close(fd)
             if gate is not None:
                 os.close(gate)
             raise
+        if waiter is not None:
+            ce_lock_status.forget(waiter)
         self._gate_fd = gate
         self.waited = time.monotonic() - start
         if announced:

@@ -4,7 +4,8 @@
       "source": {
         "source": "github",
         "repo": "ffunkfabian-hash/ce-agent-tools"
-      }
+      },
+      "autoUpdate": true
     }
   },
   "enabledPlugins": {

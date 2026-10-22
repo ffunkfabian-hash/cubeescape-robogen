@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# GENERATED from ce-agent-tools 0.15.1 - do not edit
+# GENERATED from ce-agent-tools 0.16.0 - do not edit
 # ce-sha256: fa504b75468f3f27efe99d65dc26fa85ae9e0a982319b7bbe6da67e96a489192
 """Prints the Codex quota (5-hour and weekly window) from the newest rate_limits entry in ~/.codex/sessions.
 

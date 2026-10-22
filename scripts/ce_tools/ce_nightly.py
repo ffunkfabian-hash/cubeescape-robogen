@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# GENERATED from ce-agent-tools 0.15.1 - do not edit
+# GENERATED from ce-agent-tools 0.16.0 - do not edit
 # ce-sha256: 937c6bd204da36241f14d259379b961e5ca0f7c448fcca7f18350ca6e274197f
 """ce_nightly.py [--all | --repo PATH ...] [--dry-run] [install|uninstall|status] - the one nightly run for all repos.
 

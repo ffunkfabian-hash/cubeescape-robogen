@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# GENERATED from ce-agent-tools 0.15.1 - do not edit
+# GENERATED from ce-agent-tools 0.16.0 - do not edit
 # ce-sha256: 70d4d84fbab7a947a6a76b93058e7136684945ec533577b4a79b24dcec040373
 """Waits for a Briefkasten comment addressed to this session and prints it (regeln-details.md › Briefkasten, Wächter).
 

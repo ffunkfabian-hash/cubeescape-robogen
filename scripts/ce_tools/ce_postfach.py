@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# GENERATED from ce-agent-tools 0.15.1 - do not edit
+# GENERATED from ce-agent-tools 0.16.0 - do not edit
 # ce-sha256: 78017cac1364aecdfa054bb9b61705ce9cea378ecbbdbdf3de5446e9c1ff825b
 """Writes to the Postfach (cubeescape-nexogen#16) so sessions can talk to each other without remembering the format (0.14).
 

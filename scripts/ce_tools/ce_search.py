@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# GENERATED from ce-agent-tools 0.15.1 - do not edit
+# GENERATED from ce-agent-tools 0.16.0 - do not edit
 # ce-sha256: 96626b9dd7f0e260bfa6b04e3e08cb1b2330da615936a5b7f04064269ccd591f
 """ce_search.py - local retrieval over the docs of all Cube Escape repos (RAG without a cloud).
 

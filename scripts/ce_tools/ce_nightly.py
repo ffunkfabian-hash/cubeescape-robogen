@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-# GENERATED from ce-agent-tools 0.5.0 - do not edit
-# ce-sha256: 11bbfd6854c5139d7bf0a94417a0ecb14d3bca46191222657e550a4b6007eabb
+# GENERATED from ce-agent-tools 0.11.0 - do not edit
+# ce-sha256: 937c6bd204da36241f14d259379b961e5ca0f7c448fcca7f18350ca6e274197f
 """ce_nightly.py [--all | --repo PATH ...] [--dry-run] [install|uninstall|status] - the one nightly run for all repos.
 
 0.5.0: runs `ce_check.py nightly` of every repo in turn (CE_REPOS = ':'-separated paths, else the standard checkouts under
@@ -122,7 +122,8 @@ def run(args) -> int:
         if args.dry_run:
             raise RuntimeError("dry-run: kein Index-Schreibzugriff")
         import ce_search
-        summary = ce_search.build([r for r in targets if r.is_dir()], None, log=log)
+        index_roots = ce_search.repos(None) if not args.repo else [r for r in targets if r.is_dir()]
+        summary = ce_search.build(index_roots, None, log=log)
         log(f"=== Suchindex: {summary['total_chunks']} Abschnitte, {summary['seconds']} s, Embeddings {'ja' if summary['embeddings'] else 'nein'}")
     except Exception as error:  # noqa: BLE001
         log(f"=== Suchindex: übersprungen ({error})")

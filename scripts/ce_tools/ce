@@ -1,9 +1,9 @@
 #!/bin/sh
-# GENERATED from ce-agent-tools 0.5.0 - do not edit
-# ce-sha256: 6b241b9cc38224e3339507187f95fdc353c25d1b6add2b321ed95508169eb339
+# GENERATED from ce-agent-tools 0.11.0 - do not edit
+# ce-sha256: 1e8bb376b7475ac666420e860509b8409de19fed5b45213acaa3de7be14a7f9a
 # ce - one entry for the shared tools of a repo (0.5.0): ./ce <command> [args]
 #   check [--full|--nightly]   session reserve|topics|mail   codex quota|cloud|judge
-#   evidence clip|sheet|still|diff   search query|index|status   lock <resource>|status   docs   report
+#   evidence clip|sheet|still|diff   search query|index|status   lock <resource>|status   docs   report   api login|status|budget|ask
 here="$(cd "$(dirname "$0")" && pwd)"; tools="$here"
 [ -f "$tools/ce_check.py" ] || tools="$here/ce_tools"
 cmd="${1:-help}"; [ $# -gt 0 ] && shift
@@ -43,8 +43,15 @@ case "$cmd" in
   lock)     res="${1:-status}"; [ $# -gt 0 ] && shift; [ "$res" != status ] || exec python3 "$tools/heavy_lock.py" status; exec python3 "$tools/heavy_lock.py" run --resource "$res" "$@";;
   status)   python3 "$tools/heavy_lock.py" status; exec python3 "$tools/ce_search.py" status;;
   docs)     exec python3 "$tools/ce_docs.py" "$@";;
-  contract) exec python3 "$tools/ce_contract.py" validate "$@";;
+  contract)
+    case "${1:-}" in
+      audit) shift; exec python3 "$tools/ce_interfaces.py" audit "$@";;
+      robot-package) shift; exec python3 "$tools/ce_interfaces.py" robot-package "$@";;
+      validate|list) exec python3 "$tools/ce_contract.py" "$@";;
+      *) exec python3 "$tools/ce_contract.py" validate "$@";;
+    esac;;
   report)   exec python3 "$tools/ce_report.py" "$@";;
+  api)      exec python3 "$tools/ce_api.py" "$@";;
   sync)     exec python3 "$tools/ce_sync.py" --repo . "$@";;
   mail)     exec python3 "$tools/ce_await_mail.py" --name "$@";;
   help|--help|-h) sed -n 2,4p "$0";;

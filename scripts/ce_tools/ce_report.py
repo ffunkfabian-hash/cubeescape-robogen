@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-# GENERATED from ce-agent-tools 0.12.0 - do not edit
-# ce-sha256: 1c0e9332264245a800a7a82f0836dd370cb13dfbe647d322f8cbd39e6c8601e3
+# GENERATED from ce-agent-tools 0.13.0 - do not edit
+# ce-sha256: ca20f6ac1beba738a6ea7c75b4eee76f052c0c75045f2065edb3e49654a5c7d9
 """ce_report.py [TRANSCRIPT.jsonl] [--json] - what a session actually did, measured from its Claude Code transcript.
 
 0.5.0: the rules ask for things nobody measured (model per subagent, no repeated full runs, search before reading, output size,
@@ -280,6 +280,9 @@ def hints(info: dict) -> list[str]:
 
 
 def main(argv: list[str]) -> int:
+    if argv and argv[0] == "--dashboard":
+        import ce_console
+        return ce_console.main(argv[1:] or ["snapshot"])
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("transcript", nargs="?", type=Path)
     parser.add_argument("--since", help="aggregate Claude transcripts since e.g. 7d (record timestamps, not file mtime)")

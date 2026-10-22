@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# GENERATED from ce-agent-tools 0.12.0 - do not edit
+# GENERATED from ce-agent-tools 0.13.0 - do not edit
 # ce-sha256: 3afecc726b6a0d4405f13e3022ff6a63083ba659ea5211e621f18df4870eaddc
 """Read-only interface audit; native validators keep ownership of their contracts.
 

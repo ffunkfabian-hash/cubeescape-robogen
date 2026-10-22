@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# GENERATED from ce-agent-tools 0.12.0 - do not edit
+# GENERATED from ce-agent-tools 0.13.0 - do not edit
 # ce-sha256: 837e5a6788e6440f14fed0bb2a94e48c5599a2a15d49a863f264a6debc580811
 """Proposes the session name `<Repo> <Version> „<Name>“ · <Ort>` and the branch name (CLAUDE.md > Sitzungsnamen, regeln-details.md).
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# GENERATED from ce-agent-tools 0.15.1 - do not edit
+# GENERATED from ce-agent-tools 0.16.0 - do not edit
 # ce-sha256: 3046a9cbd5e6ddb7c2ec01444375c0c81695691197bc8dcce42b4be5f633b6c4
 """Explicit, text-only Claude API calls with isolated OAuth, reservations and cache usage."""
 from __future__ import annotations

@@ -3,6 +3,11 @@
 Versionen des Roboter-Generators (zählen getrennt von Cube Escape und Cubegen). Jede Version hat einen Tag
 `v<Version>` und einen Release-Branch `release/<Version>`.
 
+## tools-0.16 „Tidemark“ – 2026-10-22
+
+- Gemeinsame Werkzeuge über `ce_sync.py` aus Agent Tools 0.16 (ce-agent-tools#15): `./ce plugins check|fix` hält die Claude-Code-Installationen von ce-shared auf einer Version (je Worktree ein Eintrag, Update erreicht sie nicht sicher); der SessionStart-Hook des Plugins warnt bei älterem ce-shared.
+- `"autoUpdate": true` am Marketplace in `.claude/settings.json`; Hinweis in `AGENTS.md` › Plugins und Hooks; fachliche Versionen und Ausgaben unverändert.
+
 ## tools-0.15.1 „Wakeline“ – 2026-10-22
 
 - Gemeinsame Werkzeuge über `ce_sync.py` aus Agent Tools 0.15.1 (ce-agent-tools#13, #14): `./ce session mail` braucht keinen Namen mehr und teilt den Stand mit dem neuen Stop-Hook des Plugins, der den Postfach-Wächter für reservierte Sitzungen selbst startet (am Mac live geprüft); `say` nimmt den Absender aus der Reservierung des Worktrees.

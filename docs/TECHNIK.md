@@ -642,7 +642,7 @@ Langtext zu Regeln, die `AGENTS.md` (Grenze 150 Zeilen) nur noch kurz nennt.
   Dateigröße, Zugangsdaten). Mit `--apply`: `merge --ff-only`, annotierter Tag `v<Version>` (`-m`/`-F`), Branch
   `release/<Version>`, **ein** atomarer Push ohne `--force`; ein Abbruch setzt mit demselben Befehl fort. Danach die Schritte
   „nach dem Merge“ aus `testplan.py` und den Worktree entfernen. `./release` (seit 1.20.7) ist der Probelauf der gemeinsamen
-  Prüfung (`scripts/ce_tools/ce_release.py`); ausgeführt wird weiter mit `release.py`.
+  Prüfung (`ce_release.py` der gepinnten Werkzeuge, `./ce tools where`); ausgeführt wird weiter mit `release.py`.
 - **Code-Aufbau:** Die Module von `scripts/robogen/` teilen einen Namensraum per `from robogen.<vorher> import *`: ein Modul
   nutzt nur Namen aus sich und früheren Modulen (sonst `NameError`). Gemeinsamer Zustand als Container; ein zur Laufzeit
   gesetzter einfacher Wert wird in seinem Modul gesetzt (`robogen.preview.PREVIEW_SAMPLE_SCALE`). Pfade über

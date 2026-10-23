@@ -51,10 +51,10 @@ RULES = [
     ("scripts/testplan.py", "tooling"),
     ("scripts/quiet.py", "tooling"),
     ("scripts/heavy_lock.py", "tooling"),
-    ("scripts/ce_tools/*", "tooling"),               # embedded shared tools (ce_sync.py)
     (".ce-repo.json", "tooling"),
     ("check", "tooling"),
-    ("ce", "tooling"),
+    ("scripts/ce_tools/*", "tooling"),               # removed embedded tools copy (1.23): deletions still diff
+    ("ce", "tooling"),                               # loader of the shared tools (./ce tools pin)
     (".mcp.json", "tooling"),
     ("scripts/nightly.sh", "tooling"),
     ("release", "tooling"),

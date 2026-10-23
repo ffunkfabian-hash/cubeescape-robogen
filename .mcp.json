@@ -3,7 +3,8 @@
     "ce-search": {
       "command": "python3",
       "args": [
-        "scripts/ce_tools/ce_search.py",
+        "ce",
+        "search",
         "serve"
       ]
     }

@@ -27,6 +27,7 @@ jobs:
           python-version: "3.12"
           cache: pip
           cache-dependency-path: .ce-repo.json
+      - uses: ffunkfabian-hash/ce-agent-tools/.github/actions/ce-tools@6e9e8235dd046d45f4691905b65e1c2094c3a73d
       - name: Abhängigkeiten
         run: |
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi

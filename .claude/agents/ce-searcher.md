@@ -1,1 +1,0 @@
-../../scripts/ce_tools/agents/ce-searcher.md

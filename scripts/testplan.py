@@ -51,7 +51,7 @@ RULES = [
     ("scripts/testplan.py", "tooling"),
     ("scripts/quiet.py", "tooling"),
     ("scripts/heavy_lock.py", "tooling"),
-    ("scripts/ce_tools/*", "tooling"),               # embedded shared tools (ce_sync.py)
+    ("ce", "tooling"),                               # loader of the shared tools (./ce tools pin)
     (".ce-repo.json", "tooling"),
     ("check", "tooling"),
     ("ce", "tooling"),

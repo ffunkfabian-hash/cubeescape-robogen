@@ -3,6 +3,15 @@
 Versionen des Roboter-Generators (zählen getrennt von Cube Escape und Cubegen). Jede Version hat einen Tag
 `v<Version>` und einen Release-Branch `release/<Version>`.
 
+## 1.23.0 „Unbundled“ – 2026-10-23
+
+Nur Werkzeuge, Modell und Lieferstand unverändert.
+
+- Keine eingebettete Werkzeugkopie mehr: `scripts/ce_tools/` (34 Dateien) entfällt, `./ce` ist der Lader aus Agent Tools 0.20 „Lodestar“, `.ce-repo.json` › `tools_version` pinnt Commit `6e9e8235dd04` (statt `tools_dir`). Wie Motiongen 0.13 (cubeescape-motiongen#40).
+- `./check`, `./release`, `scripts/heavy_lock.py` und `.mcp.json` (`ce-search` über `./ce search serve`) nutzen den Lader; `check.yml` holt die Werkzeuge mit der Aktion `ce-tools@6e9e823`; die `ce-*`-Profile in `.claude/agents/` kommen mit dem Plugin.
+- Neu `.ce-repo.json` › `tidy` für alte Stufen-Ausgaben `output/_*`.
+- [Versionsbericht](docs/versions/1.23.md).
+
 ## tools-0.16 „Tidemark“ – 2026-10-22
 
 - Gemeinsame Werkzeuge über `ce_sync.py` aus Agent Tools 0.16 (ce-agent-tools#15): `./ce plugins check|fix` hält die Claude-Code-Installationen von ce-shared auf einer Version (je Worktree ein Eintrag, Update erreicht sie nicht sicher); der SessionStart-Hook des Plugins warnt bei älterem ce-shared.

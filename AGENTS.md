@@ -42,9 +42,10 @@ Jeder Lauf schreibt `<out>/logs/robot_report.json` und bewertet die Zeit im **Ze
 ruhiger Maschine ist ein Befund, unter Last nichts schließen (`docs/TECHNIK.md` › 21).
 Cloud-Sitzungen: `docs/TECHNIK.md` › 22.
 
-- **Werkzeuge:** `scripts/ce_tools/` ist die eingebettete Kopie der gemeinsamen Werkzeuge (Plugin `ce-shared`, Repo
-  ffunkfabian-hash/ce-agent-tools): **nicht von Hand ändern**, sondern im Plugin ändern und `python3 $CE_TOOLS/ce_sync.py
-  --repo .` ausführen (`--check` prüft, `ce_lint.py` auch). `scripts/heavy_lock.py` leitet nur darauf weiter.
+- **Werkzeuge:** keine eingebettete Kopie (seit 1.23): `./ce` ist der Lader der gemeinsamen Werkzeuge (Plugin `ce-shared`, Repo
+  ffunkfabian-hash/ce-agent-tools) und führt genau den Stand aus `.ce-repo.json` › `tools_version` aus (Plugin, Cache oder
+  Download; `./ce tools where|fetch`). Neuer Stand: `./ce tools pin <Commit>`, nicht von Hand ändern. `scripts/heavy_lock.py`
+  leitet nur auf die Sperre der Werkzeuge weiter; `.mcp.json` startet `ce_search` über `./ce search serve`.
 - **Release (seit 1.20.3):** `python3 scripts/release.py <Version>` – ohne `--apply` nur Probelauf, mit `--apply` Merge
   (ff-only), Tag `v<Version>`, Branch `release/<Version>`, ein Push ohne `--force`; nur auf Wunsch des Nutzers (Einzelheiten:
   `docs/TECHNIK.md` › 22).

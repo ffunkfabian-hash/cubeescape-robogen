@@ -48,10 +48,24 @@
     "branch_prefix": "release/",
     "tag_prefix": "v"
   },
-  "tools_dir": "scripts/ce_tools",
   "heavy_lock": true,
   "coordination": {
     "repo": "ffunkfabian-hash/cubeescape-nexogen",
     "registry": "https://github.com/ffunkfabian-hash/cubeescape-nexogen/blob/main/repos.json"
+  },
+  "tools_version": {
+    "version": "0.20.0",
+    "commit": "6e9e8235dd046d45f4691905b65e1c2094c3a73d"
+  },
+  "tidy": {
+    "paths": [
+      {
+        "name": "Stufen-Ausgaben output/_*",
+        "root": "output",
+        "glob": "_*",
+        "keep": 2,
+        "older_than_days": 14
+      }
+    ]
   }
 }

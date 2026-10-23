@@ -1,7 +1,7 @@
 #!/bin/sh
 # Thin wrapper: dry run of the release checks (./release), --execute does it. Robogen's own release.py stays the
-# executor (merge, tag, branch, push); this wrapper runs the shared checks first.
+# executor (merge, tag, branch, push); this wrapper runs the shared checks first (tools: ./ce tools where).
 here="$(cd "$(dirname "$0")" && pwd)"
-tools="$here/scripts/ce_tools/ce_release.py"
-[ -f "$tools" ] || { echo "release: $tools missing - run ce_sync.py (ce-agent-tools) for this repo" >&2; exit 2; }
-exec python3 "$tools" --repo "$here" "$@"
+tools="$("$here/ce" tools where | sed 's/ (.*//')" || exit 2
+[ -f "$tools/ce_release.py" ] || { echo "release: $tools/ce_release.py missing - ./ce tools fetch" >&2; exit 2; }
+exec python3 "$tools/ce_release.py" --repo "$here" "$@"

@@ -4,4 +4,5 @@
 here="$(cd "$(dirname "$0")" && pwd)"
 tools="$("$here/ce" tools where | sed 's/ (.*//')" || exit 2
 [ -f "$tools/ce_release.py" ] || { echo "release: $tools/ce_release.py missing - ./ce tools fetch" >&2; exit 2; }
-exec python3 "$tools/ce_release.py" --repo "$here" "$@"
+# no bytecode inside the checked tools cache (read-only does not stop root)
+PYTHONDONTWRITEBYTECODE=1 exec python3 "$tools/ce_release.py" --repo "$here" "$@"

@@ -26,6 +26,7 @@ def _tools_dir():
 
 
 _path = os.path.join(_tools_dir(), "heavy_lock.py")
+sys.dont_write_bytecode = True  # never write .pyc into the checked tools cache (root ignores read-only)
 _spec = importlib.util.spec_from_file_location("ce_tools_heavy_lock", _path)
 _shared = importlib.util.module_from_spec(_spec)
 sys.modules[_spec.name] = _shared

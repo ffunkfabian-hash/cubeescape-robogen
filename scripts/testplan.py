@@ -53,6 +53,7 @@ RULES = [
     ("scripts/heavy_lock.py", "tooling"),
     (".ce-repo.json", "tooling"),
     ("check", "tooling"),
+    ("scripts/ce_tools/*", "tooling"),               # removed embedded tools copy (1.23): deletions still diff
     ("ce", "tooling"),                               # loader of the shared tools (./ce tools pin)
     (".mcp.json", "tooling"),
     ("scripts/nightly.sh", "tooling"),

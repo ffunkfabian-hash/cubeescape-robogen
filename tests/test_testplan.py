@@ -29,6 +29,7 @@ class Areas(unittest.TestCase):
             "unity/RobotTestbed/Assets/RobotTestbed/Shaders/RobotBody.shader": "unity",
             "unity/RobotTestbed/Library/foo": "ignored", "scripts/debug_frames.py": "debug",
             "scripts/verify_robot.py": "verify", "something/new.bin": "unknown",
+            "scripts/ce_tools/ce_check.py": "tooling", "ce": "tooling",
             "scripts/heavy_lock.py": "tooling", "scripts/release.py": "tooling", "unity/run_testbed.sh": "unity",
         }
         for f, area in cases.items():

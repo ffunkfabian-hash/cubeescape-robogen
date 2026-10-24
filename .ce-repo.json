@@ -54,8 +54,8 @@
     "registry": "https://github.com/ffunkfabian-hash/cubeescape-nexogen/blob/main/repos.json"
   },
   "tools_version": {
-    "version": "0.20.0",
-    "commit": "6e9e8235dd046d45f4691905b65e1c2094c3a73d"
+    "version": "0.22.0",
+    "commit": "9f1ed12072c8807d3cd0b26370e792bd4249f762"
   },
   "tidy": {
     "paths": [

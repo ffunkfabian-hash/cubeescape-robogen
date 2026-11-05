@@ -3,7 +3,7 @@
 Versionen des Roboter-Generators (zählen getrennt von Cube Escape und Cubegen). Jede Version hat einen Tag
 `v<Version>` und einen Release-Branch `release/<Version>`.
 
-## Patch kern-sweep – 2026-11-05
+## 1.23.2 – 2026-11-05 (Patch kern-sweep)
 
 Nur Doku und Konfiguration, Modell und Lieferstand unverändert.
 

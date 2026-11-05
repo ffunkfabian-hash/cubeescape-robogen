@@ -54,8 +54,8 @@
     "registry": "https://github.com/ffunkfabian-hash/cubeescape-nexogen/blob/main/repos.json"
   },
   "tools_version": {
-    "version": "0.20.0",
-    "commit": "6e9e8235dd046d45f4691905b65e1c2094c3a73d"
+    "version": "0.35.0",
+    "commit": "79250432f2d2cedeab642800c6a2ac667e6ec645"
   },
   "tidy": {
     "paths": [
@@ -67,5 +67,11 @@
         "older_than_days": 14
       }
     ]
-  }
+  },
+  "core_paths": [
+    "scripts/robogen/export.py",
+    "scripts/robogen/rig.py",
+    "scripts/robogen/clips.py",
+    "scripts/robogen/pipeline.py"
+  ]
 }

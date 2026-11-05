@@ -3,6 +3,13 @@
 Versionen des Roboter-Generators (zählen getrennt von Cube Escape und Cubegen). Jede Version hat einen Tag
 `v<Version>` und einen Release-Branch `release/<Version>`.
 
+## Patch kern-sweep – 2026-11-05
+
+Nur Doku und Konfiguration, Modell und Lieferstand unverändert.
+
+- `AGENTS.md` an den harten Kern (Nexogen `templates/kern.md`) angeglichen: Kopien globaler Regeln gestrichen (151 → 135 Zeilen), alte Gesamtsperre durch `./ce lock <Ressource>` ersetzt, drei wirkungslose hookify-Warnungen (`git-nur-auf-wunsch`, `cache-schema`, `viewer-pruefen`) gelöscht.
+- `.ce-repo.json`: Werkzeug-Pin 0.35.0 (`79250432f2d2`), `core_paths` gesetzt; `check.yml` auf denselben Stand.
+
 ## 1.23.0 „Unbundled“ – 2026-10-23
 
 Nur Werkzeuge, Modell und Lieferstand unverändert.

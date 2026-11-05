@@ -1,8 +1,19 @@
 # Roboter-Generator – Regeln für KI-Agenten
-Zentraler Repo-Einstieg: [Nexogen](https://github.com/ffunkfabian-hash/cubeescape-nexogen) – Repo-Links, Zuständigkeiten, Abhängigkeiten und Live-Status über die Status-CLI im Nexogen-Repo. Globale Regeln dort, Fachwissen und Prüfbelege hier.
-Gilt für alle Agenten (Claude Code, Codex, …). Langform: `README.md` (Teststufen), `CHANGELOG.md`, `docs/FAHRPLAN.md` (führend ist das
-Claude Doc), `docs/TECHNIK.md` (**Erfahrungen**: Techniken, Lehren, Fallen – mitpflegen; Schwesterprojekte vor dem Bauen querlesen:
-`~/.claude/CLAUDE.md` › Erfahrungen festhalten und querlesen), `docs/ENTSCHEIDUNGEN.md`. Diese Datei hält nur, was jede Aufgabe braucht.
+Zentraler Einstieg: [Nexogen](https://github.com/ffunkfabian-hash/cubeescape-nexogen) (Repo-Links, Zuständigkeiten, Status). Globale Regeln dort; hier nur Repo-Eigenes. Langform: `README.md` (Teststufen), `CHANGELOG.md`, `docs/FAHRPLAN.md`, `docs/TECHNIK.md` (Erfahrungen, Techniken, Fallen), `docs/ENTSCHEIDUNGEN.md`.
+
+## Harter Kern
+
+Quelle: Nexogen `templates/kern.md`, nur dort ändern; gilt auch in Cloud-Sitzungen.
+
+1. Kein Commit direkt auf `main`.
+2. Kein Force-Push, keine überschriebenen Branches oder Tags.
+3. Nichts Fremdes anfassen oder löschen: andere Sitzungen, Worktrees, Stash, Haupt-Checkout.
+4. Merge nach `main` nur mit Ja des Nutzers, außer Patch bis 100 Zeilen ohne Format, Vertrag, Kernpfad bei grünem `merge-check`; Tag, Release, Repo öffentlich machen immer nur mit Ja.
+5. Tests nie löschen oder abschwächen, um grün zu werden.
+6. Keine Zugangsdaten, kein fremdes Material, keine großen Binärdaten nach außen (öffentliche Repos, fremde APIs).
+7. Formate, Verträge und IDs nur mit Migration; IDs sind ewig.
+8. Nichts als fertig melden, was nicht geprüft ist.
+
 ## Projekt
 
 Blender-Generator für den Roboter-Charakter von Cube Escape (Modell, Rig, Clips, Skins, Export, Viewer, Unity-Testbett).
@@ -14,14 +25,14 @@ Die Version steht in `scripts/robogen/core.py` (`VERSION`); sie zählt getrennt 
   lesen die passende `SKILL.md` vor der Arbeit): `rg-unity-testbed` (Unity-Testpaket, -Vorlagen, -Laufzeit),
   `rg-unity-integration` (Übergabe an das Spiel: FBX, Masken, Look, Clip-Daten, Kapseln, Emitter).
 
-## Wahrheit und Aktualität
+## Stand und Zuständigkeit
 
-- **Code ist die Wahrheit**, dann `docs/TECHNIK.md`/`README.md`, dann Erinnerungen und alte Prompts; widerspricht ein Doc dem
-  Code, wird es im selben Zuge korrigiert. Version und Stand: `scripts/robogen/core.py`, `git log --oneline -15`, `CHANGELOG.md`.
+- Version und Stand: `scripts/robogen/core.py`, `git log --oneline -15`, `CHANGELOG.md`; widerspricht ein Doc dem Code, wird es im selben Zuge korrigiert.
 - `output/` ist nicht versioniert und entsteht nur durch den Generator. **Nie von Hand ändern** – auch nicht „schnell“ eine
   Textur, einen Clip-Wert oder eine FBX. Fehler werden im Generator behoben und neu erzeugt.
 - Das Spielprojekt Cube Escape wird von hier nicht verändert. Namen von Skins, Bauteilen, Ausdrücken, Motiven und
   Oberflächen sind ewige IDs. Entscheidungen des Nutzers: `docs/ENTSCHEIDUNGEN.md` (vor dem Neuverhandeln einer Regel lesen).
+
 
 ## Befehle
 
@@ -42,21 +53,9 @@ Jeder Lauf schreibt `<out>/logs/robot_report.json` und bewertet die Zeit im **Ze
 ruhiger Maschine ist ein Befund, unter Last nichts schließen (`docs/TECHNIK.md` › 21).
 Cloud-Sitzungen: `docs/TECHNIK.md` › 22.
 
-- **Werkzeuge:** keine eingebettete Kopie (seit 1.23): `./ce` ist der Lader der gemeinsamen Werkzeuge (Plugin `ce-shared`, Repo
-  ffunkfabian-hash/ce-agent-tools) und führt genau den Stand aus `.ce-repo.json` › `tools_version` aus (Plugin, Cache oder
-  Download; `./ce tools where|fetch`). Neuer Stand: `./ce tools pin <Commit>`, nicht von Hand ändern. `scripts/heavy_lock.py`
-  leitet nur auf die Sperre der Werkzeuge weiter; `.mcp.json` startet `ce_search` über `./ce search serve`.
-- **Release (seit 1.20.3):** `python3 scripts/release.py <Version>` – ohne `--apply` nur Probelauf, mit `--apply` Merge
-  (ff-only), Tag `v<Version>`, Branch `release/<Version>`, ein Push ohne `--force`; nur auf Wunsch des Nutzers (Einzelheiten:
-  `docs/TECHNIK.md` › 22).
-- **Ein schwerer Lauf zur Zeit:** `full`, `check_output.sh` und `unity/run_testbed.sh` warten auf die rechnerweite Sperre
-  `~/Library/Caches/CubeEscape/heavy-run.lock` (`scripts/heavy_lock.py`; `… status` zeigt den Halter, `CE_HEAVY_LOCK=0`
-  überspringt sie). **Erst die Sperre, dann die Pause.** Vertrag nur zusammen mit den anderen Repos ändern (`docs/TECHNIK.md` › 21).
-- **Ganze Leistung des Geräts:** Braucht eine Sitzung den Rechner für sich, darf sie andere Sitzungen pausieren
-  (`pause_sessions.py run -- <Befehl>` aus Cube Escape › `ce-testing`); nur so lange wie nötig, im Bericht nennen. `full` und
-  `check_output.sh` tun das selbst (`scripts/quiet.py`, `ROBOGEN_NO_PAUSE=1`; `docs/TECHNIK.md` › 22).
-- **Berichte:** längere Berichte nach `report.md` im Worktree-Wurzelordner (ungetrackt, `.git/info/exclude`); die Meldung an den
-  Auftraggeber ist eine Zeile. Aufträge an andere Sitzungen ohne Erkundungsläufe schreiben (Vorlage: `docs/TECHNIK.md` › 22).
+- **Release:** `./release` (Probelauf der gemeinsamen Release-Prüfung), `--execute` führt über `scripts/release.py <Version>` aus: Merge ff-only, Tag `v<Version>`, Branch `release/<Version>`, ein Push ohne `--force`; nur auf Wunsch des Nutzers (`docs/TECHNIK.md` › 22).
+- **Schwere Läufe:** `full`, `check_output.sh` und `unity/run_testbed.sh` nur über `./ce lock <unity|blender|gpu> -- <Befehl>` (Ressource nennen; gleiche Ressource nacheinander, GPU exklusiv; Nexogen `templates/regeln-details.md` › Schwere Läufe und Sperren). `scripts/heavy_lock.py` leitet auf die Sperre der Werkzeuge weiter.
+- **Ganze Leistung des Geräts:** Braucht eine Sitzung den Rechner für sich, darf sie andere Sitzungen pausieren (`pause_sessions.py run -- <Befehl>` aus Cube Escape › `ce-testing`); nur so lange wie nötig, im Bericht nennen. `full` und `check_output.sh` tun das selbst (`scripts/quiet.py`, `ROBOGEN_NO_PAUSE=1`; `docs/TECHNIK.md` › 22).
 
 ## Regeln
 
@@ -107,6 +106,7 @@ Cloud-Sitzungen: `docs/TECHNIK.md` › 22.
   erhöhen. **Code im Schlüssel** (`QA_CODE_PARTS`, `CLIP_CODE_PARTS`, `EXPORT_CODE_PARTS`): neue Funktion an einer gecachten
   Ausgabe → ihr Name in die Liste. Einzelheiten: `docs/TECHNIK.md` › 20, 22.
 
+
 ## Definition of Done (Prüfablauf vor dem Commit)
 
 0. **Zuerst `python3 scripts/testplan.py`:** liest den Diff (gegen `main`, auch Ungesichertes) und nennt Weg, Stufen, Prüfungen
@@ -128,24 +128,8 @@ Cloud-Sitzungen: `docs/TECHNIK.md` › 22.
 7. Abschlussmeldung auf Deutsch: was geändert, wie geprüft (Stufen, Zahlen), was offen ist. Nichts als erledigt melden, was
    nicht geprüft wurde.
 
-### Schneller Weg für reine Datenänderungen (seit 1.20.1)
+Reine Datenänderungen (nur Werte, nicht Modell, Rig, Clips, UVs, Backen, Export, Viewer, Shader, Cache) sind ein Patch (`./ce session patch`); `testplan.py` erkennt „nur Daten“ selbst und nennt den kurzen Weg.
 
-Gilt, wenn sich **nur Werte** ändern (Tabellen/Konfiguration wie `FINISH_PARAMS`, Skins, Farben, Looks, Texte, Doku), nicht
-Modell, Rig, Clips, UVs, Backen, Export, Viewer-, Shader- oder Cache-Code:
-1. Im Worktree `quick` **einmal** und `standard` **einmal**, `qa`/`clips`/`type_bounds` gegen den gesicherten Bericht; kein
-   zweiter `quick`, kein `full`, kein kalter Lauf im Worktree.
-2. Nach dem Merge genau **ein** `full` im Haupt-Checkout (warm aus dem geteilten Cache), darauf **einmal**
-   `scripts/check_output.sh` – das ist der Lieferstand in `output/`.
-3. `Previews/skins.png` und `Previews/hero.png` ansehen; Pausen im Bericht nennen. Ziel: unter 15 Minuten bis zum Release;
-   fällt etwas auf (Cache-Fehltreffer, rote Prüfung), gilt ab da der volle Prüfablauf.
+## Hooks
 
-## Plugins und Hooks
-
-`CLAUDE.md` importiert diese Datei. Der gemeinsame Wächter (Agent Tools 0.12) wird über Nexogen für Codex nach `/hooks`-Vertrauen und für Antigravity auf den gemessenen Oberflächen installiert; das reversible Git-Netz ergänzt ihn für alle Clients. Die begrenzte Commit-Vorabprüfung, Einbau und Grenzen stehen zentral in [Werkzeuge und Durchsetzung](https://github.com/ffunkfabian-hash/cubeescape-nexogen/blob/main/templates/regeln-details.md#werkzeuge-und-durchsetzung). Postfach (ce-shared 0.15.1, nur Claude Code mit installiertem Plugin): Für eine reservierte Sitzung (`./ce session reserve|patch`) startet ein Stop-Hook den Wächter selbst und weckt sie bei Nachrichten; läuft keiner, hält ein zweiter Stop-Hook das Ende einmal an (höchstens alle 2 h). Versionen (ce-shared 0.16): Claude Code führt je Checkout und Worktree einen eigenen Plugin-Eintrag, den `claude plugin update` nicht sicher erreicht – nach einem Update `./ce plugins check`, bei Abweichung `./ce plugins fix --apply`; eine Sitzung mit älterem ce-shared warnt beim Start. Die folgende Liste nennt Claude-Plugins und repo-eigene Claude-Hooks. Globale Regeln: Repo `~/Claude/cubeescape-nexogen` (Links aus `~/.claude`, `~/.codex`). Plugins (Blender-MCP, `code-review`
-vor jedem Release, `github`, `quick-gate-python`, `hookify`, `ce-shared` …): `docs/TECHNIK.md` › 21. **Hooks blockieren**
-Handänderungen an `output/` und am Spielprojekt, nacktes `git stash`, Force-Push, Teleportieren einer Cloud-Sitzung, Unity
-auf Cube-Escape-Checkouts; sie **halten das Sitzungsende an**, bis nach einer Änderung in `scripts/` eine Teststufe lief, und
-**warnen** bei Commit/Merge/Tag/Push, Code rund um `unwrap()`/Backen, Viewer und Workflows. Der Hook `precommit` (`ce-shared`)
-führt bei einem Commit mit geänderten `*.md`/Skills `ce_lint.py` aus (nur Warnung). Ändert sich eine Regel, ändert sich ihre
-Hook-Datei mit. **Subagents:** `rg-test-runner` (berichtet nur), `rg-doc-keeper` (nur Markdown).
-Werkzeug-Erfahrungen: [docs/LESSONS.md](docs/LESSONS.md); die verlinkte Systemdokumentation bleibt die Langform.
+Repo-eigene Claude-Hooks (`.claude/hookify.*.local.md`, `.claude/settings.json`): **blockieren** Handänderungen an `output/` und am Spielprojekt (`ausgabe-nie-von-hand`, `cube-escape-nicht-aendern`) und **halten das Sitzungsende an**, bis nach einer Änderung in `scripts/` eine Teststufe lief (`teststufe-vor-abschluss`). Die Warnungen `git-nur-auf-wunsch`, `cache-schema`, `viewer-pruefen` sind entfernt (wirkungslos; Git-Regeln stehen im harten Kern, Cache-Regeln oben, Viewer-Prüfung im Prüfablauf). Subagents: `rg-test-runner` (berichtet nur), `rg-doc-keeper` (nur Markdown). Plugins und Werkzeuge: `docs/TECHNIK.md` › 21, `README.md`.

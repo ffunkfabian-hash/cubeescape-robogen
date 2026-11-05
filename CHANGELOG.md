@@ -10,6 +10,14 @@ Nur Doku und Konfiguration, Modell und Lieferstand unverändert.
 - `AGENTS.md` an den harten Kern (Nexogen `templates/kern.md`) angeglichen: Kopien globaler Regeln gestrichen (151 → 135 Zeilen), alte Gesamtsperre durch `./ce lock <Ressource>` ersetzt, drei wirkungslose hookify-Warnungen (`git-nur-auf-wunsch`, `cache-schema`, `viewer-pruefen`) gelöscht.
 - `.ce-repo.json`: Werkzeug-Pin 0.35.0 (`79250432f2d2`), `core_paths` gesetzt; `check.yml` auf denselben Stand.
 
+## Patch doku-panorama (ohne Versionsänderung)
+
+- `AGENTS.md`: Versionsangaben als „seit …“ (Agent Tools 0.12, ce-shared 0.15.1/0.16), Sperrbeschreibung nennt `heavy-run.lock` als Gesamtsperre und die Weiterleitung an die gepinnten Werkzeuge. Nur Markdown.
+
+## 1.23.1 – 2026-10-24
+
+- Werkzeug-Pin auf ce-agent-tools 0.22.0 „Tollgate“ (`9f1ed12`, vorher 0.20.0 `6e9e823`): `./ce session say/mail` mit Courier-Verbesserungen (Modellzeile, Kopie an Sightline bei PR/Merge, `ce-freigabe`-Erkennung, `--follow`), Merge-Sperre im Plugin; `.ce-repo.json`, `./ce`, PR-Check-Schritt. Kein Verhalten des Generators geändert.
+
 ## 1.23.0 „Unbundled“ – 2026-10-23
 
 Nur Werkzeuge, Modell und Lieferstand unverändert.

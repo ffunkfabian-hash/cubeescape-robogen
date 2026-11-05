@@ -3,6 +3,13 @@
 Versionen des Roboter-Generators (zählen getrennt von Cube Escape und Cubegen). Jede Version hat einen Tag
 `v<Version>` und einen Release-Branch `release/<Version>`.
 
+## 1.23.2 – 2026-11-05 (Patch kern-sweep)
+
+Nur Doku und Konfiguration, Modell und Lieferstand unverändert.
+
+- `AGENTS.md` an den harten Kern (Nexogen `templates/kern.md`) angeglichen: Kopien globaler Regeln gestrichen (151 → 135 Zeilen), alte Gesamtsperre durch `./ce lock <Ressource>` ersetzt, drei wirkungslose hookify-Warnungen (`git-nur-auf-wunsch`, `cache-schema`, `viewer-pruefen`) gelöscht.
+- `.ce-repo.json`: Werkzeug-Pin 0.35.0 (`79250432f2d2`), `core_paths` gesetzt; `check.yml` auf denselben Stand.
+
 ## Patch doku-panorama (ohne Versionsänderung)
 
 - `AGENTS.md`: Versionsangaben als „seit …“ (Agent Tools 0.12, ce-shared 0.15.1/0.16), Sperrbeschreibung nennt `heavy-run.lock` als Gesamtsperre und die Weiterleitung an die gepinnten Werkzeuge. Nur Markdown.

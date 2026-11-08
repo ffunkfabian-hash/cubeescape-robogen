@@ -3,6 +3,10 @@
 Versionen des Roboter-Generators (zählen getrennt von Cube Escape und Cubegen). Jede Version hat einen Tag
 `v<Version>` und einen Release-Branch `release/<Version>`.
 
+## 1.23.3 – 2026-11-08 (Patch lod-text)
+
+- `scripts/verify_robot.py`: Prüftext der LOD-Prüfung nennt die geprüften Grenzen 6300/2650 Dreiecke (Ziel 6000/2500 aus `export.py`); Prüfung, Modell und Lieferstand unverändert (Workflow-Prüfung 2026-11, Maßnahme 10).
+
 ## 1.23.2 – 2026-11-05 (Patch kern-sweep)
 
 Nur Doku und Konfiguration, Modell und Lieferstand unverändert.

@@ -549,7 +549,7 @@ def verify_spectral():
     lods = rep.get("lods", {})
     bad = [k for k, v in lods.items() if not (v["LOD1"] <= 6300 and v["LOD2"] <= 2650 and v["LOD2"] < v["LOD1"] < v["LOD0"])]
     files = [os.path.join(OUT, "LOD", "CubeEscape_Robot_LOD%d.fbx" % i) for i in (1, 2)]
-    check("lod: LOD1/LOD2 for the robot and every type within 6000/2500 triangles",
+    check("lod: LOD1/LOD2 for the robot and every type within 6300/2650 triangles (target 6000/2500)",
           len(lods) == 1 + len(cfg["robotTypes"]) and not bad and all(os.path.exists(f) for f in files), bad or len(lods))
     caps = cfg.get("hitCapsules", [])
     cov = [c["coverage"] for c in caps]
